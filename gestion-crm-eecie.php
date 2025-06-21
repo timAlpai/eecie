@@ -29,13 +29,15 @@ require_once GCE_PLUGIN_DIR . 'includes/api/rest-routes.php';
 
 function eecie_crm_register_global_rest_nonce() {
     $script_url = plugins_url('/includes/api/js/eecie-rest.js', __FILE__);
-
     wp_enqueue_script('eecie-crm-rest', $script_url, [], GCE_VERSION, true);
-    error_log('TIM NONCE généré pour user ID : ' . get_current_user_id());
-    wp_localize_script('eecie-crm-rest', 'EECIE_CRM', [
-        'rest_url' => rest_url(),
-        'nonce'    => wp_create_nonce('wp_rest'),
-    ]);
+
+    if (function_exists('rest_url') && rest_url()) {
+        wp_localize_script('eecie-crm-rest', 'EECIE_CRM', [
+            'rest_url' => esc_url_raw(rest_url()),
+            'nonce'    => wp_create_nonce('wp_rest'),
+        ]);
+    }
 }
+
 add_action('wp_enqueue_scripts', 'eecie_crm_register_global_rest_nonce');
 add_action('admin_enqueue_scripts', 'eecie_crm_register_global_rest_nonce');

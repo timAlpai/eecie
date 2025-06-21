@@ -10,8 +10,8 @@ defined('ABSPATH') || exit;
  */
 function eecie_crm_baserow_get($path, $queryParams = [])
 {
-    $baseUrl = rtrim(get_option('eecie_baserow_url'), '/');
-    $token = get_option('eecie_baserow_token');
+    $baseUrl = rtrim(get_option('gce_baserow_url'), '/');
+    $token = get_option('gce_baserow_api_key');
 
     if (empty($baseUrl) || empty($token)) {
         return new WP_Error('missing_credentials', 'Baserow credentials not configured.', ['status' => 500]);
@@ -43,4 +43,31 @@ function eecie_crm_baserow_get($path, $queryParams = [])
     }
 
     return json_decode($body, true);
+}
+function eecie_crm_baserow_get_all_tables()
+{
+    return eecie_crm_baserow_get('tables/all-tables/');
+}
+
+
+function eecie_crm_guess_table_id($target_name)
+{
+    $tables = eecie_crm_baserow_get_all_tables();
+
+    if (is_wp_error($tables) || !is_array($tables)) {
+        return null;
+    }
+
+    foreach ($tables as $table) {
+        if (strtolower($table['name']) === strtolower($target_name)) {
+            return $table['id'];
+        }
+    }
+
+    return null;
+}
+
+function eecie_crm_baserow_get_fields($table_id)
+{
+    return eecie_crm_baserow_get("fields/table/$table_id/");
 }
