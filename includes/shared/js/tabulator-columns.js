@@ -1,121 +1,58 @@
 function getTabulatorColumnsFromSchema(schema) {
-    return schema.map(field => {
-        const name = field.name;
-        const type = field.type;
+  return schema.map(field => {
+    const isRelation = field.type === "link_row";
+    const isBoolean = field.type === "boolean";
+    const isDate = field.type === "date";
+    const isSelect = field.type === "single_select" || field.type === "multiple_select";
+    const isRollup = field.type === "formula" || field.type === "lookup";
+    const label = `🧩 Colonne interprétée : ${field.name} ${field.type}`;
+    console.log(label);
 
-        const isRelation     = type === "link_row";
-        const isBoolean      = type === "boolean";
-        const isRollup       = ["formula", "lookup", "rollup"].includes(type);
-        const isSingleSelect = type === "single_select";
-        const isMultipleSelect = type === "multiple_select";
-        const isDate         = type === "date";
-        const isTime         = isDate && field.date_include_time === true;
+    const column = {
+      title: field.name,
+      field: field.name,
+      editor: false,
+      formatter: false,
+    };
 
-        const col = {
-            title: name,
-            field: name,
-            editor: false,
-            formatter: undefined,
-            formatterParams: {}
-        };
+    // Relations : lecture seule + lien cliquable
+    if (isRelation) {
+      column.formatter = function (cell) {
+        const value = cell.getValue();
+        if (!Array.isArray(value)) return '';
+        const page = field.name.toLowerCase();
+        return value.map(obj => `<a href="?page=gce-${page}&id=${obj.id}">${obj.value}</a>`).join(', ');
+      };
+      column.formatterParams = { allowHTML: true };
+    }
 
-        // 🔗 Relations (non éditables, affichés en liens)
-        if (isRelation) {
-            col.formatter = function (cell) {
-                const value = cell.getValue();
-                if (!Array.isArray(value)) return '';
-                const page = name.toLowerCase();
-                return value.map(obj =>
-                    `<a href="?page=gce-${page}&id=${obj.id}">${obj.value}</a>`
-                ).join(', ');
-            };
-            col.formatterParams.allowHTML = true;
-        }
+    // Booléens
+    else if (isBoolean) {
+      column.editor = tickCrossEditor;
+      column.formatter = "tickCross";
+    }
 
-        // ✅ Booléens
-        else if (isBoolean) {
-            col.editor = "tickCross";
-            col.formatter = "tickCross";
-        }
+    // Dates
+    else if (isDate) {
+      column.editor = dateEditor;
+    }
 
-        // 🚫 Champs calculés
-        else if (isRollup) {
-            col.editor = false;
-        }
+    // Choix (liste déroulante)
+    else if (isSelect && Array.isArray(field.select_options)) {
+      const options = field.select_options.map(opt => opt.value || opt.name || opt.id);
+      column.editor = selectEditor(options);
+    }
 
-        // 🎚️ Single select
-        else if (isSingleSelect && field.select_options) {
-            const optionsMap = field.select_options.reduce((acc, opt) => {
-                acc[opt.id] = opt.value;
-                return acc;
-            }, {});
+    // Champs calculés → lecture seule
+    else if (isRollup) {
+      column.editor = false;
+    }
 
-            col.editor = "select";
-            col.editorParams = {
-                values: optionsMap
-            };
-            col.formatter = function (cell) {
-                const id = cell.getValue();
-                return optionsMap[id] || '';
-            };
-        }
+    // Par défaut : champ texte ou numérique
+    else {
+      column.editor = "input";
+    }
 
-        // 🟣 Multiple select (lecture seule)
-        else if (isMultipleSelect && field.select_options) {
-            col.editor = false;
-            col.formatter = function (cell) {
-                const ids = cell.getValue();
-                if (!Array.isArray(ids)) return '';
-                return ids.map(id => {
-                    const opt = field.select_options.find(o => o.id === id);
-                    return opt ? opt.value : '[?]';
-                }).join(', ');
-            };
-        }
-
-        // 📅 Dates
-        else if (isDate) {
-            col.editor = "input";
-            col.editorParams = {
-                elementAttributes: {
-                    type: isTime ? "datetime-local" : "date"
-                }
-            };
-        }
-
-        // 📝 Texte ou valeur simple
-        else {
-            col.editor = "input";
-        }
-
-        return col;
-    });
+    return column;
+  });
 }
-function sanitizeRowBeforeSave(row, schema) {
-    const cleaned = { ...row };
-    schema.forEach(field => {
-        const key = field.name;
-        const val = cleaned[key];
-
-        if (field.type === "link_row") {
-            cleaned[key] = Array.isArray(val)
-                ? val.map(obj => ({ id: obj.id }))
-                : [];
-        }
-
-        if (field.type === "single_select") {
-            if (val && typeof val === 'object' && val.id) {
-                cleaned[key] = val.id;
-            }
-        }
-
-        if (field.type === "multiple_select") {
-            if (Array.isArray(val)) {
-                cleaned[key] = val.map(v => (typeof v === 'object' && v.id ? v.id : v));
-            }
-        }
-    });
-
-    return cleaned;
-}
-
