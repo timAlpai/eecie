@@ -1,12 +1,10 @@
-// global function dispo dans la page
-const columns = getTabulatorColumnsFromSchema(schema);
-
-
 document.addEventListener('DOMContentLoaded', () => {
     const container = document.getElementById('gce-users-admin-table');
     if (!container) return;
 
     container.innerHTML = 'Chargement des utilisateurs...';
+
+    let schema = [];
 
     Promise.all([
         fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/utilisateurs', {
@@ -16,37 +14,18 @@ document.addEventListener('DOMContentLoaded', () => {
             headers: { 'X-WP-Nonce': EECIE_CRM.nonce }
         }).then(r => r.json())
     ])
-    .then(([data, schema]) => {
-        if (!Array.isArray(data.results) || !Array.isArray(schema)) {
+    .then(([data, fetchedSchema]) => {
+        if (!Array.isArray(data.results) || !Array.isArray(fetchedSchema)) {
             container.innerHTML = '<p>Erreur de structure des données reçues.</p>';
             return;
         }
-    const columns = schema.map(field => {
-    const isRelation = field.type === "link_row";
-    const isBoolean  = field.type === "boolean";
 
-    return {
-        title: field.name,
-        field: field.name,
-        editor: isRelation ? false : (isBoolean ? "tickCross" : "input"),
-        formatter: isRelation
-    ? function (cell) {
-        const value = cell.getValue();
-        if (!Array.isArray(value)) return '';
-        const page = field.name.toLowerCase(); // ex: Taches → taches
-        return value.map(obj => `<a href="?page=gce-${page}&id=${obj.id}">${obj.value}</a>`).join(', ');
-    }
-    : (isBoolean ? "tickCross" : undefined),
-
-    };
-    
-});
-
+        schema = fetchedSchema; // stocker pour la sauvegarde
+        const columns = getTabulatorColumnsFromSchema(schema);
 
         // Nettoyer le conteneur
         container.innerHTML = '';
 
-        // Créer dynamiquement le conteneur Tabulator
         const tableEl = document.createElement('div');
         container.appendChild(tableEl);
 
@@ -56,16 +35,21 @@ document.addEventListener('DOMContentLoaded', () => {
             columns: columns,
             cellEdited: function (cell) {
                 const row = cell.getRow().getData();
-                // console.log('Données modifiées:', row);
+                const cleaned = sanitizeRowBeforeSave(row, schema);
+                console.log('Envoi PUT vers Baserow:', cleaned);
+
+
                 fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/utilisateurs/' + row.id, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-WP-Nonce': EECIE_CRM.nonce
                     },
-                    body: JSON.stringify(row)
+                    body: JSON.stringify(cleaned)
                 }).then(res => {
-                    if (!res.ok) alert("Erreur de sauvegarde");
+                    if (!res.ok) {
+                        alert("Erreur de sauvegarde");
+                    }
                 });
             }
         });

@@ -91,3 +91,31 @@ function getTabulatorColumnsFromSchema(schema) {
         return col;
     });
 }
+function sanitizeRowBeforeSave(row, schema) {
+    const cleaned = { ...row };
+    schema.forEach(field => {
+        const key = field.name;
+        const val = cleaned[key];
+
+        if (field.type === "link_row") {
+            cleaned[key] = Array.isArray(val)
+                ? val.map(obj => ({ id: obj.id }))
+                : [];
+        }
+
+        if (field.type === "single_select") {
+            if (val && typeof val === 'object' && val.id) {
+                cleaned[key] = val.id;
+            }
+        }
+
+        if (field.type === "multiple_select") {
+            if (Array.isArray(val)) {
+                cleaned[key] = val.map(v => (typeof v === 'object' && v.id ? v.id : v));
+            }
+        }
+    });
+
+    return cleaned;
+}
+

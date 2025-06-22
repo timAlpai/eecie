@@ -42,6 +42,17 @@ add_action('rest_api_init', function () {
     },
 ]);
 
+register_rest_route('eecie-crm/v1', '/utilisateurs/(?P<id>\d+)', [
+    'methods'  => 'PUT',
+    'callback' => 'eecie_crm_update_utilisateur',
+    'permission_callback' => function () {
+        $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) &&
+                       wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+        return is_user_logged_in() && $nonce_valid;
+    },
+]);
+
+
 });
 
 
@@ -74,4 +85,40 @@ function eecie_crm_get_utilisateurs(WP_REST_Request $request)
 
     $rows = eecie_crm_baserow_get("rows/table/$table_id/", ['user_field_names' => 'true']);
     return is_wp_error($rows) ? $rows : rest_ensure_response($rows);
+}
+
+function eecie_crm_update_utilisateur(WP_REST_Request $request) {
+    $id = (int) $request['id'];
+    $body = $request->get_json_params();
+
+    $table_id = get_option('gce_baserow_table_utilisateurs') ?: eecie_crm_guess_table_id('T1_user');
+    if (!$table_id) {
+        return new WP_Error('no_table', 'Table inconnue');
+    }
+
+    $baseUrl = rtrim(get_option('gce_baserow_url'), '/');
+    $token = get_option('gce_baserow_api_key');
+    $url = "$baseUrl/api/database/rows/table/$table_id/$id/";
+
+    $response = wp_remote_request($url, [
+        'method' => 'PATCH',
+        'headers' => [
+            'Authorization' => 'Token ' . $token,
+            'Content-Type'  => 'application/json',
+        ],
+        'body' => json_encode($body),
+    ]);
+
+    if (is_wp_error($response)) {
+        return new WP_Error('baserow_error', $response->get_error_message(), ['status' => 502]);
+    }
+
+    $status = wp_remote_retrieve_response_code($response);
+    $body = json_decode(wp_remote_retrieve_body($response), true);
+
+    if ($status !== 200) {
+        return new WP_Error('baserow_api_error', "Erreur Baserow ($status)", ['status' => $status, 'details' => $body]);
+    }
+
+    return rest_ensure_response($body);
 }
