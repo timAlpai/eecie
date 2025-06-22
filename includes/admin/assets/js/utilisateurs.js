@@ -35,19 +35,19 @@ document.addEventListener('DOMContentLoaded', () => {
             reactiveData: false,
             height: "auto",
             cellClick: function (e, cell) {
-                console.log("🖱️ Click sur :", cell.getField(), "→", cell.getValue());
+                console.log("Click sur :", cell.getField(), "→", cell.getValue());
             }
         });
 
         window.gceUserTable = tableInstance;
 
         tableInstance.on("cellEdited", function(cell){
-            console.log("✅ cellEdited déclenché →", cell.getField(), cell.getValue());
+            console.log(" cellEdited déclenché →", cell.getField(), cell.getValue());
 
             const row = cell.getRow().getData();
             const cleaned = sanitizeRowBeforeSave(row, gceUserSchema);
 
-            console.log("🧼 Données envoyées :", cleaned);
+            console.log("Données envoyées :", cleaned);
 
             fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/utilisateurs/' + row.id, {
                 method: 'PUT',
@@ -59,16 +59,16 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .then(res => {
                 if (!res.ok) {
-                    console.warn("❌ Erreur HTTP", res.status);
+                    console.warn("Erreur HTTP", res.status);
                     alert("Erreur lors de la sauvegarde.");
                 }
                 return res.json();
             })
             .then(json => {
-                console.log("✅ Réponse Baserow :", json);
+                console.log(" Réponse Baserow :", json);
             })
             .catch(err => {
-                console.error("🔥 Erreur PUT :", err);
+                console.error(" Erreur PUT :", err);
             });
         });
     })
