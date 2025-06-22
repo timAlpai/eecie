@@ -31,32 +31,29 @@ wp_enqueue_script(
     true
 );
 
-
-// Script de ton plugin (utilisateurs.js)
 wp_enqueue_script(
-    'gce-utilisateurs-js',
-    plugin_dir_url(__FILE__) . '../assets/js/utilisateurs.js',
-    ['tabulator-js'], // dépendance
+    'gce-tabulator-editors',
+    plugin_dir_url(__FILE__) . '../../shared/js/tabulator-editors.js',
+    ['tabulator-js'],
     GCE_VERSION,
     true
 );
-
 
 wp_enqueue_script(
     'gce-tabulator-columns',
     plugin_dir_url(__FILE__) . '../../shared/js/tabulator-columns.js',
-    [],
+    ['tabulator-js', 'gce-tabulator-editors'],
     GCE_VERSION,
     true
 );
-
 
 wp_enqueue_script(
-    'gce-tabulator-editors',
-    plugin_dir_url(__FILE__) . '../../shared/js/tabulator-editors.js',
-    [],
+    'gce-utilisateurs-js',
+    plugin_dir_url(__FILE__) . '../assets/js/utilisateurs.js',
+    ['tabulator-js', 'gce-tabulator-editors', 'gce-tabulator-columns'],
     GCE_VERSION,
     true
 );
+
 
 ?>

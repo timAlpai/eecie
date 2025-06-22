@@ -1,20 +1,15 @@
-// tabulator-editors.js
 
-// ✅ TickCross Editor (booléens)
+//  tickCrossEditor : pour les booléens
 function tickCrossEditor(cell, onRendered, success, cancel) {
-    const value = cell.getValue();
     const input = document.createElement("input");
     input.type = "checkbox";
-    input.checked = !!value;
+    input.checked = !!cell.getValue();
     input.style.margin = "auto";
     input.style.display = "block";
 
     onRendered(() => input.focus());
 
-    function onChange() {
-        success(input.checked); // ✅ C'est ça qui déclenche cellEdited
-    }
-
+    const onChange = () => success(input.checked);
     input.addEventListener("change", onChange);
     input.addEventListener("blur", onChange);
     input.addEventListener("keydown", e => {
@@ -25,30 +20,24 @@ function tickCrossEditor(cell, onRendered, success, cancel) {
     return input;
 }
 
-// ✅ Select Editor (single_choice, multiple_choice)
+//  selectEditor : pour les single_select / multiple_select
 function selectEditor(options = []) {
     return function(cell, onRendered, success, cancel) {
-        const value = cell.getValue();
         const input = document.createElement("select");
-
         options.forEach(opt => {
             const o = document.createElement("option");
             o.value = opt;
             o.textContent = opt;
-            if (opt === value) o.selected = true;
+            if (opt === cell.getValue()) o.selected = true;
             input.appendChild(o);
         });
 
         onRendered(() => input.focus());
 
-        function onChange() {
-            success(input.value);
-        }
-
-        input.addEventListener("change", onChange);
-        input.addEventListener("blur", onChange);
+        input.addEventListener("change", () => success(input.value));
+        input.addEventListener("blur", () => success(input.value));
         input.addEventListener("keydown", e => {
-            if (e.key === "Enter") onChange();
+            if (e.key === "Enter") success(input.value);
             if (e.key === "Escape") cancel();
         });
 
@@ -56,40 +45,85 @@ function selectEditor(options = []) {
     };
 }
 
-// ✅ Date Editor (format dd/MM/yyyy ↔ yyyy-MM-dd)
+//  dateEditor : utilise Luxon
 function dateEditor(cell, onRendered, success, cancel) {
     const luxon = window.luxon;
     const cellValue = luxon.DateTime.fromFormat(cell.getValue(), "dd/MM/yyyy").toFormat("yyyy-MM-dd");
     const input = document.createElement("input");
 
-    input.setAttribute("type", "date");
+    input.type = "date";
+    input.value = cellValue;
     input.style.padding = "4px";
     input.style.width = "100%";
     input.style.boxSizing = "border-box";
-    input.value = cellValue;
 
     onRendered(() => {
         input.focus();
         input.style.height = "100%";
     });
 
-    function onChange() {
+    input.addEventListener("blur", () => {
         if (input.value !== cellValue) {
             success(luxon.DateTime.fromFormat(input.value, "yyyy-MM-dd").toFormat("dd/MM/yyyy"));
         } else {
             cancel();
         }
-    }
+    });
 
-    input.addEventListener("blur", onChange);
-    input.addEventListener("keydown", function(e) {
-        if (e.key === "Enter") onChange();
+    input.addEventListener("keydown", e => {
+        if (e.key === "Enter") {
+            success(luxon.DateTime.fromFormat(input.value, "yyyy-MM-dd").toFormat("dd/MM/yyyy"));
+        }
         if (e.key === "Escape") cancel();
     });
 
     return input;
 }
-// Exports dans la portée globale
-window.tickCrossEditor = tickCrossEditor;
-window.selectEditor = selectEditor;
-window.dateEditor = dateEditor;
+
+//  inputEditor : pour texte / number simple
+function inputEditor(cell, onRendered, success, cancel) {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = cell.getValue() || "";
+    input.style.width = "100%";
+
+    onRendered(() => input.focus());
+
+    input.addEventListener("blur", () => success(input.value));
+    input.addEventListener("keydown", e => {
+        if (e.key === "Enter") success(input.value);
+        if (e.key === "Escape") cancel();
+    });
+
+    return input;
+}
+function sanitizeRowBeforeSave(row, schema) {
+    const cleaned = {};
+
+    schema.forEach(field => {
+        const name = field.name;
+        const type = field.type;
+        const id = field.id;
+        let value = row[name];
+
+        if (type === "boolean") {
+            cleaned["field_" + id] = !!value;
+
+        } else if (type === "single_select" && value && typeof value === "object") {
+            cleaned["field_" + id] = value.id;
+
+        } else if (type === "multiple_select" && Array.isArray(value)) {
+            cleaned["field_" + id] = value.map(v => v.id);
+
+        } else if (type === "link_row" && Array.isArray(value)) {
+            cleaned["field_" + id] = value.map(v => v.id);
+
+        } else if (!["formula", "lookup", "rollup"].includes(type)) {
+            cleaned["field_" + id] = value;
+        }
+    });
+
+    return cleaned;
+}
+
+window.sanitizeRowBeforeSave = sanitizeRowBeforeSave;
