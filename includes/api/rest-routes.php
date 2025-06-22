@@ -71,9 +71,52 @@ register_rest_route('eecie-crm/v1', '/utilisateurs/(?P<id>\d+)', [
         return is_user_logged_in() && $nonce_valid;
     },
 ]);
+// ===== Opportunités =====
+register_rest_route('eecie-crm/v1', '/opportunites', [
+    'methods'  => 'GET',
+    'callback' => 'eecie_crm_get_opportunites',
+    'permission_callback' => function () {
+        $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE'])
+                     && wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+        return is_user_logged_in() && $nonce_valid;
+    },
+]);
+register_rest_route('eecie-crm/v1', '/opportunites/schema', [
+    'methods'  => 'GET',
+    'callback' => function () {
+        // slug « opportunites » => nom Baserow « Task_input »
+        $table_id = get_option('gce_baserow_table_opportunites')
+                  ?: eecie_crm_guess_table_id('Task_input');
+        if (!$table_id) {
+            return new WP_Error('no_table', 'Table Opportunités introuvable', ['status'=>500]);
+        }
+        $fields = eecie_crm_baserow_get_fields($table_id);
+        return is_wp_error($fields) ? $fields : rest_ensure_response($fields);
+    },
+    'permission_callback' => function () {
+        $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE'])
+                     && wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+        return is_user_logged_in() && $nonce_valid;
+    },
+]);
+
 
 
 });
+
+
+
+function eecie_crm_get_opportunites(WP_REST_Request $request) {
+    $table_id = get_option('gce_baserow_table_opportunites')
+              ?: eecie_crm_guess_table_id('Task_input');
+    if (!$table_id) {
+        return new WP_Error('no_table', 'Table Opportunités introuvable', ['status'=>500]);
+    }
+    // On récupère tout pour filtrer côté client
+    $rows = eecie_crm_baserow_get("rows/table/$table_id/", ['user_field_names'=>'true']);
+    return is_wp_error($rows) ? $rows : rest_ensure_response($rows);
+}
+
 
 function eecie_crm_create_utilisateur(WP_REST_Request $request) {
     $table_id = get_option('gce_baserow_table_utilisateurs') ?: eecie_crm_guess_table_id('T1_user');

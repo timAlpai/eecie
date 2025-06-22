@@ -1,2 +1,4 @@
-<h2>Les opportunités à traiter</h2>
-<p>Module de gestion des opportunités à venir.</p>
+<h2>Mes opportunités</h2>
+<div id="gce-opportunites-table" style="margin-top:1em;">
+  Chargement…
+</div>
