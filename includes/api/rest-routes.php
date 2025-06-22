@@ -52,14 +52,42 @@ register_rest_route('eecie-crm/v1', '/utilisateurs/(?P<id>\d+)', [
     },
 ]);
 
+register_rest_route('eecie-crm/v1', '/utilisateurs', [
+    'methods'  => 'POST',
+    'callback' => 'eecie_crm_create_utilisateur',
+    'permission_callback' => function () {
+        $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) &&
+                       wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+        return is_user_logged_in() && $nonce_valid;
+    },
+]);
 
 });
 
+function eecie_crm_create_utilisateur(WP_REST_Request $request) {
+    $table_id = get_option('gce_baserow_table_utilisateurs') ?: eecie_crm_guess_table_id('T1_user');
+    if (!$table_id) {
+        return new WP_Error('missing_table_id', 'ID de table introuvable.', ['status' => 500]);
+    }
+
+    $payload = $request->get_json_params();
+    if (!is_array($payload)) {
+        return new WP_Error('invalid_data', 'Format JSON invalide.', ['status' => 400]);
+    }
+
+    $response = eecie_crm_baserow_post("rows/table/$table_id/", $payload);
+
+    return is_wp_error($response)
+        ? $response
+        : rest_ensure_response($response);
+}
 
 
 function eecie_crm_check_capabilities() {
     return  check_ajax_referer('wp_rest', '_wpnonce', false);
 }
+
+
 function eecie_crm_get_contacts(WP_REST_Request $request)
 {
     // audessus test
@@ -70,6 +98,40 @@ function eecie_crm_get_contacts(WP_REST_Request $request)
 
     $data = eecie_crm_baserow_get("rows/table/$table_id/", ['user_field_names' => 'true']);
     return is_wp_error($data) ? $data : rest_ensure_response($data);
+}
+
+
+function eecie_crm_baserow_post($endpoint, $payload = []) {
+    $base_url = rtrim(get_option('gce_baserow_url'), '/');
+    $token = get_option('gce_baserow_api_key');
+
+    if (!$base_url || !$token) {
+        return new WP_Error('baserow_credentials', 'Baserow credentials not configured.');
+    }
+
+    $url = $base_url . '/api/database/' . ltrim($endpoint, '/');
+
+    $response = wp_remote_post($url, [
+        'headers' => [
+            'Authorization' => 'Token ' . $token,
+            'Content-Type'  => 'application/json',
+        ],
+        'body' => json_encode($payload),
+        'timeout' => 15,
+    ]);
+
+    if (is_wp_error($response)) {
+        return $response;
+    }
+
+    $code = wp_remote_retrieve_response_code($response);
+    $body = json_decode(wp_remote_retrieve_body($response), true);
+
+    if ($code >= 400 || !$body) {
+        return new WP_Error('baserow_http_error', 'Baserow error: ' . $code, ['body' => $body]);
+    }
+
+    return $body;
 }
 
 

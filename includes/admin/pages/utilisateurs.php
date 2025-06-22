@@ -2,6 +2,22 @@
 
 <div class="wrap">
     <h1>Gestion des utilisateurs Baserow</h1>
+    <button id="gce-add-user-btn" class="button button-primary">➕ Nouvel utilisateur</button>
+
+<div id="gce-add-user-modal" style="display:none; margin-top: 20px;">
+    <h3>Ajouter un utilisateur</h3>
+    <label>Nom<br><input type="text" id="gce-new-user-nom" style="width: 100%;"></label><br><br>
+    <label>Email<br><input type="email" id="gce-new-user-email" style="width: 100%;"></label><br><br>
+    <label>Actif<br>
+        <select id="gce-new-user-actif">
+            <option value="true">Oui</option>
+            <option value="false">Non</option>
+        </select>
+    </label><br><br>
+    <button id="gce-submit-user" class="button button-primary">Créer</button>
+    <button id="gce-cancel-user" class="button">Annuler</button>
+</div>
+
     <div id="gce-users-admin-table"></div>
 </div>
 <?php
