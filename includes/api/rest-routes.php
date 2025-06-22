@@ -62,6 +62,17 @@ register_rest_route('eecie-crm/v1', '/utilisateurs', [
     },
 ]);
 
+register_rest_route('eecie-crm/v1', '/utilisateurs/(?P<id>\d+)', [
+    'methods'  => 'DELETE',
+    'callback' => 'eecie_crm_delete_utilisateur',
+    'permission_callback' => function () {
+        $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) &&
+                       wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+        return is_user_logged_in() && $nonce_valid;
+    },
+]);
+
+
 });
 
 function eecie_crm_create_utilisateur(WP_REST_Request $request) {
@@ -80,6 +91,54 @@ function eecie_crm_create_utilisateur(WP_REST_Request $request) {
     return is_wp_error($response)
         ? $response
         : rest_ensure_response($response);
+}
+
+
+function eecie_crm_delete_utilisateur(WP_REST_Request $request) {
+    $row_id = (int) $request->get_param('id');
+    $table_id = get_option('gce_baserow_table_utilisateurs') ?: eecie_crm_guess_table_id('T1_user');
+
+    if (!$table_id || !$row_id) {
+        return new WP_Error('invalid_request', 'Table ID ou Row ID manquant.', ['status' => 400]);
+    }
+
+    $response = eecie_crm_baserow_delete("rows/table/$table_id/$row_id/");
+
+    return is_wp_error($response)
+        ? $response
+        : rest_ensure_response(['success' => true]);
+}
+
+
+function eecie_crm_baserow_delete($endpoint) {
+    $base_url = rtrim(get_option('gce_baserow_url'), '/');
+    $token = get_option('gce_baserow_api_key');
+
+    if (!$base_url || !$token) {
+        return new WP_Error('baserow_credentials', 'Baserow credentials not configured.');
+    }
+
+    $url = $base_url . '/api/database/' . ltrim($endpoint, '/');
+
+    $response = wp_remote_request($url, [
+        'method'  => 'DELETE',
+        'headers' => [
+            'Authorization' => 'Token ' . $token,
+        ],
+        'timeout' => 15,
+    ]);
+
+    if (is_wp_error($response)) {
+        return $response;
+    }
+
+    $code = wp_remote_retrieve_response_code($response);
+
+    if ($code >= 400) {
+        return new WP_Error('baserow_http_error', 'Erreur Baserow: ' . $code);
+    }
+
+    return true;
 }
 
 

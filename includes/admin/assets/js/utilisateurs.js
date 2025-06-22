@@ -24,6 +24,32 @@ document.addEventListener('DOMContentLoaded', () => {
         window.gceUserSchema = schema;
 
         const columns = getTabulatorColumnsFromSchema(schema);
+        columns.unshift({
+    title: "Delete",
+    formatter: "buttonCross",
+    width: 80,
+    hozAlign: "center",
+    headerSort: false,
+    cellClick: function (e, cell) {
+        const row = cell.getRow();
+        const data = row.getData();
+        if (confirm(`Supprimer l'utilisateur ${data.Name || data.Nom || 'inconnu'} ?`)) {
+            fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/utilisateurs/${data.id}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-WP-Nonce': EECIE_CRM.nonce
+                }
+            }).then(res => {
+                if (!res.ok) {
+                    alert("Erreur de suppression !");
+                } else {
+                    row.delete();
+                    console.log("✅ Utilisateur supprimé !");
+                }
+            });
+        }
+    }
+});
         container.innerHTML = '';
         const tableEl = document.createElement('div');
         container.appendChild(tableEl);
