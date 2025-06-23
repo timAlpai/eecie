@@ -1,3 +1,24 @@
+/* Couleurs Baserow */
+.gce-color-darker-blue { background-color: #1E40AF; }
+.gce-color-dark-blue   { background-color: #2563EB; }
+.gce-color-blue        { background-color: #3B82F6; }
+.gce-color-light-blue  { background-color: #60A5FA; }
+
+.gce-color-darker-green { background-color: #047857; }
+.gce-color-dark-green   { background-color: #059669; }
+.gce-color-green        { background-color: #10B981; }
+
+.gce-color-darker-red { background-color: #991B1B; }
+.gce-color-dark-red   { background-color: #DC2626; }
+.gce-color-red        { background-color: #EF4444; }
+
+.gce-color-orange  { background-color: #F97316; }
+.gce-color-yellow  { background-color: #EAB308; }
+
+.gce-color-gray         { background-color: #6B7280; }
+.gce-color-dark-gray    { background-color: #4B5563; }
+.gce-color-darker-gray  { background-color: #374151; }
+
 /* dashboard.css */
 /* Élargir le bloc principal à 100% */
 .page .entry-content > .gce-dashboard,
@@ -107,3 +128,37 @@
     padding: 20px;
   }
 }  
+.gce-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.85em;
+  color: white;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+#gce-opportunites-table {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.tabulator {
+  width: 100% !important;
+}
+
+.tabulator .tabulator-table {
+  min-width: 600px;
+}
+
+@media (max-width: 768px) {
+  .gce-badge {
+    font-size: 0.75em;
+    padding: 2px 6px;
+  }
+
+  .tabulator-cell button {
+    font-size: 0.75em;
+    padding: 4px 6px;
+  }
+}

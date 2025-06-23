@@ -40,6 +40,8 @@ function gce_add_admin_menu() {
     );
 
 }
+wp_enqueue_script('gce-popup-handler', plugin_dir_url(__FILE__) . '../shared/js/popup-handler.js', ['eecie-crm-rest'], GCE_VERSION, true);
+wp_enqueue_style('gce-popup-css', plugin_dir_url(__FILE__) . '../shared/css/popup.css', [], GCE_VERSION);
 
 function gce_render_dashboard_page() {
     include_once plugin_dir_path(__FILE__) . 'pages/dashboard.php';

@@ -100,6 +100,70 @@ register_rest_route('eecie-crm/v1', '/opportunites/schema', [
     },
 ]);
 
+    register_rest_route('eecie-crm/v1', '/row/(?P<table_slug>[a-z_]+)/(?P<id>\d+)', [
+        'methods'  => 'GET',
+        'callback' => function (WP_REST_Request $request) {
+            $slug = sanitize_text_field($request['table_slug']);
+            $row_id = (int) $request['id'];
+
+            $option_key = 'gce_baserow_table_' . $slug;
+            $table_id = get_option($option_key) ?: eecie_crm_guess_table_id(ucfirst($slug));
+
+            if (!$table_id) {
+                return new WP_Error('invalid_table', "Table inconnue pour slug `$slug`", ['status' => 400]);
+            }
+
+            $data = eecie_crm_baserow_get("rows/table/$table_id/$row_id/?user_field_names=true");
+
+            return is_wp_error($data) ? $data : rest_ensure_response($data);
+        },
+        'permission_callback' => function () {
+            $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) && wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+            return is_user_logged_in() && $nonce_valid;
+        },
+    ]);
+    register_rest_route('eecie-crm/v1', '/opportunites/(?P<id>\d+)', [
+    'methods'  => 'PATCH',
+    'callback' => function (WP_REST_Request $request) {
+        $id = (int) $request['id'];
+        $body = $request->get_json_params();
+        $table_id = get_option('gce_baserow_table_opportunites') ?: eecie_crm_guess_table_id('Task_input');
+        if (!$table_id) {
+            return new WP_Error('no_table', 'Table inconnue');
+        }
+
+        $baseUrl = rtrim(get_option('gce_baserow_url'), '/');
+        $token = get_option('gce_baserow_api_key');
+        $url = "$baseUrl/api/database/rows/table/$table_id/$id/";
+
+        $response = wp_remote_request($url, [
+            'method' => 'PATCH',
+            'headers' => [
+                'Authorization' => 'Token ' . $token,
+                'Content-Type'  => 'application/json',
+            ],
+            'body' => json_encode($body),
+        ]);
+
+        if (is_wp_error($response)) {
+            return new WP_Error('baserow_error', $response->get_error_message(), ['status' => 502]);
+        }
+
+        $status = wp_remote_retrieve_response_code($response);
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+
+        if ($status !== 200) {
+            return new WP_Error('baserow_api_error', "Erreur Baserow ($status)", ['status' => $status, 'details' => $body]);
+        }
+
+        return rest_ensure_response($body);
+    },
+    'permission_callback' => function () {
+        $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) &&
+                       wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+        return is_user_logged_in() && $nonce_valid;
+    },
+]);
 
 
 });
