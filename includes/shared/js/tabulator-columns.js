@@ -7,7 +7,7 @@ function getTabulatorColumnsFromSchema(schema) {
         const isRollup = field.type === "formula" || field.type === "lookup";
         const isAttachment = field.name === "Attachement";
         const isStatus = field.name === "Status";
-
+        const isStatut = field.name === "statut";
         const column = {
             title: field.name,
             field: field.name,
@@ -35,46 +35,68 @@ function getTabulatorColumnsFromSchema(schema) {
             };
             column.formatterParams = { allowHTML: true };
             column.editor = false; // pas éditable manuellement
-        } else if (isRelation) {
+        } else if (isStatut) {
             column.formatter = function (cell) {
-                const value = cell.getValue();
-                if (!Array.isArray(value)) return '';
-                const page = field.name.toLowerCase();
-                return value.map(obj =>
-                    `<a href="#" class="gce-popup-link" data-table="${page}" data-id="${obj.id}">${obj.value}</a>`
-                ).join(', ');
+                const val = cell.getValue();
+                if (!val || typeof val !== 'object') return '';
+                const colorClass = 'gce-color-' + (val.color || 'gray');
+                const label = val.value || val.name || '';
+                return `<span class="gce-badge ${colorClass}">${label}</span>`;
             };
             column.formatterParams = { allowHTML: true };
-
-        } else if (isBoolean) {
-            column.editor = tickCrossEditor;
-            column.formatter = "tickCross";
-
-        } else if (isDate) {
-            column.editor = dateEditor;
-
+            column.editor = false; // pas éditable manuellement
         } else if (isSelect && Array.isArray(field.select_options)) {
             const options = field.select_options.map(opt => opt.value || opt.name || opt.id);
             column.editor = selectEditor(options);
-
-        } else if (isRollup) {
-            column.editor = false;
-
-        } else {
-            column.editor = inputEditor;
-        }
-        if (field.name.toLowerCase() === 'tel') {
             column.formatter = function (cell) {
-                const value = cell.getValue();
-                if (!value) return '';
-                const clean = value.replace(/\s+/g, '');
-                return `<a href="tel:${clean}">${value}</a>`;
+                const val = cell.getValue();
+                if (!val || typeof val !== 'object') return '';
+                const label = val.value || val.name || '';
+                const color = val.color || 'gray';
+                return `<span class="gce-badge gce-color-${color}">${label}</span>`;
             };
             column.formatterParams = { allowHTML: true };
-            column.editor = false;
-        }
         
+        }else if (isRelation) {
+                column.formatter = function (cell) {
+                    const value = cell.getValue();
+                    if (!Array.isArray(value)) return '';
+                    const page = field.name.toLowerCase();
+                    return value.map(obj =>
+                        `<a href="#" class="gce-popup-link" data-table="${page}" data-id="${obj.id}">${obj.value}</a>`
+                    ).join(', ');
+                };
+                column.formatterParams = { allowHTML: true };
 
-        return column;
-    });
+            } else if (isBoolean) {
+                column.editor = tickCrossEditor;
+                column.formatter = "tickCross";
+
+            } else if (isDate) {
+                column.editor = dateEditor;
+
+            } else if (isSelect && Array.isArray(field.select_options)) {
+                const options = field.select_options.map(opt => opt.value || opt.name || opt.id);
+                column.editor = selectEditor(options);
+
+            } else if (isRollup) {
+                column.editor = false;
+
+            } else {
+                column.editor = inputEditor;
+            }
+            if (field.name.toLowerCase() === 'tel') {
+                column.formatter = function (cell) {
+                    const value = cell.getValue();
+                    if (!value) return '';
+                    const clean = value.replace(/\s+/g, '');
+                    return `<a href="tel:${clean}">${value}</a>`;
+                };
+                column.formatterParams = { allowHTML: true };
+                column.editor = false;
+            }
+
+
+            return column;
+        });
 }
