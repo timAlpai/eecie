@@ -6,7 +6,7 @@ function getTabulatorColumnsFromSchema(schema) {
         const isSelect = field.type === "single_select" || field.type === "multiple_select";
         const isRollup = field.type === "formula" || field.type === "lookup";
         const isAttachment = field.name === "Attachement";
-        const isStatus = field.name === "Status"; // ← pour formatter personnalisé
+        const isStatus = field.name === "Status";
 
         const column = {
             title: field.name,
@@ -63,6 +63,17 @@ function getTabulatorColumnsFromSchema(schema) {
         } else {
             column.editor = inputEditor;
         }
+        if (field.name.toLowerCase() === 'tel') {
+            column.formatter = function (cell) {
+                const value = cell.getValue();
+                if (!value) return '';
+                const clean = value.replace(/\s+/g, '');
+                return `<a href="tel:${clean}">${value}</a>`;
+            };
+            column.formatterParams = { allowHTML: true };
+            column.editor = false;
+        }
+        
 
         return column;
     });
