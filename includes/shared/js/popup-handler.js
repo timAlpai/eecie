@@ -5,7 +5,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     e.preventDefault();
 
-    const table = link.dataset.table;
+    const rawTable = link.dataset.table;
+    const table = ({
+      assigne: 'utilisateurs',
+      contact: 'contacts',
+      opportunite: 'task_input'
+    })[rawTable] || rawTable;
+
+
+
+
     const id = link.dataset.id;
 
     if (!table || !id) return;
@@ -36,17 +45,17 @@ function gceShowModal(data, tableName) {
     <h3>${tableName.charAt(0).toUpperCase() + tableName.slice(1)} #${data.id}</h3>
     <div class="gce-modal-content">
       ${Object.entries(data).map(([k, v]) => {
-        let value;
-        if (Array.isArray(v)) {
-          value = v.map(item => typeof item === 'object' ? item.value || JSON.stringify(item) : item).join(', ');
-        } else if (typeof v === 'object' && v !== null) {
-          value = v.value || JSON.stringify(v);
-        } else {
-          value = v;
-        }
+    let value;
+    if (Array.isArray(v)) {
+      value = v.map(item => typeof item === 'object' ? item.value || JSON.stringify(item) : item).join(', ');
+    } else if (typeof v === 'object' && v !== null) {
+      value = v.value || JSON.stringify(v);
+    } else {
+      value = v;
+    }
 
-        return `<div class="gce-field-row"><strong>${k}</strong><div>${value}</div></div>`;
-      }).join('')}
+    return `<div class="gce-field-row"><strong>${k}</strong><div>${value}</div></div>`;
+  }).join('')}
     </div>
   `;
 

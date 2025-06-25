@@ -8,11 +8,11 @@ add_action('rest_api_init', function () {
         'methods'  => 'GET',
         'callback' => 'eecie_crm_get_contacts',
         'permission_callback' => function () {
-        // Récupération du nonce par entête JS
-        $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) && wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+            // Récupération du nonce par entête JS
+            $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) && wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
 
-        return is_user_logged_in() && $nonce_valid;
-    },
+            return is_user_logged_in() && $nonce_valid;
+        },
     ]);
 
     // route utilisateur (employés)
@@ -28,77 +28,77 @@ add_action('rest_api_init', function () {
     // get table fields and structure
 
     register_rest_route('eecie-crm/v1', '/utilisateurs/schema', [
-    'methods' => 'GET',
-    'callback' => function () {
-        $table_id = get_option('gce_baserow_table_utilisateurs') ?: eecie_crm_guess_table_id('T1_user');
-        if (!$table_id) return new WP_Error('no_table', 'Table inconnue');
+        'methods' => 'GET',
+        'callback' => function () {
+            $table_id = get_option('gce_baserow_table_utilisateurs') ?: eecie_crm_guess_table_id('T1_user');
+            if (!$table_id) return new WP_Error('no_table', 'Table inconnue');
 
-        $fields = eecie_crm_baserow_get_fields($table_id);
-        return is_wp_error($fields) ? $fields : rest_ensure_response($fields);
-    },
-    'permission_callback' => function () {
-        $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) && wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
-        return is_user_logged_in() && $nonce_valid;
-    },
-]);
+            $fields = eecie_crm_baserow_get_fields($table_id);
+            return is_wp_error($fields) ? $fields : rest_ensure_response($fields);
+        },
+        'permission_callback' => function () {
+            $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) && wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+            return is_user_logged_in() && $nonce_valid;
+        },
+    ]);
 
-register_rest_route('eecie-crm/v1', '/utilisateurs/(?P<id>\d+)', [
-    'methods'  => 'PUT',
-    'callback' => 'eecie_crm_update_utilisateur',
-    'permission_callback' => function () {
-        $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) &&
-                       wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
-        return is_user_logged_in() && $nonce_valid;
-    },
-]);
+    register_rest_route('eecie-crm/v1', '/utilisateurs/(?P<id>\d+)', [
+        'methods'  => 'PUT',
+        'callback' => 'eecie_crm_update_utilisateur',
+        'permission_callback' => function () {
+            $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) &&
+                wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+            return is_user_logged_in() && $nonce_valid;
+        },
+    ]);
 
-register_rest_route('eecie-crm/v1', '/utilisateurs', [
-    'methods'  => 'POST',
-    'callback' => 'eecie_crm_create_utilisateur',
-    'permission_callback' => function () {
-        $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) &&
-                       wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
-        return is_user_logged_in() && $nonce_valid;
-    },
-]);
+    register_rest_route('eecie-crm/v1', '/utilisateurs', [
+        'methods'  => 'POST',
+        'callback' => 'eecie_crm_create_utilisateur',
+        'permission_callback' => function () {
+            $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) &&
+                wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+            return is_user_logged_in() && $nonce_valid;
+        },
+    ]);
 
-register_rest_route('eecie-crm/v1', '/utilisateurs/(?P<id>\d+)', [
-    'methods'  => 'DELETE',
-    'callback' => 'eecie_crm_delete_utilisateur',
-    'permission_callback' => function () {
-        $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) &&
-                       wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
-        return is_user_logged_in() && $nonce_valid;
-    },
-]);
-// ===== Opportunités =====
-register_rest_route('eecie-crm/v1', '/opportunites', [
-    'methods'  => 'GET',
-    'callback' => 'eecie_crm_get_opportunites',
-    'permission_callback' => function () {
-        $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE'])
-                     && wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
-        return is_user_logged_in() && $nonce_valid;
-    },
-]);
-register_rest_route('eecie-crm/v1', '/opportunites/schema', [
-    'methods'  => 'GET',
-    'callback' => function () {
-        // slug « opportunites » => nom Baserow « Task_input »
-        $table_id = get_option('gce_baserow_table_opportunites')
-                  ?: eecie_crm_guess_table_id('Task_input');
-        if (!$table_id) {
-            return new WP_Error('no_table', 'Table Opportunités introuvable', ['status'=>500]);
-        }
-        $fields = eecie_crm_baserow_get_fields($table_id);
-        return is_wp_error($fields) ? $fields : rest_ensure_response($fields);
-    },
-    'permission_callback' => function () {
-        $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE'])
-                     && wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
-        return is_user_logged_in() && $nonce_valid;
-    },
-]);
+    register_rest_route('eecie-crm/v1', '/utilisateurs/(?P<id>\d+)', [
+        'methods'  => 'DELETE',
+        'callback' => 'eecie_crm_delete_utilisateur',
+        'permission_callback' => function () {
+            $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) &&
+                wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+            return is_user_logged_in() && $nonce_valid;
+        },
+    ]);
+    // ===== Opportunités =====
+    register_rest_route('eecie-crm/v1', '/opportunites', [
+        'methods'  => 'GET',
+        'callback' => 'eecie_crm_get_opportunites',
+        'permission_callback' => function () {
+            $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE'])
+                && wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+            return is_user_logged_in() && $nonce_valid;
+        },
+    ]);
+    register_rest_route('eecie-crm/v1', '/opportunites/schema', [
+        'methods'  => 'GET',
+        'callback' => function () {
+            // slug « opportunites » => nom Baserow « Task_input »
+            $table_id = get_option('gce_baserow_table_opportunites')
+                ?: eecie_crm_guess_table_id('Task_input');
+            if (!$table_id) {
+                return new WP_Error('no_table', 'Table Opportunités introuvable', ['status' => 500]);
+            }
+            $fields = eecie_crm_baserow_get_fields($table_id);
+            return is_wp_error($fields) ? $fields : rest_ensure_response($fields);
+        },
+        'permission_callback' => function () {
+            $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE'])
+                && wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+            return is_user_logged_in() && $nonce_valid;
+        },
+    ]);
 
     register_rest_route('eecie-crm/v1', '/row/(?P<table_slug>[a-z_]+)/(?P<id>\d+)', [
         'methods'  => 'GET',
@@ -123,94 +123,165 @@ register_rest_route('eecie-crm/v1', '/opportunites/schema', [
         },
     ]);
     register_rest_route('eecie-crm/v1', '/opportunites/(?P<id>\d+)', [
-    'methods'  => 'PATCH',
-    'callback' => function (WP_REST_Request $request) {
-        $id = (int) $request['id'];
-        $body = $request->get_json_params();
-        $table_id = get_option('gce_baserow_table_opportunites') ?: eecie_crm_guess_table_id('Task_input');
-        if (!$table_id) {
-            return new WP_Error('no_table', 'Table inconnue');
+        'methods'  => 'PATCH',
+        'callback' => function (WP_REST_Request $request) {
+            $id = (int) $request['id'];
+            $body = $request->get_json_params();
+            $table_id = get_option('gce_baserow_table_opportunites') ?: eecie_crm_guess_table_id('Task_input');
+            if (!$table_id) {
+                return new WP_Error('no_table', 'Table inconnue');
+            }
+
+            $baseUrl = rtrim(get_option('gce_baserow_url'), '/');
+            $token = get_option('gce_baserow_api_key');
+            $url = "$baseUrl/api/database/rows/table/$table_id/$id/";
+
+            $response = wp_remote_request($url, [
+                'method' => 'PATCH',
+                'headers' => [
+                    'Authorization' => 'Token ' . $token,
+                    'Content-Type'  => 'application/json',
+                ],
+                'body' => json_encode($body),
+            ]);
+
+            if (is_wp_error($response)) {
+                return new WP_Error('baserow_error', $response->get_error_message(), ['status' => 502]);
+            }
+
+            $status = wp_remote_retrieve_response_code($response);
+            $body = json_decode(wp_remote_retrieve_body($response), true);
+
+            if ($status !== 200) {
+                return new WP_Error('baserow_api_error', "Erreur Baserow ($status)", ['status' => $status, 'details' => $body]);
+            }
+
+            return rest_ensure_response($body);
+        },
+        'permission_callback' => function () {
+            $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) &&
+                wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+            return is_user_logged_in() && $nonce_valid;
+        },
+    ]);
+    register_rest_route('eecie-crm/v1', '/taches', [
+        'methods'  => 'GET',
+        'callback' => function () {
+            $table_id = get_option('gce_baserow_table_taches') ?: eecie_crm_guess_table_id('Taches');
+            if (!$table_id) return new WP_Error('no_table', 'Table Tâches introuvable', ['status' => 500]);
+
+            $rows = eecie_crm_baserow_get("rows/table/$table_id/", ['user_field_names' => 'true']);
+            return is_wp_error($rows) ? $rows : rest_ensure_response($rows);
+        },
+        'permission_callback' => function () {
+            $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) && wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+            return is_user_logged_in() && $nonce_valid;
+        },
+    ]);
+
+    register_rest_route('eecie-crm/v1', '/taches/schema', [
+        'methods' => 'GET',
+        'callback' => function () {
+            $table_id = get_option('gce_baserow_table_taches') ?: eecie_crm_guess_table_id('Taches');
+            if (!$table_id) return new WP_Error('no_table', 'Table Tâches introuvable', ['status' => 500]);
+
+            $fields = eecie_crm_baserow_get_fields($table_id);
+            return is_wp_error($fields) ? $fields : rest_ensure_response($fields);
+        },
+        'permission_callback' => function () {
+            $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) && wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+            return is_user_logged_in() && $nonce_valid;
+        },
+    ]);
+
+    register_rest_route('eecie-crm/v1', '/proxy/start-task', [
+        'methods'  => 'POST',
+        'callback' => function (WP_REST_Request $req) {
+            $body = $req->get_body();
+
+            $response = wp_remote_post("https://n8n.eecie.ca/webhook/StartTask", [
+                'headers' => [
+                    'Content-Type' => 'application/json',
+                ],
+                'body'    => $body,
+                'timeout' => 15
+            ]);
+
+            if (is_wp_error($response)) {
+                return new WP_Error('proxy_failed', $response->get_error_message(), ['status' => 500]);
+            }
+
+            return rest_ensure_response([
+                'code' => wp_remote_retrieve_response_code($response),
+                'body' => wp_remote_retrieve_body($response)
+            ]);
+        },
+        'permission_callback' => function () {
+            return is_user_logged_in(); // ou __return_true si tu veux public
         }
+    ]);
+    register_rest_route('eecie-crm/v1', '/taches/(?P<id>\d+)', [
+        'methods'  => 'PATCH',
+        'callback' => function (WP_REST_Request $request) {
+            $id = (int) $request['id'];
+            $body = $request->get_json_params();
 
-        $baseUrl = rtrim(get_option('gce_baserow_url'), '/');
-        $token = get_option('gce_baserow_api_key');
-        $url = "$baseUrl/api/database/rows/table/$table_id/$id/";
+            $table_id = get_option('gce_baserow_table_taches') ?: eecie_crm_guess_table_id('Taches');
+            if (!$table_id) {
+                return new WP_Error('no_table', 'Table inconnue');
+            }
 
-        $response = wp_remote_request($url, [
-            'method' => 'PATCH',
-            'headers' => [
-                'Authorization' => 'Token ' . $token,
-                'Content-Type'  => 'application/json',
-            ],
-            'body' => json_encode($body),
-        ]);
+            $baseUrl = rtrim(get_option('gce_baserow_url'), '/');
+            $token = get_option('gce_baserow_api_key');
+            $url = "$baseUrl/api/database/rows/table/$table_id/$id/";
 
-        if (is_wp_error($response)) {
-            return new WP_Error('baserow_error', $response->get_error_message(), ['status' => 502]);
-        }
+            $response = wp_remote_request($url, [
+                'method' => 'PATCH',
+                'headers' => [
+                    'Authorization' => 'Token ' . $token,
+                    'Content-Type'  => 'application/json',
+                ],
+                'body' => json_encode($body),
+            ]);
 
-        $status = wp_remote_retrieve_response_code($response);
-        $body = json_decode(wp_remote_retrieve_body($response), true);
+            if (is_wp_error($response)) {
+                return new WP_Error('baserow_error', $response->get_error_message(), ['status' => 502]);
+            }
 
-        if ($status !== 200) {
-            return new WP_Error('baserow_api_error', "Erreur Baserow ($status)", ['status' => $status, 'details' => $body]);
-        }
+            $status = wp_remote_retrieve_response_code($response);
+            $body = json_decode(wp_remote_retrieve_body($response), true);
 
-        return rest_ensure_response($body);
-    },
-    'permission_callback' => function () {
-        $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) &&
-                       wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
-        return is_user_logged_in() && $nonce_valid;
-    },
-]);
-register_rest_route('eecie-crm/v1', '/taches', [
-    'methods'  => 'GET',
-    'callback' => function () {
-        $table_id = get_option('gce_baserow_table_taches') ?: eecie_crm_guess_table_id('Taches');
-        if (!$table_id) return new WP_Error('no_table', 'Table Tâches introuvable', ['status'=>500]);
+            if ($status !== 200) {
+                return new WP_Error('baserow_api_error', "Erreur Baserow ($status)", ['status' => $status, 'details' => $body]);
+            }
 
-        $rows = eecie_crm_baserow_get("rows/table/$table_id/", ['user_field_names'=>'true']);
-        return is_wp_error($rows) ? $rows : rest_ensure_response($rows);
-    },
-    'permission_callback' => function () {
-        $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) && wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
-        return is_user_logged_in() && $nonce_valid;
-    },
-]);
-
-register_rest_route('eecie-crm/v1', '/taches/schema', [
-    'methods' => 'GET',
-    'callback' => function () {
-        $table_id = get_option('gce_baserow_table_taches') ?: eecie_crm_guess_table_id('Taches');
-        if (!$table_id) return new WP_Error('no_table', 'Table Tâches introuvable', ['status'=>500]);
-
-        $fields = eecie_crm_baserow_get_fields($table_id);
-        return is_wp_error($fields) ? $fields : rest_ensure_response($fields);
-    },
-    'permission_callback' => function () {
-        $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) && wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
-        return is_user_logged_in() && $nonce_valid;
-    },
-]);
-
+            return rest_ensure_response($body);
+        },
+        'permission_callback' => function () {
+            $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) &&
+                wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+            return is_user_logged_in() && $nonce_valid;
+        },
+    ]);
 });
 
 
 
-function eecie_crm_get_opportunites(WP_REST_Request $request) {
+function eecie_crm_get_opportunites(WP_REST_Request $request)
+{
     $table_id = get_option('gce_baserow_table_opportunites')
-              ?: eecie_crm_guess_table_id('Task_input');
+        ?: eecie_crm_guess_table_id('Task_input');
     if (!$table_id) {
-        return new WP_Error('no_table', 'Table Opportunités introuvable', ['status'=>500]);
+        return new WP_Error('no_table', 'Table Opportunités introuvable', ['status' => 500]);
     }
     // On récupère tout pour filtrer côté client
-    $rows = eecie_crm_baserow_get("rows/table/$table_id/", ['user_field_names'=>'true']);
+    $rows = eecie_crm_baserow_get("rows/table/$table_id/", ['user_field_names' => 'true']);
     return is_wp_error($rows) ? $rows : rest_ensure_response($rows);
 }
 
 
-function eecie_crm_create_utilisateur(WP_REST_Request $request) {
+function eecie_crm_create_utilisateur(WP_REST_Request $request)
+{
     $table_id = get_option('gce_baserow_table_utilisateurs') ?: eecie_crm_guess_table_id('T1_user');
     if (!$table_id) {
         return new WP_Error('missing_table_id', 'ID de table introuvable.', ['status' => 500]);
@@ -229,7 +300,8 @@ function eecie_crm_create_utilisateur(WP_REST_Request $request) {
 }
 
 
-function eecie_crm_delete_utilisateur(WP_REST_Request $request) {
+function eecie_crm_delete_utilisateur(WP_REST_Request $request)
+{
     $row_id = (int) $request->get_param('id');
     $table_id = get_option('gce_baserow_table_utilisateurs') ?: eecie_crm_guess_table_id('T1_user');
 
@@ -245,7 +317,8 @@ function eecie_crm_delete_utilisateur(WP_REST_Request $request) {
 }
 
 
-function eecie_crm_baserow_delete($endpoint) {
+function eecie_crm_baserow_delete($endpoint)
+{
     $base_url = rtrim(get_option('gce_baserow_url'), '/');
     $token = get_option('gce_baserow_api_key');
 
@@ -277,7 +350,8 @@ function eecie_crm_baserow_delete($endpoint) {
 }
 
 
-function eecie_crm_check_capabilities() {
+function eecie_crm_check_capabilities()
+{
     return  check_ajax_referer('wp_rest', '_wpnonce', false);
 }
 
@@ -295,7 +369,8 @@ function eecie_crm_get_contacts(WP_REST_Request $request)
 }
 
 
-function eecie_crm_baserow_post($endpoint, $payload = []) {
+function eecie_crm_baserow_post($endpoint, $payload = [])
+{
     $base_url = rtrim(get_option('gce_baserow_url'), '/');
     $token = get_option('gce_baserow_api_key');
 
@@ -343,7 +418,8 @@ function eecie_crm_get_utilisateurs(WP_REST_Request $request)
     return is_wp_error($rows) ? $rows : rest_ensure_response($rows);
 }
 
-function eecie_crm_update_utilisateur(WP_REST_Request $request) {
+function eecie_crm_update_utilisateur(WP_REST_Request $request)
+{
     $id = (int) $request['id'];
     $body = $request->get_json_params();
 

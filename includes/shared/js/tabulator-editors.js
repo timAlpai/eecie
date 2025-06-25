@@ -1,4 +1,3 @@
-
 //  tickCrossEditor : pour les booléens
 function tickCrossEditor(cell, onRendered, success, cancel) {
     const input = document.createElement("input");
@@ -97,6 +96,8 @@ function inputEditor(cell, onRendered, success, cancel) {
 
     return input;
 }
+
+// sanitizeRowBeforeSave : nettoie les champs avant envoi vers Baserow
 function sanitizeRowBeforeSave(row, schema) {
     const cleaned = {};
 
@@ -104,6 +105,12 @@ function sanitizeRowBeforeSave(row, schema) {
         const name = field.name;
         const type = field.type;
         const id = field.id;
+
+        // ❌ Ne pas envoyer les champs non modifiables
+        if (["formula", "lookup", "rollup", "autonumber", "created_on", "modified_on"].includes(type)) {
+            return;
+        }
+
         let value = row[name];
 
         if (type === "boolean") {
@@ -118,7 +125,7 @@ function sanitizeRowBeforeSave(row, schema) {
         } else if (type === "link_row" && Array.isArray(value)) {
             cleaned["field_" + id] = value.map(v => v.id);
 
-        } else if (!["formula", "lookup", "rollup"].includes(type)) {
+        } else {
             cleaned["field_" + id] = value;
         }
     });

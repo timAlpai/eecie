@@ -2,14 +2,16 @@
 defined('ABSPATH') || exit;
 
 // Style de login personnalisé
-function gce_login_custom_style() {
+function gce_login_custom_style()
+{
     wp_enqueue_style('gce-login-css', plugin_dir_url(__FILE__) . 'assets/css/login.css');
 }
 add_action('login_enqueue_scripts', 'gce_login_custom_style');
 
 // Redirection après login pour les non-admins
 add_filter('login_redirect', 'gce_redirect_user_after_login', 10, 3);
-function gce_redirect_user_after_login($redirect_to, $request, $user) {
+function gce_redirect_user_after_login($redirect_to, $request, $user)
+{
     if (!is_wp_error($user)) {
         if (!in_array('administrator', (array) $user->roles)) {
             return home_url('/mon-espace');
@@ -20,11 +22,13 @@ function gce_redirect_user_after_login($redirect_to, $request, $user) {
 
 // Enqueue conditionnel des scripts pour la partie publique
 add_action('wp_enqueue_scripts', 'gce_enqueue_front_scripts');
-function gce_enqueue_front_scripts() {
+function gce_enqueue_front_scripts()
+{
     if (!is_user_logged_in()) return;
 
     $page_slug = isset($_GET['gce-page']) ? sanitize_text_field($_GET['gce-page']) : '';
-    if ($page_slug !== 'opportunites') return;
+    if (!in_array($page_slug, ['opportunites', 'taches'])) return;
+
 
     // Tabulator + dépendances
     wp_enqueue_style('tabulator-css', 'https://unpkg.com/tabulator-tables@6.3/dist/css/tabulator.min.css', [], '6.3');
@@ -35,9 +39,10 @@ function gce_enqueue_front_scripts() {
     wp_enqueue_script('gce-tabulator-columns', plugin_dir_url(__FILE__) . '../shared/js/tabulator-columns.js', ['tabulator-js', 'gce-tabulator-editors'], GCE_VERSION, true);
 
     // Script opportunités
-    wp_enqueue_script('gce-opportunites-js',
+    wp_enqueue_script(
+        'gce-opportunites-js',
         plugin_dir_url(__FILE__) . 'assets/js/opportunites.js',
-        ['eecie-crm-rest','tabulator-js','gce-tabulator-editors','gce-tabulator-columns'],
+        ['eecie-crm-rest', 'tabulator-js', 'gce-tabulator-editors', 'gce-tabulator-columns'],
         GCE_VERSION,
         true
     );
@@ -50,7 +55,8 @@ function gce_enqueue_front_scripts() {
 
 // Shortcode (si jamais tu l’utilises ailleurs)
 add_shortcode('gce_user_dashboard', 'gce_render_user_dashboard');
-function gce_render_user_dashboard() {
+function gce_render_user_dashboard()
+{
     if (!is_user_logged_in()) {
         return '<p>Vous devez être connecté pour accéder à cet espace.</p>';
     }
@@ -61,9 +67,9 @@ function gce_render_user_dashboard() {
     wp_enqueue_style('gce-popup-css', plugin_dir_url(__FILE__) . '../shared/css/popup.css', [], GCE_VERSION);
 
     $current_page = isset($_GET['gce-page']) ? sanitize_text_field($_GET['gce-page']) : 'dashboard';
-
+   
     ob_start();
-    ?>
+?>
     <div class="gce-dashboard">
         <header class="gce-header">
             <span class="gce-header-title">Mon espace</span>
@@ -81,12 +87,13 @@ function gce_render_user_dashboard() {
             <?php gce_render_dashboard_content($current_page); ?>
         </main>
     </div>
-    <?php
+<?php
     return ob_get_clean();
 }
 
 // Rend les pages internes du dashboard public
-function gce_render_dashboard_content($page) {
+function gce_render_dashboard_content($page)
+{
     $base = plugin_dir_path(__FILE__) . 'pages/';
     switch ($page) {
         case 'dashboard':
