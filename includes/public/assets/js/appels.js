@@ -19,50 +19,91 @@ document.addEventListener('DOMContentLoaded', () => {
         }).then(r => r.json()),
         fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/appels/schema', {
             headers: { 'X-WP-Nonce': EECIE_CRM.nonce }
+        }).then(r => r.json()),
+        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/interactions/schema', {
+            headers: { 'X-WP-Nonce': EECIE_CRM.nonce }
         }).then(r => r.json())
     ])
-    .then(([appelsData, interactionsData, appelsSchema]) => {
-        if (!appelsData.results || !interactionsData.results || !Array.isArray(appelsSchema)) {
-            container.innerHTML = '<p>Erreur lors de la récupération des données.</p>';
-            return;
-        }
+    .then(([appelsData, interactionsData, appelsSchema, interactionsSchema]) => {
+        const appels = appelsData.results || [];
+        const interactions = interactionsData.results || [];
 
-        const appels = appelsData.results;
-        const interactions = interactionsData.results;
-
-        // Grouper les interactions par ID d'appel
         const groupedInteractions = {};
         interactions.forEach(inter => {
-            if (!inter.Appel || !Array.isArray(inter.Appel)) return;
-            inter.Appel.forEach(link => {
+            const appelField = Object.keys(inter).find(k => k.toLowerCase().startsWith("appel"));
+            if (!appelField || !Array.isArray(inter[appelField])) return;
+            inter[appelField].forEach(link => {
                 if (!groupedInteractions[link.id]) groupedInteractions[link.id] = [];
                 groupedInteractions[link.id].push(inter);
+                console.log(`🧷 Interaction ${inter.id} liée à appel ${link.id}`);
             });
         });
 
-        // Injecter les interactions comme _children dans chaque appel
-        const appelsAvecChildren = appels.map(appel => ({
-            ...appel,
-            _children: groupedInteractions[appel.id] || []
-        }));
+        const appelsAvecChildren = appels.map(appel => {
+            const enfants = groupedInteractions[appel.id];
+            console.log(`📞 Appel ID ${appel.id} → ${enfants?.length || 0} interaction(s)`);
+            return {
+                ...appel,
+                _children: Array.isArray(enfants) && enfants.length > 0 ? enfants : []
+            };
+        });
 
-        // Colonnes dynamiques depuis ton système
         const columns = getTabulatorColumnsFromSchema(appelsSchema);
+        const interactionColumns = getTabulatorColumnsFromSchema(interactionsSchema);
 
-        // Créer et injecter le tableau
         const tableEl = document.createElement('div');
         container.innerHTML = '';
         container.appendChild(tableEl);
 
-        new Tabulator(tableEl, {
-            data: appelsAvecChildren,
-            dataTree: true,
-            dataTreeStartExpanded: false,
+       const table =  new Tabulator(tableEl, {
+    data: appelsAvecChildren,
+    layout: "fitColumns",
+    columns: columns,
+    columnDefaults: {
+        resizable: true,
+        widthGrow: 1
+    },
+    height: "auto",
+    placeholder: "Aucun appel trouvé.",
+    responsiveLayout: "collapse",
+
+    rowFormatter: function (row) {
+        const data = row.getData()._children;
+        if (!Array.isArray(data) || data.length === 0) return;
+
+        const holderEl = document.createElement("div");
+        holderEl.style.margin = "10px";
+        holderEl.style.borderTop = "1px solid #ddd";
+
+        const table = document.createElement("div");
+        holderEl.appendChild(table);
+        row.getElement().appendChild(holderEl);
+
+       new Tabulator(table, {
+            data: data,
             layout: "fitColumns",
-            columns: columns,
             height: "auto",
-            placeholder: "Aucun appel trouvé.",
+            columns: [
+                { title: "ID", field: "id" },
+                { title: "Type", field: "types_interactions.value" },
+                { title: "Compte rendu", field: "compte_rendu" },
+                { title: "Lien", field: "id", formatter: (cell) => {
+                    const id = cell.getValue();
+                    return `<a href="#" class="gce-popup-link" data-table="interactions" data-id="${id}">🔍 voir</a>`;
+                }}
+            ],
+            renderComplete: () => {
+                // ⚠️ IMPORTANT : on redéclenche le popup handler
+                if (typeof initializePopupHandlers === "function") {
+                    initializePopupHandlers();
+                }
+            }
         });
+    }
+});
+
+        
+        window.appelsTable = table;
     })
     .catch(err => {
         console.error("Erreur appels.js :", err);

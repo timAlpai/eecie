@@ -19,34 +19,50 @@ document.addEventListener('DOMContentLoaded', () => {
         }).then(r => r.json()),
         fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/devis/schema', {
             headers: { 'X-WP-Nonce': EECIE_CRM.nonce }
+        }).then(r => r.json()),
+        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/articles_devis/schema', {
+            headers: { 'X-WP-Nonce': EECIE_CRM.nonce }
         }).then(r => r.json())
     ])
-    .then(([devisData, articlesData, devisSchema]) => {
-        if (!devisData.results || !articlesData.results || !Array.isArray(devisSchema)) {
-            container.innerHTML = '<p>Erreur lors de la récupération des données.</p>';
-            return;
-        }
+    .then(([devisData, articlesData, devisSchema, articlesSchema]) => {
+        const devis = devisData.results || [];
+        const articles = articlesData.results || [];
 
-        const devis = devisData.results;
-        const articles = articlesData.results;
-
-        // Grouper les articles par ID de devis
+        // Groupement des articles par devis
         const groupedArticles = {};
         articles.forEach(article => {
-            if (!article.Devis || !Array.isArray(article.Devis)) return;
-            article.Devis.forEach(link => {
+            const devisField = Object.keys(article).find(k => k.toLowerCase().startsWith("devis"));
+            if (!devisField || !Array.isArray(article[devisField])) return;
+            article[devisField].forEach(link => {
                 if (!groupedArticles[link.id]) groupedArticles[link.id] = [];
                 groupedArticles[link.id].push(article);
+                console.log(`🧾 Article ${article.id} lié au devis ${link.id}`);
             });
         });
 
         // Injecter les articles comme _children dans chaque devis
-        const devisAvecChildren = devis.map(item => ({
-            ...item,
-            _children: groupedArticles[item.id] || []
-        }));
+        const devisAvecChildren = devis.map(d => {
+            const enfants = groupedArticles[d.id];
+            return {
+                ...d,
+                _children: Array.isArray(enfants) && enfants.length > 0 ? enfants : []
+            };
+        });
 
         const columns = getTabulatorColumnsFromSchema(devisSchema);
+        const articleColumns = [
+            { title: "ID", field: "id" },
+            { title: "Désignation", field: "designation" },
+            { title: "Quantité", field: "quantite" },
+            { title: "Prix unitaire", field: "prix_unitaire" },
+            { title: "Total", field: "total" },
+            {
+                title: "Lien", field: "id", formatter: (cell) => {
+                    const id = cell.getValue();
+                    return `<a href="#" class="gce-popup-link" data-table="articles_devis" data-id="${id}">🔍</a>`;
+                }
+            }
+        ];
 
         const tableEl = document.createElement('div');
         container.innerHTML = '';
@@ -54,44 +70,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
         new Tabulator(tableEl, {
             data: devisAvecChildren,
-            dataTree: true,
-            dataTreeStartExpanded: false,
             layout: "fitColumns",
             columns: columns,
+            columnDefaults: {
+                resizable: true,
+                widthGrow: 1
+            },
             height: "auto",
             placeholder: "Aucun devis trouvé.",
-            cellEdited: function (cell) {
-                const row = cell.getRow().getData();
-                const schema = window.gceDevisSchema;
-                const cleaned = sanitizeRowBeforeSave(row, schema);
-                const isArticle = !!row.Devis; // Si présent, c'est un article
+            responsiveLayout: "collapse",
+            cellEdited: window.gceTabulatorSaveHandler('devis'),
 
-                const endpoint = isArticle
-                    ? `articles_devis/${row.id}`
-                    : `devis/${row.id}`;
+            rowFormatter: function (row) {
+                const data = row.getData()._children;
+                if (!Array.isArray(data) || data.length === 0) return;
 
-                fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/${endpoint}`, {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-WP-Nonce': EECIE_CRM.nonce
+                const holderEl = document.createElement("div");
+                holderEl.style.margin = "10px";
+                holderEl.style.borderTop = "1px solid #ddd";
+
+                const table = document.createElement("div");
+                holderEl.appendChild(table);
+                row.getElement().appendChild(holderEl);
+
+                new Tabulator(table, {
+                    data: data,
+                    columns: articleColumns,
+                    layout: "fitColumns",
+                    columnDefaults: {
+                        resizable: true,
+                        widthGrow: 1
                     },
-                    body: JSON.stringify(cleaned)
-                })
-                .then(res => res.json())
-                .then(json => {
-                    console.log("✅ Modification sauvegardée :", json);
-                })
-                .catch(err => {
-                    console.error("❌ Erreur lors de l'enregistrement :", err);
+                    height: "auto",
+                    responsiveLayout: "collapse",
+                    cellEdited: window.gceTabulatorSaveHandler('articles_devis'),
+
+                    renderComplete: () => {
+                        if (typeof initializePopupHandlers === "function") {
+                            initializePopupHandlers();
+                        }
+                    }
                 });
             }
         });
-
-        window.gceDevisSchema = devisSchema;
     })
     .catch(err => {
         console.error("Erreur devis.js :", err);
-        container.innerHTML = `<p>Erreur réseau : ${err.message}</p>`;
+        container.innerHTML = `<p>Erreur réseau ou serveur : ${err.message}</p>`;
     });
 });

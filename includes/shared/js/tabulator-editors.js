@@ -134,3 +134,25 @@ function sanitizeRowBeforeSave(row, schema) {
 }
 
 window.sanitizeRowBeforeSave = sanitizeRowBeforeSave;
+window.gceTabulatorSaveHandler = function (tableName) {
+    return function (cell) {
+        const row = cell.getRow().getData();
+        const id = row.id;
+        const field = cell.getField();
+        const value = cell.getValue();
+
+        fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/${tableName}/${id}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-WP-Nonce': EECIE_CRM.nonce
+            },
+            body: JSON.stringify({ [field]: value })
+        }).then(res => {
+            if (!res.ok) throw new Error(`Erreur ${res.status}`);
+            console.log(`✅ Champ "${field}" mis à jour dans ${tableName} #${id}`);
+        }).catch(err => {
+            console.error("❌ Erreur de sauvegarde automatique :", err);
+        });
+    };
+};

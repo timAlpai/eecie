@@ -166,3 +166,8 @@
     padding: 4px 6px;
   }
 }
+#gce-appels-table .tabulator {
+    max-width: 100%;
+    overflow-x: auto;
+    box-sizing: border-box;
+}

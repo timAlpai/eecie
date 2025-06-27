@@ -67,7 +67,7 @@ function gce_render_user_dashboard()
     wp_enqueue_style('gce-popup-css', plugin_dir_url(__FILE__) . '../shared/css/popup.css', [], GCE_VERSION);
 
     $current_page = isset($_GET['gce-page']) ? sanitize_text_field($_GET['gce-page']) : 'dashboard';
-   
+
     ob_start();
 ?>
     <div class="gce-dashboard">
@@ -80,9 +80,10 @@ function gce_render_user_dashboard()
             <ul class="gce-nav">
                 <li><a href="?gce-page=dashboard">🏠 Dashboard</a></li>
                 <li><a href="?gce-page=taches">📋 Mes Tâches</a></li>
-                <li><a href="?gce-page=opportunites">💼 Opportunités</a></li>               
-                <li><a href="?gce-page=appels">📞 Appels</a></li>
+                <li><a href="?gce-page=opportunites">💼 Opportunités</a></li>
+                <li><a href="?gce-page=appels">📞 Flux de travail</a></li>
                 <li><a href="?gce-page=devis">📄 Devis</a></li>
+                <li><a href="?gce-page=contacts">📇 Mes contacts</a></li>
             </ul>
         </aside>
         <main class="gce-main-content">
@@ -112,6 +113,9 @@ function gce_render_dashboard_content($page)
             break;
         case 'devis':
             include $base . 'devis.php';
+            break;
+        case 'contacts':
+            include $base . 'contacts.php';
             break;
 
         default:
