@@ -93,5 +93,11 @@ if (is_wp_error($tables)) {
 
         <?php submit_button('Enregistrer'); ?>
     </form>
+
+
+<h2>Explorer la structure Baserow</h2>
+<p><button id="gce-explorer-structure" class="button">🔍 Voir la structure</button></p>
+<div id="gce-baserow-structure-output" style="white-space: pre-wrap; background: #f8f8f8; padding: 10px; border: 1px solid #ccc; max-height: 400px; overflow: auto;"></div>
+
 </div>
 

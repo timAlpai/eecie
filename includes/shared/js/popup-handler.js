@@ -4,15 +4,23 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!link) return;
 
     e.preventDefault();
+    const normalize = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
     const rawTable = link.dataset.table;
+    const normTable = normalize(rawTable);
+
     const table = ({
       assigne: 'utilisateurs',
       contact: 'contacts',
-      opportunite: 'task_input'
-    })[rawTable] || rawTable;
-
-
+      opportunite: 'task_input',
+      task_input: 'task_input',
+      t1_user: 'utilisateurs',
+      appel: 'appels',
+      interaction: 'interactions',
+      devis: 'devis',
+      article: 'articles_devis',
+      articles_devis: 'articles_devis'
+    })[normTable] || normTable;
 
 
     const id = link.dataset.id;

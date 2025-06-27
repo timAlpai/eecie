@@ -80,7 +80,9 @@ function gce_render_user_dashboard()
             <ul class="gce-nav">
                 <li><a href="?gce-page=dashboard">🏠 Dashboard</a></li>
                 <li><a href="?gce-page=taches">📋 Mes Tâches</a></li>
-                <li><a href="?gce-page=opportunites">💼 Opportunités</a></li>
+                <li><a href="?gce-page=opportunites">💼 Opportunités</a></li>               
+                <li><a href="?gce-page=appels">📞 Appels</a></li>
+                <li><a href="?gce-page=devis">📄 Devis</a></li>
             </ul>
         </aside>
         <main class="gce-main-content">
@@ -105,6 +107,13 @@ function gce_render_dashboard_content($page)
         case 'opportunites':
             include $base . 'opportunites.php';
             break;
+        case 'appels':
+            include $base . 'appels.php';
+            break;
+        case 'devis':
+            include $base . 'devis.php';
+            break;
+
         default:
             echo '<h2>Page introuvable</h2>';
     }
