@@ -1,4 +1,4 @@
-function getTabulatorColumnsFromSchema(schema) {
+function getTabulatorColumnsFromSchema(schema, tableName = "") {
     return schema.map(field => {
         const isRelation = field.type === "link_row";
         const isBoolean = field.type === "boolean";
@@ -8,6 +8,7 @@ function getTabulatorColumnsFromSchema(schema) {
         const isAttachment = field.name === "Attachement";
         const isStatus = field.name === "Status";
         const isStatut = field.name === "statut";
+
         const column = {
             title: field.name,
             field: field.name,
@@ -25,7 +26,7 @@ function getTabulatorColumnsFromSchema(schema) {
             };
             column.formatterParams = { allowHTML: true };
 
-        } else if (isStatus) {
+        } else if (isStatus || isStatut) {
             column.formatter = function (cell) {
                 const val = cell.getValue();
                 if (!val || typeof val !== 'object') return '';
@@ -34,17 +35,7 @@ function getTabulatorColumnsFromSchema(schema) {
                 return `<span class="gce-badge ${colorClass}">${label}</span>`;
             };
             column.formatterParams = { allowHTML: true };
-            column.editor = false; // pas éditable manuellement
-        } else if (isStatut) {
-            column.formatter = function (cell) {
-                const val = cell.getValue();
-                if (!val || typeof val !== 'object') return '';
-                const colorClass = 'gce-color-' + (val.color || 'gray');
-                const label = val.value || val.name || '';
-                return `<span class="gce-badge ${colorClass}">${label}</span>`;
-            };
-            column.formatterParams = { allowHTML: true };
-            column.editor = false; // pas éditable manuellement
+
         } else if (isSelect && Array.isArray(field.select_options)) {
             const options = field.select_options.map(opt => opt.value || opt.name || opt.id);
             column.editor = selectEditor(options);
@@ -56,47 +47,45 @@ function getTabulatorColumnsFromSchema(schema) {
                 return `<span class="gce-badge gce-color-${color}">${label}</span>`;
             };
             column.formatterParams = { allowHTML: true };
+
+        } else if (isRelation) {
+            column.formatter = function (cell) {
+                const value = cell.getValue();
+                if (!Array.isArray(value)) return '';
+                const page = field.name.toLowerCase();
+                return value.map(obj =>
+                    `<a href="#" class="gce-popup-link" data-table="${page}" data-id="${obj.id}">${obj.value}</a>`
+                ).join(', ');
+            };
+            column.formatterParams = { allowHTML: true };
+
+        } else if (isBoolean) {
+            column.editor = tickCrossEditor;
+            column.formatter = "tickCross";
+
+        } else if (isDate) {
+            column.editor = dateEditor;
+
+        } else if (isRollup) {
+            column.editor = false;
+
+        } else {
+            column.editor = inputEditor;
+        }
+
+        if (field.name.toLowerCase() === 'tel') {
+            column.formatter = function (cell) {
+                const value = cell.getValue();
+                if (!value) return '';
+                const clean = value.replace(/\s+/g, '');
+                return `<a href="tel:${clean}">${value}</a>`;
+            };
+            column.formatterParams = { allowHTML: true };
+            column.editor = false;
+        }
+
         
-        }else if (isRelation) {
-                column.formatter = function (cell) {
-                    const value = cell.getValue();
-                    if (!Array.isArray(value)) return '';
-                    const page = field.name.toLowerCase();
-                    return value.map(obj =>
-                        `<a href="#" class="gce-popup-link" data-table="${page}" data-id="${obj.id}">${obj.value}</a>`
-                    ).join(', ');
-                };
-                column.formatterParams = { allowHTML: true };
 
-            } else if (isBoolean) {
-                column.editor = tickCrossEditor;
-                column.formatter = "tickCross";
-
-            } else if (isDate) {
-                column.editor = dateEditor;
-
-            } else if (isSelect && Array.isArray(field.select_options)) {
-                const options = field.select_options.map(opt => opt.value || opt.name || opt.id);
-                column.editor = selectEditor(options);
-
-            } else if (isRollup) {
-                column.editor = false;
-
-            } else {
-                column.editor = inputEditor;
-            }
-            if (field.name.toLowerCase() === 'tel') {
-                column.formatter = function (cell) {
-                    const value = cell.getValue();
-                    if (!value) return '';
-                    const clean = value.replace(/\s+/g, '');
-                    return `<a href="tel:${clean}">${value}</a>`;
-                };
-                column.formatterParams = { allowHTML: true };
-                column.editor = false;
-            }
-
-
-            return column;
-        });
+        return column;
+    });
 }
