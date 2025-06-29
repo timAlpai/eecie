@@ -166,8 +166,89 @@
     padding: 4px 6px;
   }
 }
-#gce-appels-table .tabulator {
+
+div[class^="gce-"] .tabulator {
     max-width: 100%;
     overflow-x: auto;
     box-sizing: border-box;
+}
+/* Conteneur Tabulator avec coins arrondis */
+.gce-tabulator .tabulator {
+  background-color: #2e2e2e;
+  border: 1px solid #444;
+  border-radius: 8px;
+  font-family: "Segoe UI", sans-serif;
+  color: #ddd;
+}
+
+/* En-tête */
+.gce-tabulator .tabulator-header {
+  background-color: #1a1a1a;
+  color: #eee;
+  font-weight: bold;
+}
+
+/* Colonnes de l'en-tête avec wrapping */
+.gce-tabulator .tabulator-header .tabulator-col,
+.gce-tabulator .tabulator-header .tabulator-col-row-handle {
+  white-space: normal;
+  border-right: 1px solid #444;
+}
+
+/* Lignes normales */
+.gce-tabulator .tabulator-row {
+  background-color: #3b3b3b;
+  color: #f0f0f0;
+  border-bottom: 1px solid #444;
+}
+
+/* Lignes paires */
+.gce-tabulator .tabulator-row:nth-child(even) {
+  background-color: #2f2f2f;
+}
+
+/* Hover sur lignes */
+.gce-tabulator .tabulator-row:hover {
+  background-color: #555;
+}
+
+/* Liens dans les cellules */
+.gce-tabulator .tabulator-cell a {
+  color: #4da6ff;
+  text-decoration: underline;
+}
+
+.gce-tabulator .tabulator-cell a:hover {
+  color: #88c9ff;
+}
+
+/* Boutons dans les cellules */
+.gce-tabulator button {
+  background-color: #444;
+  color: #ddd;
+  border: 1px solid #666;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 0.9em;
+}
+
+.gce-tabulator button:hover {
+  background-color: #555;
+  border-color: #888;
+}
+
+/* Champs sélection/checkbox */
+.gce-tabulator .tabulator-cell input,
+.gce-tabulator .tabulator-edit-select {
+  background-color: #2a2a2a;
+  color: #f5f5f5;
+  border: 1px solid #666;
+}
+
+/* Champs texte edit inline */
+.gce-tabulator .tabulator-edit-input {
+  background-color: #2a2a2a;
+  color: #fff;
+  border: 1px solid #888;
 }

@@ -64,6 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const columns = getTabulatorColumnsFromSchema(contactSchema);
 
         const tableEl = document.createElement('div');
+        tableEl.className = 'gce-tabulator';
         container.innerHTML = '';
         container.appendChild(tableEl);
 

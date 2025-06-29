@@ -54,6 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const interactionColumns = getTabulatorColumnsFromSchema(interactionsSchema);
 
         const tableEl = document.createElement('div');
+        tableEl.className = 'gce-tabulator';
         container.innerHTML = '';
         container.appendChild(tableEl);
 

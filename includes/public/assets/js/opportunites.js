@@ -68,6 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const tableEl = document.createElement('div');
+            tableEl.className = 'gce-tabulator';
             container.appendChild(tableEl);
 
             const cols = getTabulatorColumnsFromSchema(oppSchema);
