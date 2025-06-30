@@ -472,7 +472,71 @@ add_action('rest_api_init', function () {
             return is_user_logged_in() && $nonce_valid;
         },
     ]);
+    register_rest_route('eecie-crm/v1', '/interactions/(?P<id>\d+)', [
+        'methods'  => 'DELETE',
+        'callback' => function (WP_REST_Request $request) {
+            $row_id = (int) $request['id'];
+            $table_id = get_option('gce_baserow_table_interactions') ?: eecie_crm_guess_table_id('Interactions');
+            if (!$table_id) {
+                return new WP_Error('no_table', 'Table Interactions introuvable');
+            }
 
+            return eecie_crm_baserow_delete("rows/table/$table_id/$row_id/");
+        },
+        'permission_callback' => function () {
+            return is_user_logged_in() &&
+                isset($_SERVER['HTTP_X_WP_NONCE']) &&
+                wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+        },
+    ]);
+ register_rest_route('eecie-crm/v1', '/proxy/calculate-devis', [
+        'methods'  => 'POST',
+        'callback' => function (WP_REST_Request $req) {
+            // IMPORTANT : Remplacez cette URL par l'URL réelle de votre webhook n8n
+            $n8n_webhook_url = "https://n8n.eecie.ca/webhook/fc9a0dba-704b-4391-9190-4db7a33a85b0"; 
+            
+            $body = $req->get_body(); // On transmet les données du devis reçues du JS
+
+            $response = wp_remote_post($n8n_webhook_url, [
+                'headers' => [
+                    'Content-Type' => 'application/json',
+                ],
+                'body'    => $body,
+                'timeout' => 180 // Augmentez le timeout si le workflow est long
+            ]);
+
+            if (is_wp_error($response)) {
+                return new WP_Error('proxy_failed', $response->get_error_message(), ['status' => 502]);
+            }
+            
+            $response_code = wp_remote_retrieve_response_code($response);
+            $response_body = wp_remote_retrieve_body($response);
+
+            // On vérifie si n8n a répondu avec un code de succès (2xx)
+            if ($response_code < 200 || $response_code >= 300) {
+                 return new WP_Error(
+                    'n8n_error', 
+                    'Le service de calcul a retourné une erreur.', 
+                    ['status' => $response_code, 'details' => $response_body]
+                );
+            }
+
+            return rest_ensure_response([
+                'status' => 'success',
+                'n8n_response_code' => $response_code,
+                'n8n_response_body' => json_decode($response_body) // On décode la réponse de n8n
+            ]);
+        },
+        'permission_callback' => function () {
+            // Sécurisé pour les utilisateurs connectés avec un nonce valide
+            return is_user_logged_in() && 
+                   isset($_SERVER['HTTP_X_WP_NONCE']) &&
+                   wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+        }
+    ]);
+
+
+   
 
     // GET /devis
     register_rest_route('eecie-crm/v1', '/devis', [
