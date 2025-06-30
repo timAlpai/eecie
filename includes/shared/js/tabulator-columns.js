@@ -53,23 +53,28 @@ function getTabulatorColumnsFromSchema(schema, tableName = "") {
                 const value = cell.getValue();
                 if (!Array.isArray(value) || !field.link_row_table_id) return '';
                 
-                // Use the reliable ID-to-slug map FROM THE GLOBAL OBJECT
-                // Ancien code défectueux : const targetTableSlug = tableIdMap[field.link_row_table_id];
-                const targetTableSlug = window.EECIE_CRM.tableIdMap[field.link_row_table_id]; // <-- CORRECTION
+                const targetTableSlug = window.EECIE_CRM.tableIdMap[field.link_row_table_id];
                 
                 if (!targetTableSlug) {
-                    // Fallback or error for safety
-                    console.warn(`No slug found for table ID ${field.link_row_table_id}. Using field name as fallback.`);
-                    // Affiche la valeur brute si le slug n'est pas trouvé, pour éviter de tout casser.
+                    console.warn(`No slug found for table ID ${field.link_row_table_id}.`);
                     return value.map(obj => obj.value).join(', ');
                 }
 
+                // === MODIFICATION RECOMMANDÉE CI-DESSOUS ===
                 return value.map(obj =>
-                    `<a href="#" class="gce-popup-link" data-table="${field.name}" data-id="${obj.id}">${obj.value}</a>`
+                    // On enveloppe le lien et l'icône dans un conteneur pour un meilleur alignement
+                    `<span style="display: inline-flex; align-items: center; gap: 5px;">
+                        <!-- Lien pour la LECTURE (mode par défaut) -->
+                        <a href="#" class="gce-popup-link" data-table="${field.name}" data-id="${obj.id}">${obj.value}</a>
+                        
+                        <!-- Icône pour l'ÉCRITURE (mode="ecriture") -->
+                        <a href="#" class="gce-popup-link" data-table="${field.name}" data-id="${obj.id}" data-mode="ecriture" title="Modifier">✏️</a>
+                    </span>`
                 ).join(', ');
+                // === FIN DE LA MODIFICATION ===
             };
             column.formatterParams = { allowHTML: true };
-            column.editor = false; // Linked rows are not directly editableS
+            column.editor = false; 
         }  else if (isBoolean) {
             column.editor = tickCrossEditor;
             column.formatter = "tickCross";

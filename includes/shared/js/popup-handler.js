@@ -1,25 +1,38 @@
 /**
- * Handles popup modals for viewing and editing Baserow records.
- * Uses event delegation to work with dynamically generated Tabulator links.
+ * Fichier : includes/shared/js/popup-handler.js
+ *
+ * Gère les popups (modals) pour visualiser et éditer les enregistrements Baserow.
+ * Utilise la délégation d'événements pour fonctionner avec les liens générés dynamiquement par Tabulator.
  */
 
 /**
- * Refreshes the data of any visible Tabulator table on the page.
- * This is used to update the UI after a record is created or updated in a modal.
+ * Rafraîchit les tables de données principales sur la page après une modification.
+ * Cette version est conçue pour fonctionner avec des tables principales pouvant contenir des sous-tables.
  */
 function gceRefreshVisibleTable() {
-    document.querySelectorAll(".tabulator").forEach(el => {
-        const tabulatorInstance = el.tabulator;
-        // Check if the table is visible and is a valid Tabulator instance
-        if (tabulatorInstance && el.offsetParent !== null) {
-            console.log("🔁 Refreshing visible table:", tabulatorInstance.element.id || 'N/A');
-            tabulatorInstance.replaceData();
+    console.log("🔁 Attempting to refresh main tables...");
+
+    // Liste des variables globales contenant nos instances principales de Tabulator
+    const mainTableInstances = [
+        window.devisTable,
+        window.appelsTable,
+        window.gceUserTable
+        // Ajoutez d'autres instances de tables principales ici si nécessaire
+    ];
+
+    mainTableInstances.forEach(tableInstance => {
+        // Vérifie si l'instance existe et est une table Tabulator valide
+        if (tableInstance && typeof tableInstance.replaceData === 'function') {
+            console.log(`✅ Found main table instance. Refreshing data...`);
+            // replaceData() va re-lancer la source de données d'origine (l'appel API),
+            // ce qui reconstruira la table principale et toutes ses sous-tables avec des données fraîches.
+            tableInstance.replaceData();
         }
     });
 }
 
 /**
- * Initializes the main event listener for popup links.
+ * Initialise l'écouteur d'événements principal pour les liens de popup.
  */
 document.addEventListener('DOMContentLoaded', () => {
     document.body.addEventListener('click', async (e) => {
@@ -35,8 +48,9 @@ document.addEventListener('DOMContentLoaded', () => {
             'assigne': 'utilisateurs',
             'contacts': 'contacts',
             'contact': 'contacts',
-            'task_input': 'opportunites', // <-- LA TRADUCTION IMPORTANTE
+            'task_input': 'opportunites',
             'opportunite': 'opportunites',
+            'opportunité': 'opportunites', // Gère le nom avec accent
             'appel': 'appels',
             'appels': 'appels',
             'interaction': 'interactions',
@@ -44,50 +58,35 @@ document.addEventListener('DOMContentLoaded', () => {
             'devis': 'devis',
             'articles_devis': 'articles_devis',
             'article': 'articles_devis'
-            // Ajoutez d'autres si nécessaire
         };
 
-        const rawTableName = link.dataset.table; // Ceci contiendra "Task_input", "T1_user", etc.
+        const rawTableName = link.dataset.table;
         const rowId = link.dataset.id;
+        const mode = link.dataset.mode || "lecture";
         
         // On traduit le nom brut en slug REST.
-        // On met en minuscule pour être sûr que ça matche (Task_input -> task_input)
-        const tableSlug = rawNameToSlugMap[rawTableName.toLowerCase()];
+        let tableSlug = rawNameToSlugMap[rawTableName.toLowerCase()];
 
         if (!tableSlug) {
-            // Si aucune traduction n'est trouvée, on suppose que le nom est le slug (ex: "contacts")
-            // C'est un fallback pour les cas simples.
             console.warn(`Aucune traduction pour '${rawTableName}', utilisation en tant que slug.`);
             tableSlug = rawTableName.toLowerCase();
         }
-
-        const mode = link.dataset.mode || "lecture";
 
         if (!rowId) {
             console.error(`ID de ligne manquant.`);
             return;
         }
 
-        // On appelle la route générique `/row/...` avec le SLUG REST traduit
         const url = `${EECIE_CRM.rest_url}eecie-crm/v1/row/${tableSlug}/${rowId}`;
 
         try {
-            console.log(`Tentative d'appel de : ${url}`);
-            
-            const res = await fetch(url, {
-                headers: { 'X-WP-Nonce': EECIE_CRM.nonce }
-            });
+            const res = await fetch(url, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } });
 
             if (!res.ok) {
-                const errorBody = await res.text();
-                console.error("Erreur HTTP:", res.status, "URL:", url, "Body:", errorBody);
                 throw new Error(`Erreur HTTP ${res.status}`);
             }
 
             const data = await res.json();
-            
-            // On passe le slug REST à la modal, car c'est lui qui est utilisé
-            // pour trouver le schéma dans `window.gceSchemas`.
             gceShowModal(data, tableSlug, mode);
 
         } catch (err) {
@@ -98,23 +97,22 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /**
- * Creates and displays a modal for a given record.
- * @param {object} data The data for the record.
- * @param {string} tableName The slug of the table (e.g., 'contacts').
- * @param {string} mode 'lecture' (read-only) or 'ecriture' (edit form).
- * @param {string[]|null} visibleFields Optional array of field names to display.
+ * Crée et affiche un modal pour un enregistrement donné.
+ * @param {object} data - Les données de l'enregistrement.
+ * @param {string} tableName - Le slug de la table (ex: 'contacts', 'articles_devis').
+ * @param {string} mode - 'lecture' (lecture seule) ou 'ecriture' (formulaire d'édition).
+ * @param {string[]|null} visibleFields - Tableau optionnel de noms de champs à afficher.
  */
 function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = null) {
     const schema = window.gceSchemas?.[tableName];
     if (!schema || !Array.isArray(schema)) {
-        // As a fallback, try to fetch the schema if it's not pre-loaded
         console.warn(`Schema for '${tableName}' not pre-loaded. Attempting to fetch.`);
         fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/${tableName}/schema`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce }})
             .then(r => r.ok ? r.json() : Promise.reject('Failed to fetch schema'))
             .then(fetchedSchema => {
                 window.gceSchemas = window.gceSchemas || {};
                 window.gceSchemas[tableName] = fetchedSchema;
-                gceShowModal(data, tableName, mode, visibleFields); // Retry with fetched schema
+                gceShowModal(data, tableName, mode, visibleFields);
             })
             .catch(err => {
                 console.error(`❌ Schema missing or failed to load for ${tableName}:`, err);
@@ -123,7 +121,6 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
         return;
     }
 
-    // Filter fields to display if an allow-list is provided
     let filteredSchema = schema;
     if (Array.isArray(visibleFields)) {
         filteredSchema = schema.filter(f =>
@@ -139,59 +136,64 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
 
     const title = data.id ?
         `${tableName.charAt(0).toUpperCase() + tableName.slice(1)} #${data.id}` :
-        `New ${tableName}`;
+        `Nouveau ${tableName}`;
 
-    // Generate the HTML for each field based on its type and the current mode
     const contentHtml = filteredSchema.map((field) => {
-        const fieldKey = `field_${field.id}`; // Baserow API uses field_id
+        const fieldKey = `field_${field.id}`;
         const label = `<label for="${fieldKey}"><strong>${field.name}</strong></label>`;
-        let value = data[field.name]; // Tabulator data uses field names
+        let value = data[field.name];
+        if (value === undefined) {
+            value = data[fieldKey];
+        }
 
         if (mode === "lecture") {
             let displayValue = '';
             if (Array.isArray(value)) {
-                displayValue = value.map(v => typeof v === 'object' && v !== null ? v.value : v).join(', ');
+                displayValue = value.map(v => (typeof v === 'object' && v !== null) ? v.value : v).join(', ');
             } else if (typeof value === 'object' && value !== null) {
                 displayValue = value.value || '';
             } else {
                 displayValue = value || '';
             }
             return `<div class="gce-field-row"><strong>${field.name}</strong><div>${displayValue}</div></div>`;
-        }
+        } else { // Mode 'ecriture'
+            if (field.read_only) {
+                return `<div class="gce-field-row">${label}<input type="text" value="${value || ''}" readonly disabled></div>`;
+            }
 
-        // --- Start Edit Mode ('ecriture') ---
-        if (field.read_only) {
-            return `<div class="gce-field-row">${label}<input type="text" value="${value || ''}" readonly disabled></div>`;
-        }
+            if (field.type === "link_row") {
+                const linkedRecord = Array.isArray(value) ? value[0] : null;
+                const recordId = linkedRecord ? linkedRecord.id : '';
+                return `
+                    <div class="gce-field-row">
+                        ${label}
+                        <input type="text" id="${fieldKey}" name="${fieldKey}" value="${recordId}" readonly style="background:#f0f0f0; border:1px solid #ddd; color: #555;">
+                    </div>`;
+            }
 
-        if (field.type === "boolean") {
+            if (field.type === "boolean") {
+                return `
+                    <div class="gce-field-row">${label}
+                      <select name="${fieldKey}" id="${fieldKey}">
+                        <option value="true" ${value === true ? "selected" : ""}>Oui</option>
+                        <option value="false" ${value !== true ? "selected" : ""}>Non</option>
+                      </select>
+                    </div>`;
+            }
+
+            if (field.type === "single_select" && field.select_options) {
+                const options = field.select_options.map(opt =>
+                    `<option value="${opt.id}" ${value?.id === opt.id ? "selected" : ""}>${opt.value}</option>`
+                ).join("");
+                return `<div class="gce-field-row">${label}<select name="${fieldKey}" id="${fieldKey}"><option value="">-</option>${options}</select></div>`;
+            }
+
+            const inputType = field.type === 'number' ? 'number' : 'text';
             return `
                 <div class="gce-field-row">${label}
-                  <select name="${fieldKey}" id="${fieldKey}">
-                    <option value="true" ${value === true ? "selected" : ""}>Yes</option>
-                    <option value="false" ${value !== true ? "selected" : ""}>No</option>
-                  </select>
+                    <input type="${inputType}" id="${fieldKey}" name="${fieldKey}" value="${value || ''}">
                 </div>`;
         }
-
-        if (field.type === "single_select" && field.select_options) {
-            const options = field.select_options.map(opt =>
-                `<option value="${opt.id}" ${value?.id === opt.id ? "selected" : ""}>${opt.value}</option>`
-            ).join("");
-            return `<div class="gce-field-row">${label}<select name="${fieldKey}" id="${fieldKey}"><option value="">-</option>${options}</select></div>`;
-        }
-
-        if (field.type === "link_row") {
-            const display = Array.isArray(value) ? value.map(v => v.value).join(', ') : '';
-            return `<div class="gce-field-row">${label}<input type="text" value="${display}" readonly title="Cannot be edited from this view."></div>`;
-        }
-        
-        const inputType = field.type === 'number' ? 'number' : 'text';
-        return `
-            <div class="gce-field-row">${label}
-                <input type="${inputType}" id="${fieldKey}" name="${fieldKey}" value="${value || ''}">
-            </div>`;
-
     }).join("");
 
     modal.innerHTML = `
@@ -199,7 +201,7 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
         <h3>${title}</h3>
         <form class="gce-modal-content">
             ${contentHtml}
-            ${mode === "ecriture" ? `<button type="submit" class="button button-primary">💾 Save</button>` : ""}
+            ${mode === "ecriture" ? `<button type="submit" class="button button-primary">💾 Enregistrer</button>` : ""}
         </form>
     `;
 
@@ -212,7 +214,6 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
     });
     modal.querySelector(".gce-modal-close").addEventListener("click", close);
 
-    // --- Form submission logic for 'ecriture' mode ---
     if (mode === "ecriture") {
         modal.querySelector("form").addEventListener("submit", async (e) => {
             e.preventDefault();
@@ -225,13 +226,19 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
                 if (!formData.has(key)) continue;
 
                 const rawValue = formData.get(key);
+                if (rawValue === null || rawValue === '') continue;
                 
                 if (field.type === "boolean") {
                     payload[key] = rawValue === "true";
                 } else if (field.type === "number" || field.type === "decimal") {
                     payload[key] = Number(rawValue);
                 } else if (field.type === "single_select") {
-                    payload[key] = rawValue ? parseInt(rawValue, 10) : null;
+                    payload[key] = parseInt(rawValue, 10);
+                } else if (field.type === "link_row") {
+                    const id = parseInt(rawValue, 10);
+                    if (!isNaN(id)) {
+                        payload[key] = [id]; // L'API attend un tableau d'IDs
+                    }
                 } else {
                     payload[key] = rawValue;
                 }
@@ -259,6 +266,7 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
                 
                 close();
                 gceRefreshVisibleTable();
+                location.reload();
 
             } catch (err) {
                 console.error("❌ Save error:", err);

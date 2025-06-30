@@ -88,11 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         columns: getTabulatorColumnsFromSchema(window.gceSchemas["interactions"]),
 
                         placeholder: "Aucune interaction.",
-                        renderComplete: () => {
-                            if (typeof initializePopupHandlers === "function") {
-                                initializePopupHandlers();
-                            }
-                        }
+                        
                     });
 
                     innerTable.on("cellEdited", function (cell) {
