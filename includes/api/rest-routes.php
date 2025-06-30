@@ -100,22 +100,48 @@ add_action('rest_api_init', function () {
         },
     ]);
 
-    register_rest_route('eecie-crm/v1', '/row/(?P<table_slug>[a-z_]+)/(?P<id>\d+)', [
+   register_rest_route('eecie-crm/v1', '/row/(?P<table_slug>[a-z_]+)/(?P<id>\d+)', [
         'methods'  => 'GET',
         'callback' => function (WP_REST_Request $request) {
             $slug = sanitize_text_field($request['table_slug']);
             $row_id = (int) $request['id'];
 
+            // Table de correspondance pour les cas où le slug ne matche pas le nom de la table
+            $slug_to_baserow_name_map = [
+                'opportunites'   => 'Task_input',
+                'utilisateurs'   => 'T1_user',
+                'articles_devis' => 'Articles_devis',
+                // Ajoutez ici d'autres exceptions si nécessaire
+            ];
+
+            // 1. On cherche si un ID de table est défini manuellement dans les options. C'est prioritaire.
             $option_key = 'gce_baserow_table_' . $slug;
-            $table_id = get_option($option_key) ?: eecie_crm_guess_table_id(ucfirst($slug));
+            $table_id = get_option($option_key);
+
+            // 2. Si pas d'ID manuel, on essaie de deviner.
+            if (!$table_id) {
+                // On regarde dans notre map si le slug a un nom spécial.
+                // Sinon, on prend le slug et on met la première lettre en majuscule (pour "contacts", "devis", etc.)
+                $baserow_name_to_guess = $slug_to_baserow_name_map[$slug] ?? ucfirst($slug);
+                
+                $table_id = eecie_crm_guess_table_id($baserow_name_to_guess);
+            }
 
             if (!$table_id) {
-                return new WP_Error('invalid_table', "Table inconnue pour slug `$slug`", ['status' => 400]);
+                return new WP_Error('invalid_table', "Impossible de trouver la table Baserow pour le slug `$slug`", ['status' => 404]);
             }
 
             $data = eecie_crm_baserow_get("rows/table/$table_id/$row_id/?user_field_names=true");
+            
+            if (is_wp_error($data)) {
+                return $data;
+            }
 
-            return is_wp_error($data) ? $data : rest_ensure_response($data);
+            // Pour aider le JS, on peut lui redonner le slug, même si ce n'est plus strictement nécessaire
+            // avec la dernière version du JS. C'est une bonne pratique.
+            $data['rest_slug_for_popup'] = $slug;
+
+            return rest_ensure_response($data);
         },
         'permission_callback' => function () {
             $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) && wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
@@ -758,7 +784,41 @@ register_rest_route('eecie-crm/v1', '/contacts', [
 
 ]);
 
+ register_rest_route('eecie-crm/v1', '/row/(?P<table_slug>[a-z_]+)/(?P<id>\d+)', [
+        'methods'  => 'GET',
+        'callback' => function (WP_REST_Request $request) {
+            $slug = sanitize_text_field($request['table_slug']);
+            $row_id = (int) $request['id'];
 
+            // V2 - CORRECTION : Table de correspondance slug -> nom réel dans Baserow
+            $slug_to_baserow_name_map = [
+                'opportunites' => 'Task_input',
+                'utilisateurs' => 'T1_user',
+                // Ajoutez ici d'autres exceptions si nécessaire
+            ];
+
+            $option_key = 'gce_baserow_table_' . $slug;
+            $table_id = get_option($option_key); // 1. On cherche une valeur manuelle d'abord
+
+            if (!$table_id) {
+                // 2. Si pas de valeur manuelle, on consulte notre table de correspondance
+                $baserow_name_to_guess = $slug_to_baserow_name_map[$slug] ?? ucfirst($slug);
+                $table_id = eecie_crm_guess_table_id($baserow_name_to_guess);
+            }
+
+            if (!$table_id) {
+                return new WP_Error('invalid_table', "Table inconnue pour slug `$slug`", ['status' => 400]);
+            }
+
+            $data = eecie_crm_baserow_get("rows/table/$table_id/$row_id/?user_field_names=true");
+
+            return is_wp_error($data) ? $data : rest_ensure_response($data);
+        },
+        'permission_callback' => function () {
+            $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) && wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+            return is_user_logged_in() && $nonce_valid;
+        },
+    ]);
 });
 
 

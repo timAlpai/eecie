@@ -24,54 +24,75 @@ function gceRefreshVisibleTable() {
 document.addEventListener('DOMContentLoaded', () => {
     document.body.addEventListener('click', async (e) => {
         const link = e.target.closest('.gce-popup-link');
-        if (!link) return; // Exit if the click was not on a popup link
+        if (!link) return;
 
         e.preventDefault();
 
-        // Mapping from data-table attributes to actual REST endpoint slugs
-        const tableSlugMap = {
-            'assigne': 'utilisateurs',
-            'contact': 'contacts',
-            'contacts': 'contacts',
-            'opportunite': 'opportunites',
-            'task_input': 'opportunites',
+        // Cette map est la clé. Elle traduit le NOM du champ de liaison (brut)
+        // vers le SLUG de l'API REST.
+        const rawNameToSlugMap = {
             't1_user': 'utilisateurs',
+            'assigne': 'utilisateurs',
+            'contacts': 'contacts',
+            'contact': 'contacts',
+            'task_input': 'opportunites', // <-- LA TRADUCTION IMPORTANTE
+            'opportunite': 'opportunites',
             'appel': 'appels',
             'appels': 'appels',
             'interaction': 'interactions',
             'interactions': 'interactions',
             'devis': 'devis',
-            'article': 'articles_devis',
-            'articles_devis': 'articles_devis'
+            'articles_devis': 'articles_devis',
+            'article': 'articles_devis'
+            // Ajoutez d'autres si nécessaire
         };
 
-        const rawTableSlug = link.dataset.table;
-        const tableSlug = tableSlugMap[rawTableSlug.toLowerCase()];
+        const rawTableName = link.dataset.table; // Ceci contiendra "Task_input", "T1_user", etc.
         const rowId = link.dataset.id;
+        
+        // On traduit le nom brut en slug REST.
+        // On met en minuscule pour être sûr que ça matche (Task_input -> task_input)
+        const tableSlug = rawNameToSlugMap[rawTableName.toLowerCase()];
+
+        if (!tableSlug) {
+            // Si aucune traduction n'est trouvée, on suppose que le nom est le slug (ex: "contacts")
+            // C'est un fallback pour les cas simples.
+            console.warn(`Aucune traduction pour '${rawTableName}', utilisation en tant que slug.`);
+            tableSlug = rawTableName.toLowerCase();
+        }
+
         const mode = link.dataset.mode || "lecture";
 
-        if (!tableSlug || !rowId) {
-            console.error(`Missing table slug ('${tableSlug}') or row ID ('${rowId}') for popup.`);
+        if (!rowId) {
+            console.error(`ID de ligne manquant.`);
             return;
         }
 
+        // On appelle la route générique `/row/...` avec le SLUG REST traduit
+        const url = `${EECIE_CRM.rest_url}eecie-crm/v1/row/${tableSlug}/${rowId}`;
+
         try {
-            // Use the generic /row/{table_slug}/{id} endpoint for fetching data
-            const res = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/row/${tableSlug}/${rowId}`, {
+            console.log(`Tentative d'appel de : ${url}`);
+            
+            const res = await fetch(url, {
                 headers: { 'X-WP-Nonce': EECIE_CRM.nonce }
             });
 
             if (!res.ok) {
-                throw new Error(`HTTP Error ${res.status} while fetching row data.`);
+                const errorBody = await res.text();
+                console.error("Erreur HTTP:", res.status, "URL:", url, "Body:", errorBody);
+                throw new Error(`Erreur HTTP ${res.status}`);
             }
 
             const data = await res.json();
-            // Call the modal display function
+            
+            // On passe le slug REST à la modal, car c'est lui qui est utilisé
+            // pour trouver le schéma dans `window.gceSchemas`.
             gceShowModal(data, tableSlug, mode);
 
         } catch (err) {
-            console.error('Error fetching data for popup:', err);
-            alert("Could not load the details for this item.");
+            console.error('Erreur lors de la récupération des données pour le popup:', err);
+            alert("Impossible de charger les détails.");
         }
     });
 });
