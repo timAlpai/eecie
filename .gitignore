@@ -3,3 +3,7 @@ memory-bank/*
 etatdeslieux.txt
 .roo/*
 .env
+includes/shared/js/temporaire/
+includes/shared/js/temporaire/*.js
+
+includes/shared/js/temporaire/popup-handler.js

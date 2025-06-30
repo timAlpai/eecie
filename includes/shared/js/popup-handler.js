@@ -1,328 +1,248 @@
-function gceRefreshVisibleTable() {
-  let parentTable = null;
-  document.querySelectorAll(".tabulator").forEach(el => {
-    const tab = el.__tabulator__;
-    if (tab && el.offsetParent !== null) { // uniquement si visible
-      parentTable = tab;
-    }
-  });
+/**
+ * Handles popup modals for viewing and editing Baserow records.
+ * Uses event delegation to work with dynamically generated Tabulator links.
+ */
 
-  if (parentTable && parentTable.replaceData) {
-    console.log("🔁 Rafraîchissement de la table principale visible");
-    parentTable.replaceData();
-  }
+/**
+ * Refreshes the data of any visible Tabulator table on the page.
+ * This is used to update the UI after a record is created or updated in a modal.
+ */
+function gceRefreshVisibleTable() {
+    document.querySelectorAll(".tabulator").forEach(el => {
+        const tabulatorInstance = el.tabulator;
+        // Check if the table is visible and is a valid Tabulator instance
+        if (tabulatorInstance && el.offsetParent !== null) {
+            console.log("🔁 Refreshing visible table:", tabulatorInstance.element.id || 'N/A');
+            tabulatorInstance.replaceData();
+        }
+    });
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  const modal = document.getElementById("gce-modal");
-  const modalTitle = modal.querySelector("h2");
-  const form = modal.querySelector("form");
-  const container = modal.querySelector(".gce-fields");
-  const submitBtn = modal.querySelector("button[type=submit]");
+/**
+ * Initializes the main event listener for popup links.
+ */
+document.addEventListener('DOMContentLoaded', () => {
+    document.body.addEventListener('click', async (e) => {
+        const link = e.target.closest('.gce-popup-link');
+        if (!link) return; // Exit if the click was not on a popup link
 
-  let schemaCache = {};
-  let popupData = {};
-  let currentMode = "lecture"; // ou "écriture"
-  let currentTable = "";
+        e.preventDefault();
 
-  async function loadSchema(table) {
-    if (schemaCache[table]) return schemaCache[table];
-    const response = await fetch(`/wp-json/eecie-crm/v1/${table}/schema`);
-    if (!response.ok) throw new Error("Erreur schéma HTTP " + response.status);
-    const json = await response.json();
-    schemaCache[table] = json;
-    return json;
-  }
+        // Mapping from data-table attributes to actual REST endpoint slugs
+        const tableSlugMap = {
+            'assigne': 'utilisateurs',
+            'contact': 'contacts',
+            'contacts': 'contacts',
+            'opportunite': 'opportunites',
+            'task_input': 'opportunites',
+            't1_user': 'utilisateurs',
+            'appel': 'appels',
+            'appels': 'appels',
+            'interaction': 'interactions',
+            'interactions': 'interactions',
+            'devis': 'devis',
+            'article': 'articles_devis',
+            'articles_devis': 'articles_devis'
+        };
 
-  function renderField(field, value, mode, label, fieldKey) {
-    if (mode === "lecture") {
-      if (field.type === "link_row") {
-        const display = value?.[0]?.value || value?.[0]?.name || `ID ${value?.[0]?.id || ''}`;
-        return `<div class="gce-field-row"><strong>${label}</strong><div>${display}</div></div>`;
-      } else {
-        return `<div class="gce-field-row"><strong>${label}</strong><div>${value || ""}</div></div>`;
-      }
-    }
+        const rawTableSlug = link.dataset.table;
+        const tableSlug = tableSlugMap[rawTableSlug.toLowerCase()];
+        const rowId = link.dataset.id;
+        const mode = link.dataset.mode || "lecture";
 
-    if (field.type === "link_row") {
-      const id = value?.[0]?.id || "";
-      return `<div class="gce-field-row">${label}<input type="text" id="${fieldKey}" name="${fieldKey}" value="${id}"></div>`;
-    }
-
-    const inputType = field.type === "long_text" ? "textarea" : "input";
-    const val = value || "";
-    return `
-      <div class="gce-field-row">
-        ${label}
-        ${inputType === "textarea" ? `<textarea id="${fieldKey}" name="${fieldKey}">${val}</textarea>` :
-        `<input type="${field.type === "number" ? "number" : "text"}" id="${fieldKey}" name="${fieldKey}" value="${val}">`}
-      </div>
-    `;
-  }
-
-  async function gceShowModal(data, table, mode = "lecture", visibleFields = null) {
-    try {
-      popupData = data;
-      currentTable = table;
-      currentMode = mode;
-      const schema = await loadSchema(table);
-
-      const record = {};
-      for (const [key, val] of Object.entries(data)) {
-        if (Array.isArray(val) && val.length && typeof val[0] === "object" && "id" in val[0]) {
-          record[`field_${key}`] = val;
+        if (!tableSlug || !rowId) {
+            console.error(`Missing table slug ('${tableSlug}') or row ID ('${rowId}') for popup.`);
+            return;
         }
-      }
 
-      container.innerHTML = "";
+        try {
+            // Use the generic /row/{table_slug}/{id} endpoint for fetching data
+            const res = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/row/${tableSlug}/${rowId}`, {
+                headers: { 'X-WP-Nonce': EECIE_CRM.nonce }
+            });
 
-      for (const [fieldKey, field] of Object.entries(schema.fields)) {
-        const label = field.name;
-        const value = record[fieldKey];
-        const showField = !visibleFields || visibleFields.includes(field.name) || visibleFields.includes(label);
-        if (!showField) continue;
-        container.innerHTML += renderField(field, value, mode, label, fieldKey);
-      }
+            if (!res.ok) {
+                throw new Error(`HTTP Error ${res.status} while fetching row data.`);
+            }
 
-      modalTitle.textContent = `${mode === "écriture" ? "Nouveau" : "Fiche"} ${table}`;
-      form.dataset.table = table;
-      form.dataset.mode = mode;
-      form.dataset.schema = JSON.stringify(schema);
-      modal.style.display = "block";
-    } catch (err) {
-      console.error("❌ Erreur chargement schéma :", err);
-    }
-  }
+            const data = await res.json();
+            // Call the modal display function
+            gceShowModal(data, tableSlug, mode);
 
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-
-    const formData = new FormData(form);
-    const table = form.dataset.table;
-    const schema = JSON.parse(form.dataset.schema);
-    const data = {};
-
-    for (const [key, field] of Object.entries(schema.fields)) {
-      const val = formData.get(key);
-      if (val === null || val === "") continue;
-      if (field.type === "number") {
-        data[key] = parseFloat(val);
-      } else if (field.type === "link_row") {
-        data[key] = [{ id: parseInt(val) }];
-      } else {
-        data[key] = val;
-      }
-    }
-
-    try {
-      const res = await fetch(`/wp-json/eecie-crm/v1/${table}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data)
-      });
-
-      if (!res.ok) throw new Error("Erreur HTTP " + res.status);
-      const result = await res.json();
-      console.log(`✅ ${table} créé :`, result);
-      //modal.style.display = "none";
-
-      // 🔁 Rafraîchissement ciblé
-      if (popupData._gceRefreshRow && typeof popupData._gceRefreshRow.update === "function") {
-        console.log("🔁 Rafraîchissement ligne parent");
-        popupData._gceRefreshRow.update();
-      } else {
-        console.log("🔁 Rafraîchissement tableau visible");
-        gceRefreshVisibleTable();
-      }
-
-    } catch (err) {
-      console.error("❌ Erreur enregistrement :", err);
-    }
-  });
-
-  window.gceShowModal = gceShowModal;
-
-  document.querySelectorAll(".gce-popup-link").forEach(link => {
-    link.addEventListener("click", async (e) => {
-      e.preventDefault();
-      const table = link.dataset.table;
-      const id = link.dataset.id;
-      try {
-        const schema = await loadSchema(table);
-        const response = await fetch(`/wp-json/eecie-crm/v1/${table}/${id}`);
-        if (!response.ok) throw new Error("Erreur HTTP " + response.status);
-        const json = await response.json();
-        gceShowModal(json, table);
-      } catch (err) {
-        console.error("❌ Schéma manquant pour", table, err);
-      }
+        } catch (err) {
+            console.error('Error fetching data for popup:', err);
+            alert("Could not load the details for this item.");
+        }
     });
-  });
 });
 
-
+/**
+ * Creates and displays a modal for a given record.
+ * @param {object} data The data for the record.
+ * @param {string} tableName The slug of the table (e.g., 'contacts').
+ * @param {string} mode 'lecture' (read-only) or 'ecriture' (edit form).
+ * @param {string[]|null} visibleFields Optional array of field names to display.
+ */
 function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = null) {
-  const schema = window.gceSchemas?.[tableName];
-  if (!schema || !Array.isArray(schema)) {
-    console.error(`❌ Schéma manquant pour ${tableName}`);
-    alert("Schéma non disponible.");
-    return;
-  }
-
-  // Filtrage des champs visibles (par noms ou field_ids)
-  let filteredSchema = schema;
-  if (Array.isArray(visibleFields)) {
-    filteredSchema = schema.filter(f =>
-      visibleFields.includes(f.name) || visibleFields.includes(`field_${f.id}`)
-    );
-  }
-
-  const overlay = document.createElement("div");
-  overlay.className = "gce-modal-overlay";
-
-  const modal = document.createElement("div");
-  modal.className = "gce-modal";
-
-  const title = data.id
-    ? `${tableName.charAt(0).toUpperCase() + tableName.slice(1)} #${data.id}`
-    : `Nouveau ${tableName}`;
-
-  const contentHtml = filteredSchema.map((field) => {
-    const fieldKey = `field_${field.id}`;
-    const label = `<label for="${fieldKey}"><strong>${field.name}</strong></label>`;
-    let value = data?.[fieldKey] ?? "";
-
-    // Formatage lecture (lecture uniquement)
-    if (mode === "lecture") {
-      if (Array.isArray(value)) {
-        value = value.map(v =>
-          typeof v === "object" ? (v.value || JSON.stringify(v)) : v
-        ).join(', ');
-      } else if (typeof value === "object" && value !== null) {
-        value = value?.value ?? JSON.stringify(value);
-      }
-      return `<div class="gce-field-row">${label}<div>${value}</div></div>`;
+    const schema = window.gceSchemas?.[tableName];
+    if (!schema || !Array.isArray(schema)) {
+        // As a fallback, try to fetch the schema if it's not pre-loaded
+        console.warn(`Schema for '${tableName}' not pre-loaded. Attempting to fetch.`);
+        fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/${tableName}/schema`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce }})
+            .then(r => r.ok ? r.json() : Promise.reject('Failed to fetch schema'))
+            .then(fetchedSchema => {
+                window.gceSchemas = window.gceSchemas || {};
+                window.gceSchemas[tableName] = fetchedSchema;
+                gceShowModal(data, tableName, mode, visibleFields); // Retry with fetched schema
+            })
+            .catch(err => {
+                console.error(`❌ Schema missing or failed to load for ${tableName}:`, err);
+                alert("The schema for this item is not available, cannot display details.");
+            });
+        return;
     }
 
-    // Formatage écriture
-    if (field.type === "boolean") {
-      return `
-        <div class="gce-field-row">${label}
-          <select name="${fieldKey}" id="${fieldKey}">
-            <option value="">—</option>
-            <option value="true" ${value === true || value === "true" ? "selected" : ""}>Oui</option>
-            <option value="false" ${value === false || value === "false" ? "selected" : ""}>Non</option>
-          </select>
-        </div>`;
+    // Filter fields to display if an allow-list is provided
+    let filteredSchema = schema;
+    if (Array.isArray(visibleFields)) {
+        filteredSchema = schema.filter(f =>
+            visibleFields.includes(f.name) || visibleFields.includes(`field_${f.id}`)
+        );
     }
 
-    if (field.type === "single_select" && field.select_options) {
-      const options = field.select_options.map(opt =>
-        `<option value="${opt.id}" ${opt.id == value?.id ? "selected" : ""}>${opt.value}</option>`
-      ).join("");
-      return `<div class="gce-field-row">${label}<select name="${fieldKey}" id="${fieldKey}">${options}</select></div>`;
-    }
+    const overlay = document.createElement("div");
+    overlay.className = "gce-modal-overlay";
 
-    if (field.type === "link_row") {
-      const first = Array.isArray(value) ? value[0] : null;
-      const display = first?.value || first?.name || `ID ${first?.id || ''}`;
-      const hiddenId = first?.id || "";
-      return `
-        <div class="gce-field-row">${label}
-          <input type="text" value="${display}" readonly>
-          <input type="hidden" name="${fieldKey}" id="${fieldKey}" value="${hiddenId}">
-        </div>`;
-    }
+    const modal = document.createElement("div");
+    modal.className = "gce-modal";
 
-    return `
-      <div class="gce-field-row">${label}
-        <input type="text" id="${fieldKey}" name="${fieldKey}" value="${value}">
-      </div>`;
-  }).join("");
+    const title = data.id ?
+        `${tableName.charAt(0).toUpperCase() + tableName.slice(1)} #${data.id}` :
+        `New ${tableName}`;
 
-  modal.innerHTML = `
-    <button class="gce-modal-close">✖</button>
-    <h3>${title}</h3>
-    <form class="gce-modal-content">
-      ${contentHtml}
-      ${mode === "écriture" ? `<button type="submit" class="gce-submit-btn">💾 Enregistrer</button>` : ""}
-    </form>
-  `;
+    // Generate the HTML for each field based on its type and the current mode
+    const contentHtml = filteredSchema.map((field) => {
+        const fieldKey = `field_${field.id}`; // Baserow API uses field_id
+        const label = `<label for="${fieldKey}"><strong>${field.name}</strong></label>`;
+        let value = data[field.name]; // Tabulator data uses field names
 
-  overlay.appendChild(modal);
-  document.body.appendChild(overlay);
+        if (mode === "lecture") {
+            let displayValue = '';
+            if (Array.isArray(value)) {
+                displayValue = value.map(v => typeof v === 'object' && v !== null ? v.value : v).join(', ');
+            } else if (typeof value === 'object' && value !== null) {
+                displayValue = value.value || '';
+            } else {
+                displayValue = value || '';
+            }
+            return `<div class="gce-field-row"><strong>${field.name}</strong><div>${displayValue}</div></div>`;
+        }
 
-  const close = () => overlay.remove();
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) close();
-  });
-  modal.querySelector(".gce-modal-close").addEventListener("click", close);
-
-  // Gestion enregistrement
-  if (mode === "écriture") {
-    modal.querySelector("form").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const formData = new FormData(e.target);
-      const payload = {};
-
-      for (let field of filteredSchema) {
-        const key = `field_${field.id}`;
-        const raw = formData.get(key);
-        if (raw === null || raw === "") continue;
+        // --- Start Edit Mode ('ecriture') ---
+        if (field.read_only) {
+            return `<div class="gce-field-row">${label}<input type="text" value="${value || ''}" readonly disabled></div>`;
+        }
 
         if (field.type === "boolean") {
-          payload[key] = raw === "true";
-        } else if (["number", "decimal"].includes(field.type)) {
-          payload[key] = isNaN(raw) ? raw : Number(raw);
-        } else if (field.type === "single_select") {
-          payload[key] = parseInt(raw);
-
-        } else if (field.type === "link_row") {
-          // On suppose que raw est un nombre (déjà injecté dans input readonly)
-          const id = parseInt(raw);
-          if (!isNaN(id)) payload[key] = [id]; // 👈 C’est bien un tableau d’un entier
+            return `
+                <div class="gce-field-row">${label}
+                  <select name="${fieldKey}" id="${fieldKey}">
+                    <option value="true" ${value === true ? "selected" : ""}>Yes</option>
+                    <option value="false" ${value !== true ? "selected" : ""}>No</option>
+                  </select>
+                </div>`;
         }
-        else if (field.type === "link_row") {
-          payload[key] = [{ id: parseInt(raw) }];
-        } else {
-          payload[key] = raw;
+
+        if (field.type === "single_select" && field.select_options) {
+            const options = field.select_options.map(opt =>
+                `<option value="${opt.id}" ${value?.id === opt.id ? "selected" : ""}>${opt.value}</option>`
+            ).join("");
+            return `<div class="gce-field-row">${label}<select name="${fieldKey}" id="${fieldKey}"><option value="">-</option>${options}</select></div>`;
         }
-      }
-            const method = data.id ? "PATCH" : "POST";
-      const url = data.id
-        ? `${EECIE_CRM.rest_url}eecie-crm/v1/${tableName}/${data.id}`
-        : `${EECIE_CRM.rest_url}eecie-crm/v1/${tableName}`;
 
-      try {
-        const res = await fetch(url, {
-          method,
-          headers: {
-            "Content-Type": "application/json",
-            "X-WP-Nonce": EECIE_CRM.nonce,
-          },
-          body: JSON.stringify(payload),
-        });
+        if (field.type === "link_row") {
+            const display = Array.isArray(value) ? value.map(v => v.value).join(', ') : '';
+            return `<div class="gce-field-row">${label}<input type="text" value="${display}" readonly title="Cannot be edited from this view."></div>`;
+        }
+        
+        const inputType = field.type === 'number' ? 'number' : 'text';
+        return `
+            <div class="gce-field-row">${label}
+                <input type="${inputType}" id="${fieldKey}" name="${fieldKey}" value="${value || ''}">
+            </div>`;
 
-        if (!res.ok) throw new Error(`Erreur HTTP ${res.status}`);
-        const result = await res.json();
-        console.log(`✅ ${tableName} ${method === "POST" ? "créé" : "mis à jour"} :`, result);
-        gceRefreshVisibleTable();
-        close();
+    }).join("");
 
-        // 🔁 Forcer le rafraîchissement complet de toutes les tables visibles
-        const allTabulators = document.querySelectorAll(".tabulator");
-        allTabulators.forEach(el => {
-          const tab = el.__tabulator__;
-          if (tab?.replaceData) {
-            tab.replaceData();
-          }
-        });
+    modal.innerHTML = `
+        <button class="gce-modal-close">✖</button>
+        <h3>${title}</h3>
+        <form class="gce-modal-content">
+            ${contentHtml}
+            ${mode === "ecriture" ? `<button type="submit" class="button button-primary">💾 Save</button>` : ""}
+        </form>
+    `;
 
-      } catch (err) {
-        console.error("❌ Erreur enregistrement :", err);
-        alert("Erreur lors de l'enregistrement.");
-      }
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
 
+    const close = () => overlay.remove();
+    overlay.addEventListener("click", (e) => {
+        if (e.target === overlay) close();
     });
-  }
+    modal.querySelector(".gce-modal-close").addEventListener("click", close);
+
+    // --- Form submission logic for 'ecriture' mode ---
+    if (mode === "ecriture") {
+        modal.querySelector("form").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const payload = {};
+
+            for (let field of filteredSchema) {
+                if (field.read_only) continue;
+                const key = `field_${field.id}`;
+                if (!formData.has(key)) continue;
+
+                const rawValue = formData.get(key);
+                
+                if (field.type === "boolean") {
+                    payload[key] = rawValue === "true";
+                } else if (field.type === "number" || field.type === "decimal") {
+                    payload[key] = Number(rawValue);
+                } else if (field.type === "single_select") {
+                    payload[key] = rawValue ? parseInt(rawValue, 10) : null;
+                } else {
+                    payload[key] = rawValue;
+                }
+            }
+
+            const method = data.id ? "PATCH" : "POST";
+            const url = data.id ?
+                `${EECIE_CRM.rest_url}eecie-crm/v1/${tableName}/${data.id}` :
+                `${EECIE_CRM.rest_url}eecie-crm/v1/${tableName}`;
+
+            try {
+                const res = await fetch(url, {
+                    method,
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-WP-Nonce": EECIE_CRM.nonce,
+                    },
+                    body: JSON.stringify(payload),
+                });
+
+                if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+                
+                const result = await res.json();
+                console.log(`✅ Record ${method === 'POST' ? 'created' : 'updated'}:`, result);
+                
+                close();
+                gceRefreshVisibleTable();
+
+            } catch (err) {
+                console.error("❌ Save error:", err);
+                alert("An error occurred while saving.");
+            }
+        });
+    }
 }

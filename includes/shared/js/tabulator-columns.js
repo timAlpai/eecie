@@ -51,14 +51,23 @@ function getTabulatorColumnsFromSchema(schema, tableName = "") {
         } else if (isRelation) {
             column.formatter = function (cell) {
                 const value = cell.getValue();
-                if (!Array.isArray(value)) return '';
-                const page = field.name.toLowerCase();
+                if (!Array.isArray(value) || !field.link_row_table_id) return '';
+                
+                // Use the reliable ID-to-slug map
+                const targetTableSlug = tableIdMap[field.link_row_table_id];
+
+                if (!targetTableSlug) {
+                    // Fallback or error for safety
+                    console.warn(`No slug found for table ID ${field.link_row_table_id}. Using field name as fallback.`);
+                    return value.map(obj => obj.value).join(', ');
+                }
+
                 return value.map(obj =>
-                    `<a href="#" class="gce-popup-link" data-table="${page}" data-id="${obj.id}">${obj.value}</a>`
+                    `<a href="#" class="gce-popup-link" data-table="${targetTableSlug}" data-id="${obj.id}">${obj.value}</a>`
                 ).join(', ');
             };
             column.formatterParams = { allowHTML: true };
-
+            column.editor = false; // Linked rows are not directly editableS
         } else if (isBoolean) {
             column.editor = tickCrossEditor;
             column.formatter = "tickCross";
@@ -84,7 +93,7 @@ function getTabulatorColumnsFromSchema(schema, tableName = "") {
             column.editor = false;
         }
 
-        
+
 
         return column;
     });
