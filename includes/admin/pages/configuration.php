@@ -14,24 +14,49 @@ $known_usages = [
     'T1_user'       => 'utilisateurs',
 ];
 
-
 $api_key = get_option('gce_baserow_api_key', '');
 $baserow_url = get_option('gce_baserow_url', '');
+$tps_rate = get_option('gce_tps_rate', '0.05');
+$tvq_rate = get_option('gce_tvq_rate', '0.09975');
 
 if (isset($_POST['gce_config_submit'])) {
     check_admin_referer('gce_config_save', 'gce_config_nonce');
 
     update_option('gce_baserow_url', esc_url_raw($_POST['gce_baserow_url']));
     update_option('gce_baserow_api_key', sanitize_text_field($_POST['gce_baserow_api_key']));
-    foreach ($known_usages as $slug) {
-    $key = 'gce_baserow_table_' . $slug;
-    if (isset($_POST[$key])) {
-        update_option($key, sanitize_text_field($_POST[$key]));
+    
+    // === CORRECTION POUR LA PRÉCISION DES TAXES ===
+    // On valide que la valeur est numérique, mais on la sauvegarde en tant que chaîne.
+    if (isset($_POST['gce_tps_rate'])) {
+        $tps_value = $_POST['gce_tps_rate'];
+        if (is_numeric($tps_value)) {
+            update_option('gce_tps_rate', $tps_value);
+        }
     }
-}
+    if (isset($_POST['gce_tvq_rate'])) {
+        $tvq_value = $_POST['gce_tvq_rate'];
+        if (is_numeric($tvq_value)) {
+            update_option('gce_tvq_rate', $tvq_value);
+        }
+    }
+
+    // CORRECTION: Boucle de sauvegarde correcte pour les tables
+    foreach ($known_usages as $name => $slug) {
+        $key = 'gce_baserow_table_' . $slug;
+        if (isset($_POST[$key])) {
+            update_option($key, sanitize_text_field($_POST[$key]));
+        }
+    }
 
     echo '<div class="notice notice-success"><p>Configuration enregistrée.</p></div>';
+
+    // Re-récupérer les valeurs après sauvegarde
+    $api_key = get_option('gce_baserow_api_key', '');
+    $baserow_url = get_option('gce_baserow_url', '');
+    $tps_rate = get_option('gce_tps_rate', '0.05');
+    $tvq_rate = get_option('gce_tvq_rate', '0.09975');
 }
+
 $tables = eecie_crm_baserow_get_all_tables();
 if (is_wp_error($tables)) {
     $error_message = $tables->get_error_message();
@@ -63,41 +88,56 @@ if (is_wp_error($tables)) {
                 </td>
             </tr>
         </table>
-        <h2>Tables détectées dans la base Baserow</h2>
- <h2>Association automatique des tables CRM détectées</h2>
-<table class="form-table">
-<?php foreach ($known_usages as $expected_name => $slug): 
-    $auto_id = eecie_crm_guess_table_id($expected_name);
-    $manual_key = 'gce_baserow_table_' . $slug;
-    $manual_value = get_option($manual_key);
-?>
-<tr>
-    <th scope="row"><label for="<?php echo esc_attr($manual_key); ?>">Table pour <?php echo esc_html($expected_name); ?></label></th>
-    <td>
-        <?php if ($auto_id): ?>
-            <p>Détectée automatiquement : <code><?php echo esc_html($auto_id); ?></code> (<?php echo esc_html($expected_name); ?>)</p>
-        <?php else: ?>
-            <p><em>Pas de table nommée "<?php echo esc_html($expected_name); ?>" détectée</em></p>
-        <?php endif; ?>
-        <input type="text" name="<?php echo esc_attr($manual_key); ?>"
-               id="<?php echo esc_attr($manual_key); ?>"
-               value="<?php echo esc_attr($manual_value); ?>"
-               placeholder="<?php echo esc_attr($auto_id); ?>" />
-        <p class="description">Laisser vide pour utiliser l’ID détecté automatiquement.</p>
-    </td>
-</tr>
-<?php endforeach; ?>
-</table>
+        
+        <h2><?php _e('Configuration des Taxes', 'gestion-crm-eecie'); ?></h2>
+        <table class="form-table">
+            <tr>
+                <th scope="row"><label for="gce_tps_rate">Taux TPS</label></th>
+                <td>
+                    <input type="text" name="gce_tps_rate" id="gce_tps_rate" class="small-text" value="<?php echo esc_attr($tps_rate); ?>" />
+                    <p class="description">Exemple : <code>0.05</code> pour 5%.</p>
+                </td>
+            </tr>
+             <tr>
+                <th scope="row"><label for="gce_tvq_rate">Taux TVQ</label></th>
+                <td>
+                    <input type="text" name="gce_tvq_rate" id="gce_tvq_rate" class="small-text" value="<?php echo esc_attr($tvq_rate); ?>" />
+                    <p class="description">Exemple : <code>0.09975</code> pour 9.975%.</p>
+                </td>
+            </tr>
+        </table>
 
-
+        <h2>Association automatique des tables CRM détectées</h2>
+        <table class="form-table">
+        <?php foreach ($known_usages as $expected_name => $slug): 
+            $auto_id = eecie_crm_guess_table_id($expected_name);
+            $manual_key = 'gce_baserow_table_' . $slug;
+            $manual_value = get_option($manual_key);
+        ?>
+        <tr>
+            <th scope="row"><label for="<?php echo esc_attr($manual_key); ?>">Table pour <?php echo esc_html($expected_name); ?></label></th>
+            <td>
+                <?php if ($auto_id): ?>
+                    <p>Détectée automatiquement : code><?php echo esc_html($auto_id); ?></code> (<?php echo esc_html($expected_name); ?>)</p>
+                <?php else: ?>
+                    <p><em>Pas de table nommée "<?php echo esc_html($expected_name); ?>" détectée</em></p>
+                <?php endif; ?>
+                <input type="text" name="<?php echo esc_attr($manual_key); ?>"
+                       id="<?php echo esc_attr($manual_key); ?>"
+                       value="<?php echo esc_attr($manual_value); ?>"
+                       placeholder="<?php echo esc_attr($auto_id); ?>" />
+                <p class="description">Laisser vide pour utiliser l’ID détecté automatiquement.</p>
+            </td>
+        </tr>
+        <?php endforeach; // CORRECTION: Cette ligne était manquante ?>
+        </table>
 
         <?php submit_button('Enregistrer'); ?>
     </form>
 
 
-<h2>Explorer la structure Baserow</h2>
-<p><button id="gce-explorer-structure" class="button">🔍 Voir la structure</button></p>
-<div id="gce-baserow-structure-output" style="white-space: pre-wrap; background: #f8f8f8; padding: 10px; border: 1px solid #ccc; max-height: 400px; overflow: auto;"></div>
+    <h2>Explorer la structure Baserow</h2>
+    <p><button id="gce-explorer-structure" class="button">🔍 Voir la structure</button></p>
+    <div id="gce-baserow-structure-output" style="white-space: pre-wrap; background: #f8f8f8; padding: 10px; border: 1px solid #ccc; max-height: 400px; overflow: auto;"></div>
 
 </div>
-

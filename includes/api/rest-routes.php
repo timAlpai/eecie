@@ -3,6 +3,40 @@ defined('ABSPATH') || exit;
 
 require_once __DIR__ . '/baserow-proxy.php';
 
+/**
+ * Fonction d'aide pour récupérer une ligne Baserow par son slug et son ID.
+ * C'est la logique de la route GET /row/{slug}/{id} factorisée pour un usage interne en PHP.
+ *
+ * @param string $slug Le slug de la table (ex: 'opportunites', 'contacts').
+ * @param int $row_id L'ID de la ligne.
+ * @return array|WP_Error Les données de la ligne ou une erreur.
+ */
+function eecie_crm_get_row_by_slug_and_id($slug, $row_id) {
+    // Table de correspondance pour les cas où le slug ne matche pas le nom de la table
+    $slug_to_baserow_name_map = [
+        'opportunites'   => 'Task_input',
+        'utilisateurs'   => 'T1_user',
+        'articles_devis' => 'Articles_devis',
+        // Ajoutez ici d'autres exceptions si nécessaire
+    ];
+
+    // 1. On cherche si un ID de table est défini manuellement dans les options. C'est prioritaire.
+    $option_key = 'gce_baserow_table_' . $slug;
+    $table_id = get_option($option_key);
+
+    // 2. Si pas d'ID manuel, on essaie de deviner.
+    if (!$table_id) {
+        $baserow_name_to_guess = $slug_to_baserow_name_map[$slug] ?? ucfirst($slug);
+        $table_id = eecie_crm_guess_table_id($baserow_name_to_guess);
+    }
+
+    if (!$table_id) {
+        return new WP_Error('invalid_table', "Impossible de trouver la table Baserow pour le slug `$slug`", ['status' => 404]);
+    }
+
+    // On utilise le proxy existant pour récupérer les données
+    return eecie_crm_baserow_get("rows/table/$table_id/$row_id/", ['user_field_names' => 'true']);
+}
 add_action('rest_api_init', function () {
     register_rest_route('eecie-crm/v1', '/contacts', [
         'methods'  => 'GET',
@@ -491,42 +525,7 @@ add_action('rest_api_init', function () {
     ]);
  register_rest_route('eecie-crm/v1', '/proxy/calculate-devis', [
         'methods'  => 'POST',
-        'callback' => function (WP_REST_Request $req) {
-            // IMPORTANT : Remplacez cette URL par l'URL réelle de votre webhook n8n
-            $n8n_webhook_url = "https://n8n.eecie.ca/webhook/fc9a0dba-704b-4391-9190-4db7a33a85b0"; 
-            
-            $body = $req->get_body(); // On transmet les données du devis reçues du JS
-
-            $response = wp_remote_post($n8n_webhook_url, [
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                ],
-                'body'    => $body,
-                'timeout' => 180 // Augmentez le timeout si le workflow est long
-            ]);
-
-            if (is_wp_error($response)) {
-                return new WP_Error('proxy_failed', $response->get_error_message(), ['status' => 502]);
-            }
-            
-            $response_code = wp_remote_retrieve_response_code($response);
-            $response_body = wp_remote_retrieve_body($response);
-
-            // On vérifie si n8n a répondu avec un code de succès (2xx)
-            if ($response_code < 200 || $response_code >= 300) {
-                 return new WP_Error(
-                    'n8n_error', 
-                    'Le service de calcul a retourné une erreur.', 
-                    ['status' => $response_code, 'details' => $response_body]
-                );
-            }
-
-            return rest_ensure_response([
-                'status' => 'success',
-                'n8n_response_code' => $response_code,
-                'n8n_response_body' => json_decode($response_body) // On décode la réponse de n8n
-            ]);
-        },
+        'callback' => 'eecie_crm_calculate_and_forward_devis_to_n8n',
         'permission_callback' => function () {
             // Sécurisé pour les utilisateurs connectés avec un nonce valide
             return is_user_logged_in() && 
@@ -1024,8 +1023,122 @@ function eecie_crm_baserow_post($endpoint, $payload = [])
 
     return $body;
 }
+//Modif devis tim
 
+function eecie_crm_calculate_and_forward_devis_to_n8n(WP_REST_Request $request) {
+    // URL du webhook N8N
+    $n8n_webhook_url = "https://n8n.eecie.ca/webhook/fc9a0dba-704b-4391-9190-4db7a33a85b0"; 
 
+    // Récupérer le corps de la requête
+    $body = $request->get_json_params();
+
+    // Valider les données d'entrée
+    if (empty($body) || !isset($body['_children']) || !is_array($body['_children'])) {
+        return new WP_Error('invalid_payload', 'Le corps de la requête est invalide.', ['status' => 400]);
+    }
+
+    // --- NOUVELLE LOGIQUE D'ENRICHISSEMENT ---
+    $contact_details = null;
+
+    // 1. Extraire l'ID de l'opportunité
+    $opportunity_id = $body['Task_input'][0]['id'] ?? null;
+
+    if ($opportunity_id) {
+        // 2. Récupérer les données complètes de l'opportunité
+        $opportunity_data = eecie_crm_get_row_by_slug_and_id('opportunites', $opportunity_id);
+
+        if (!is_wp_error($opportunity_data)) {
+            // 3. Extraire l'ID du premier contact lié à l'opportunité
+            // Le nom du champ de liaison est 'Contacts'
+            $contact_id = $opportunity_data['Contacts'][0]['id'] ?? null;
+
+            if ($contact_id) {
+                // 4. Récupérer les données complètes du contact
+                $contact_data = eecie_crm_get_row_by_slug_and_id('contacts', $contact_id);
+
+                if (!is_wp_error($contact_data)) {
+                    // 5. On ne garde que les champs utiles pour N8N
+                    $contact_details = [
+                        'id' => $contact_data['id'],
+                        'nom' => $contact_data['Nom'] ?? null,
+                        'email' => $contact_data['Email'] ?? null,
+                        'tel' => $contact_data['Tel'] ?? null,
+                        'adresse' => $contact_data['Adresse'] ?? null,
+                        'code postal' => $contact_data["Code_postal"] ?? null,
+                        'ville' => $contact_data['Ville'] ?? null,
+
+                    ];
+                }
+            }
+        }
+    }
+    // --- FIN DE LA LOGIQUE D'ENRICHISSEMENT ---
+
+    // Calculs du devis (inchangé)
+    $articles_list = [];
+    $total_ht = 0.0;
+    foreach ($body['_children'] as $article) {
+        if (!isset($article['Quantités']) || !isset($article['Prix_unitaire'])) continue;
+        $quantite = floatval($article['Quantités']);
+        $prix_unitaire = floatval($article['Prix_unitaire']);
+        $sous_total_ht = $quantite * $prix_unitaire;
+        $total_ht += $sous_total_ht;
+        $articles_list[] = [
+            'nom' => $article['Nom'] ?? 'Article sans nom',
+            'quantite' => $quantite,
+            'prix_unitaire' => $prix_unitaire,
+            'sous_total_ht' => round($sous_total_ht, 2),
+        ];
+    }
+    
+    // Taxes (inchangé)
+    $tps_rate = floatval(get_option('gce_tps_rate', '0.05'));
+    $tvq_rate = floatval(get_option('gce_tvq_rate', '0.09975'));
+    if (!defined('TPS_RATE')) define('TPS_RATE',  $tps_rate);
+    if (!defined('TVQ_RATE')) define('TVQ_RATE', $tvq_rate);
+    $tps = $total_ht * TPS_RATE;
+    $tvq = $total_ht * TVQ_RATE;
+    $total_ttc = $total_ht + $tps + $tvq;
+
+    // Assemblage du payload final pour N8N (maintenant avec les détails du contact)
+    $n8n_payload = [
+        'devis_id'       => $body['id'] ?? null,
+        'opportunity_id' => $body['Task_input'][0]['id'] ?? null,
+        'opportunity_name' => $body['Task_input'][0]['value'] ?? null,
+        'contact'        => $contact_details, // <-- AJOUT IMPORTANT
+        'notes'          => $body['Notes'] ?? '',
+        'summary'        => [
+            'total_hors_taxe' => round($total_ht, 2),
+            'tps_amount'      => round($tps, 2),
+            'tvq_amount'      => round($tvq, 2),
+            'total_ttc'       => round($total_ttc, 2),
+        ],
+        'articles'       => $articles_list,
+        'raw_data'       => $body,
+    ];
+
+    // Envoi à N8N (inchangé)
+    $response_to_n8n = wp_remote_post($n8n_webhook_url, [
+        'headers' => ['Content-Type' => 'application/json'],
+        'body'    => json_encode($n8n_payload),
+        'timeout' => 30
+    ]);
+
+    // Gestion de la réponse (inchangé)
+    if (is_wp_error($response_to_n8n)) {
+        return new WP_Error('n8n_proxy_failed', 'Erreur de communication avec N8N: ' . $response_to_n8n->get_error_message(), ['status' => 502]);
+    }
+    $n8n_status_code = wp_remote_retrieve_response_code($response_to_n8n);
+    if ($n8n_status_code >= 400) {
+        return new WP_Error('n8n_error', 'N8N a retourné une erreur.', ['status' => $n8n_status_code, 'n8n_response_body' => wp_remote_retrieve_body($response_to_n8n)]);
+    }
+
+    return rest_ensure_response([
+        'status'  => 'success',
+        'message' => 'Devis traité et transmis à N8N.',
+        'n8n_http_status' => $n8n_status_code,
+    ]);
+}
 
 function eecie_crm_get_utilisateurs(WP_REST_Request $request)
 {
