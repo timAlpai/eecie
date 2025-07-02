@@ -5,7 +5,7 @@ function getTabulatorColumnsFromSchema(schema, tableName = "") {
         const isDate = field.type === "date";
         const isSelect = field.type === "single_select" || field.type === "multiple_select";
         const isRollup = field.type === "formula" || field.type === "lookup";
-        const isAttachment = field.name === "Attachement";
+        const isAttachment = field.type === "file";
         const isStatus = field.name === "Status";
         const isStatut = field.name === "statut";
 

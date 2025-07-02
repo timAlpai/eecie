@@ -184,7 +184,7 @@ div[class^="gce-"] .tabulator {
 /* En-tête */
 .gce-tabulator .tabulator-header {
   background-color: #1a1a1a;
-  color: #eee;
+  color: #000000;
   font-weight: bold;
 }
 
