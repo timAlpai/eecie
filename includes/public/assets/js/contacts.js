@@ -61,7 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const filteredContacts = contacts.filter(c => contactMap.has(c.id));
 
         // Rendu Tabulator
-        const columns = getTabulatorColumnsFromSchema(contactSchema);
+        const columns = getTabulatorColumnsFromSchema(contactSchema, 'contacts');
 
         const tableEl = document.createElement('div');
         tableEl.className = 'gce-tabulator';

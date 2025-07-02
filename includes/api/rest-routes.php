@@ -11,7 +11,8 @@ require_once __DIR__ . '/baserow-proxy.php';
  * @param int $row_id L'ID de la ligne.
  * @return array|WP_Error Les données de la ligne ou une erreur.
  */
-function eecie_crm_get_row_by_slug_and_id($slug, $row_id) {
+function eecie_crm_get_row_by_slug_and_id($slug, $row_id)
+{
     // Table de correspondance pour les cas où le slug ne matche pas le nom de la table
     $slug_to_baserow_name_map = [
         'opportunites'   => 'Task_input',
@@ -38,6 +39,42 @@ function eecie_crm_get_row_by_slug_and_id($slug, $row_id) {
     return eecie_crm_baserow_get("rows/table/$table_id/$row_id/", ['user_field_names' => 'true']);
 }
 add_action('rest_api_init', function () {
+    // Route spéciale pour générer un éditeur de texte riche
+    register_rest_route('eecie-crm/v1', '/get-wp-editor', [
+        'methods'  => 'POST', // On utilise POST pour pouvoir envoyer des paramètres comme le contenu initial
+        'callback' => function (WP_REST_Request $request) {
+            $params = $request->get_json_params();
+            $content = $params['content'] ?? ''; // Contenu initial de l'éditeur
+            $editor_id = $params['editor_id'] ?? 'gce_rich_text_editor'; // ID unique pour l'éditeur
+
+            // Paramètres pour wp_editor
+            $settings = [
+                'textarea_name' => 'editor_content', // Nom du champ textarea qui sera soumis
+                'media_buttons' => false, // On désactive l'ajout de médias pour garder ça simple
+                'textarea_rows' => 10,
+                'tinymce'       => [
+                    'toolbar1' => 'bold,italic,underline,bullist,numlist,link,unlink,undo,redo',
+                    'toolbar2' => '', // Pas de deuxième barre d'outils
+                ],
+            ];
+
+            // On utilise une sortie tampon pour capturer le HTML de l'éditeur
+            ob_start();
+            wp_editor($content, $editor_id, $settings);
+            $editor_html = ob_get_clean();
+
+            // On retourne le HTML brut
+            return rest_ensure_response([
+                'html'     => $editor_html,
+                'settings' => $settings // On renvoie aussi les paramètres
+            ]);
+        },
+        'permission_callback' => function () {
+            return is_user_logged_in() &&
+                isset($_SERVER['HTTP_X_WP_NONCE']) &&
+                wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+        },
+    ]);
     register_rest_route('eecie-crm/v1', '/contacts', [
         'methods'  => 'GET',
         'callback' => 'eecie_crm_get_contacts',
@@ -134,7 +171,7 @@ add_action('rest_api_init', function () {
         },
     ]);
 
-   register_rest_route('eecie-crm/v1', '/row/(?P<table_slug>[a-z_]+)/(?P<id>\d+)', [
+    register_rest_route('eecie-crm/v1', '/row/(?P<table_slug>[a-z_]+)/(?P<id>\d+)', [
         'methods'  => 'GET',
         'callback' => function (WP_REST_Request $request) {
             $slug = sanitize_text_field($request['table_slug']);
@@ -157,7 +194,7 @@ add_action('rest_api_init', function () {
                 // On regarde dans notre map si le slug a un nom spécial.
                 // Sinon, on prend le slug et on met la première lettre en majuscule (pour "contacts", "devis", etc.)
                 $baserow_name_to_guess = $slug_to_baserow_name_map[$slug] ?? ucfirst($slug);
-                
+
                 $table_id = eecie_crm_guess_table_id($baserow_name_to_guess);
             }
 
@@ -166,7 +203,7 @@ add_action('rest_api_init', function () {
             }
 
             $data = eecie_crm_baserow_get("rows/table/$table_id/$row_id/?user_field_names=true");
-            
+
             if (is_wp_error($data)) {
                 return $data;
             }
@@ -523,19 +560,48 @@ add_action('rest_api_init', function () {
                 wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
         },
     ]);
- register_rest_route('eecie-crm/v1', '/proxy/calculate-devis', [
+
+    // POST /interactions (pour la création)
+    register_rest_route('eecie-crm/v1', '/interactions', [
+        'methods'  => 'POST',
+        'callback' => function (WP_REST_Request $request) {
+            // 1. Trouver l'ID de la table des interactions
+            $table_id = get_option('gce_baserow_table_interactions') ?: eecie_crm_guess_table_id('Interactions');
+            if (!$table_id) {
+                return new WP_Error('no_table', 'La table des Interactions est introuvable ou non configurée.', ['status' => 500]);
+            }
+
+            // 2. Récupérer les données envoyées par le popup
+            $payload = $request->get_json_params();
+            if (empty($payload)) {
+                return new WP_Error('invalid_payload', 'Aucune donnée reçue pour la création.', ['status' => 400]);
+            }
+
+            // 3. Utiliser le proxy pour envoyer la requête POST à Baserow
+            // La fonction eecie_crm_baserow_post existe déjà et fait tout le travail.
+            return eecie_crm_baserow_post("rows/table/$table_id/", $payload);
+        },
+        'permission_callback' => function () {
+            // Sécurité standard: utilisateur connecté + nonce valide
+            return is_user_logged_in() &&
+                isset($_SERVER['HTTP_X_WP_NONCE']) &&
+                wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+        },
+    ]);
+
+    register_rest_route('eecie-crm/v1', '/proxy/calculate-devis', [
         'methods'  => 'POST',
         'callback' => 'eecie_crm_calculate_and_forward_devis_to_n8n',
         'permission_callback' => function () {
             // Sécurisé pour les utilisateurs connectés avec un nonce valide
-            return is_user_logged_in() && 
-                   isset($_SERVER['HTTP_X_WP_NONCE']) &&
-                   wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+            return is_user_logged_in() &&
+                isset($_SERVER['HTTP_X_WP_NONCE']) &&
+                wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
         }
     ]);
 
 
-   
+
 
     // GET /devis
     register_rest_route('eecie-crm/v1', '/devis', [
@@ -744,110 +810,110 @@ add_action('rest_api_init', function () {
     ]);
 
     // GET /contacts
-register_rest_route('eecie-crm/v1', '/contacts', [
-    'methods'  => 'GET',
-    'callback' => function () {
-        $table_id = get_option('gce_baserow_table_contacts') ?: eecie_crm_guess_table_id('Contacts');
-        if (!$table_id) return new WP_Error('no_table', 'Table Contacts introuvable');
-        return eecie_crm_baserow_get("rows/table/$table_id/", ['user_field_names' => 'true']);
-    },
-    'permission_callback' => function () {
-        return is_user_logged_in() &&
-               isset($_SERVER['HTTP_X_WP_NONCE']) &&
-               wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
-    },
-]);
+    register_rest_route('eecie-crm/v1', '/contacts', [
+        'methods'  => 'GET',
+        'callback' => function () {
+            $table_id = get_option('gce_baserow_table_contacts') ?: eecie_crm_guess_table_id('Contacts');
+            if (!$table_id) return new WP_Error('no_table', 'Table Contacts introuvable');
+            return eecie_crm_baserow_get("rows/table/$table_id/", ['user_field_names' => 'true']);
+        },
+        'permission_callback' => function () {
+            return is_user_logged_in() &&
+                isset($_SERVER['HTTP_X_WP_NONCE']) &&
+                wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+        },
+    ]);
 
-// GET /contacts/schema
-register_rest_route('eecie-crm/v1', '/contacts/schema', [
-    'methods'  => 'GET',
-    'callback' => function () {
-        $table_id = get_option('gce_baserow_table_contacts') ?: eecie_crm_guess_table_id('Contacts');
-        if (!$table_id) return new WP_Error('no_table', 'Table Contacts introuvable');
-        return eecie_crm_baserow_get_fields($table_id);
-    },
-    'permission_callback' => function () {
-        return is_user_logged_in() &&
-               isset($_SERVER['HTTP_X_WP_NONCE']) &&
-               wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
-    },
-]);
+    // GET /contacts/schema
+    register_rest_route('eecie-crm/v1', '/contacts/schema', [
+        'methods'  => 'GET',
+        'callback' => function () {
+            $table_id = get_option('gce_baserow_table_contacts') ?: eecie_crm_guess_table_id('Contacts');
+            if (!$table_id) return new WP_Error('no_table', 'Table Contacts introuvable');
+            return eecie_crm_baserow_get_fields($table_id);
+        },
+        'permission_callback' => function () {
+            return is_user_logged_in() &&
+                isset($_SERVER['HTTP_X_WP_NONCE']) &&
+                wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+        },
+    ]);
 
-// PATCH /contacts/{id}
-register_rest_route('eecie-crm/v1', '/contacts/(?P<id>\d+)', [
-    'methods'  => 'PATCH',
-    'callback' => function (WP_REST_Request $request) {
-        $id = (int)$request['id'];
-        $table_id = get_option('gce_baserow_table_contacts') ?: eecie_crm_guess_table_id('Contacts');
-        if (!$table_id) return new WP_Error('no_table', 'Table Contacts introuvable');
-        $body = $request->get_json_params();
+    // PATCH /contacts/{id}
+    register_rest_route('eecie-crm/v1', '/contacts/(?P<id>\d+)', [
+        'methods'  => 'PATCH',
+        'callback' => function (WP_REST_Request $request) {
+            $id = (int)$request['id'];
+            $table_id = get_option('gce_baserow_table_contacts') ?: eecie_crm_guess_table_id('Contacts');
+            if (!$table_id) return new WP_Error('no_table', 'Table Contacts introuvable');
+            $body = $request->get_json_params();
 
-        $url = rtrim(get_option('gce_baserow_url'), '/') . "/api/database/rows/table/$table_id/$id/";
-        $response = wp_remote_request($url, [
-            'method' => 'PATCH',
-            'headers' => [
-                'Authorization' => 'Token ' . get_option('gce_baserow_api_key'),
-                'Content-Type'  => 'application/json',
-            ],
-            'body' => json_encode($body),
-        ]);
+            $url = rtrim(get_option('gce_baserow_url'), '/') . "/api/database/rows/table/$table_id/$id/";
+            $response = wp_remote_request($url, [
+                'method' => 'PATCH',
+                'headers' => [
+                    'Authorization' => 'Token ' . get_option('gce_baserow_api_key'),
+                    'Content-Type'  => 'application/json',
+                ],
+                'body' => json_encode($body),
+            ]);
 
-        if (is_wp_error($response)) return $response;
+            if (is_wp_error($response)) return $response;
 
-        $code = wp_remote_retrieve_response_code($response);
-        $body = json_decode(wp_remote_retrieve_body($response), true);
+            $code = wp_remote_retrieve_response_code($response);
+            $body = json_decode(wp_remote_retrieve_body($response), true);
 
-        if ($code !== 200) {
-            return new WP_Error('baserow_error', "Erreur PATCH ($code)", ['status' => $code, 'body' => $body]);
-        }
+            if ($code !== 200) {
+                return new WP_Error('baserow_error', "Erreur PATCH ($code)", ['status' => $code, 'body' => $body]);
+            }
 
-        return rest_ensure_response($body);
-    },
-    'permission_callback' => function () {
-        return is_user_logged_in() &&
-               isset($_SERVER['HTTP_X_WP_NONCE']) &&
-               wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
-    },
-]);
+            return rest_ensure_response($body);
+        },
+        'permission_callback' => function () {
+            return is_user_logged_in() &&
+                isset($_SERVER['HTTP_X_WP_NONCE']) &&
+                wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+        },
+    ]);
 
-// DELETE /contacts/{id}
-register_rest_route('eecie-crm/v1', '/contacts/(?P<id>\d+)', [
-    'methods'  => 'DELETE',
-    'callback' => function (WP_REST_Request $request) {
-        $id = (int)$request['id'];
-        $table_id = get_option('gce_baserow_table_contacts') ?: eecie_crm_guess_table_id('Contacts');
-        if (!$table_id) return new WP_Error('no_table', 'Table Contacts introuvable');
-        return eecie_crm_baserow_delete("rows/table/$table_id/$id/");
-    },
-    'permission_callback' => function () {
-        return is_user_logged_in() &&
-               isset($_SERVER['HTTP_X_WP_NONCE']) &&
-               wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
-    },
-]);
+    // DELETE /contacts/{id}
+    register_rest_route('eecie-crm/v1', '/contacts/(?P<id>\d+)', [
+        'methods'  => 'DELETE',
+        'callback' => function (WP_REST_Request $request) {
+            $id = (int)$request['id'];
+            $table_id = get_option('gce_baserow_table_contacts') ?: eecie_crm_guess_table_id('Contacts');
+            if (!$table_id) return new WP_Error('no_table', 'Table Contacts introuvable');
+            return eecie_crm_baserow_delete("rows/table/$table_id/$id/");
+        },
+        'permission_callback' => function () {
+            return is_user_logged_in() &&
+                isset($_SERVER['HTTP_X_WP_NONCE']) &&
+                wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+        },
+    ]);
 
-// POST /contacts
-register_rest_route('eecie-crm/v1', '/contacts', [
-    'methods'  => 'POST',
-    'callback' => function (WP_REST_Request $request) {
-        $table_id = get_option('gce_baserow_table_contacts') ?: eecie_crm_guess_table_id('Contacts');
-        if (!$table_id) return new WP_Error('no_table', 'Table Contacts introuvable');
-        $body = $request->get_json_params();
-        return eecie_crm_baserow_post("rows/table/$table_id/", $body);
-    },
-   'permission_callback' => function () {
-    $nonce = $_SERVER['HTTP_X_WP_NONCE'] ?? '(absent)';
-    $valid = wp_verify_nonce($nonce, 'wp_rest');
-    $user = is_user_logged_in();
+    // POST /contacts
+    register_rest_route('eecie-crm/v1', '/contacts', [
+        'methods'  => 'POST',
+        'callback' => function (WP_REST_Request $request) {
+            $table_id = get_option('gce_baserow_table_contacts') ?: eecie_crm_guess_table_id('Contacts');
+            if (!$table_id) return new WP_Error('no_table', 'Table Contacts introuvable');
+            $body = $request->get_json_params();
+            return eecie_crm_baserow_post("rows/table/$table_id/", $body);
+        },
+        'permission_callback' => function () {
+            $nonce = $_SERVER['HTTP_X_WP_NONCE'] ?? '(absent)';
+            $valid = wp_verify_nonce($nonce, 'wp_rest');
+            $user = is_user_logged_in();
 
-    error_log("[CRM] nonce = $nonce / valide = " . ($valid ? '✅' : '❌') . " / connecté = " . ($user ? '✅' : '❌'));
+            error_log("[CRM] nonce = $nonce / valide = " . ($valid ? '✅' : '❌') . " / connecté = " . ($user ? '✅' : '❌'));
 
-    return $user && $valid;
-},
+            return $user && $valid;
+        },
 
-]);
+    ]);
 
- register_rest_route('eecie-crm/v1', '/row/(?P<table_slug>[a-z_]+)/(?P<id>\d+)', [
+    register_rest_route('eecie-crm/v1', '/row/(?P<table_slug>[a-z_]+)/(?P<id>\d+)', [
         'methods'  => 'GET',
         'callback' => function (WP_REST_Request $request) {
             $slug = sanitize_text_field($request['table_slug']);
@@ -1025,9 +1091,10 @@ function eecie_crm_baserow_post($endpoint, $payload = [])
 }
 //Modif devis tim
 
-function eecie_crm_calculate_and_forward_devis_to_n8n(WP_REST_Request $request) {
+function eecie_crm_calculate_and_forward_devis_to_n8n(WP_REST_Request $request)
+{
     // URL du webhook N8N
-    $n8n_webhook_url = "https://n8n.eecie.ca/webhook/fc9a0dba-704b-4391-9190-4db7a33a85b0"; 
+    $n8n_webhook_url = "https://n8n.eecie.ca/webhook/fc9a0dba-704b-4391-9190-4db7a33a85b0";
 
     // Récupérer le corps de la requête
     $body = $request->get_json_params();
@@ -1090,7 +1157,7 @@ function eecie_crm_calculate_and_forward_devis_to_n8n(WP_REST_Request $request) 
             'sous_total_ht' => round($sous_total_ht, 2),
         ];
     }
-    
+
     // Taxes (inchangé)
     $tps_rate = floatval(get_option('gce_tps_rate', '0.05'));
     $tvq_rate = floatval(get_option('gce_tvq_rate', '0.09975'));

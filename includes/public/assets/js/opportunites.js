@@ -71,7 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tableEl.className = 'gce-tabulator';
             container.appendChild(tableEl);
 
-            const cols = getTabulatorColumnsFromSchema(oppSchema);
+            const cols = getTabulatorColumnsFromSchema(oppSchema, 'opportunites');
             cols.unshift({
                 title: "✅ Accepter",
                 formatter: "buttonTick",

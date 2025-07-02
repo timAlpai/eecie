@@ -48,13 +48,24 @@ function getTabulatorColumnsFromSchema(schema, tableName = "") {
             };
             column.formatterParams = { allowHTML: true };
 
-        } else  if (isRelation) {
+        } else if (field.type === 'long_text') {
+            column.editor = false; // On désactive l'éditeur en ligne
+            column.cellClick = function (e, cell) {
+                // Au clic, on ouvre le popup en mode édition pour la ligne entière
+                const rowData = cell.getRow().getData();
+                gceShowModal(rowData, tableName, "ecriture", null); // null pour afficher tous les champs
+            };
+            // Ajout d'un petit style pour indiquer que le champ est cliquable
+            column.cssClass = "gce-clickable-cell";
+
+
+        } else if (isRelation) {
             column.formatter = function (cell) {
                 const value = cell.getValue();
                 if (!Array.isArray(value) || !field.link_row_table_id) return '';
-                
+
                 const targetTableSlug = window.EECIE_CRM.tableIdMap[field.link_row_table_id];
-                
+
                 if (!targetTableSlug) {
                     console.warn(`No slug found for table ID ${field.link_row_table_id}.`);
                     return value.map(obj => obj.value).join(', ');
@@ -74,8 +85,8 @@ function getTabulatorColumnsFromSchema(schema, tableName = "") {
                 // === FIN DE LA MODIFICATION ===
             };
             column.formatterParams = { allowHTML: true };
-            column.editor = false; 
-        }  else if (isBoolean) {
+            column.editor = false;
+        } else if (isBoolean) {
             column.editor = tickCrossEditor;
             column.formatter = "tickCross";
 

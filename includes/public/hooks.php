@@ -43,6 +43,8 @@ function gce_enqueue_front_scripts()
     wp_enqueue_script('gce-popup-handler', plugin_dir_url(__FILE__) . '../shared/js/popup-handler.js', ['eecie-crm-rest'], GCE_VERSION, true);
     wp_enqueue_style('gce-popup-css', plugin_dir_url(__FILE__) . '../shared/css/popup.css', [], GCE_VERSION);
     wp_enqueue_script('gce-dashboard-js', plugin_dir_url(__FILE__) . 'assets/js/dashboard.js', ['gce-popup-handler'], '1.0', true);
+    wp_enqueue_editor();
+    
     // === FIN DE LA MODIFICATION ===
 
     // Le code existant pour les pages spécifiques (opportunites, taches) reste valide

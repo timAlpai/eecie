@@ -43,7 +43,7 @@ function loadAndBuildDevisTable() {
             _children: groupedArticles[d.id] || []
         }));
 
-        const devisColumns = getTabulatorColumnsFromSchema(devisSchema);
+        const devisColumns = getTabulatorColumnsFromSchema(devisSchema, "devis");
         devisColumns.push({
             title: "➕ Article",
             formatter: () => "<button class='btn-ajout-article'>Ajouter Article</button>",
@@ -141,7 +141,7 @@ function loadAndBuildDevisTable() {
 
                 // ================== MODIFICATION CI-DESSOUS ==================
                 // 1. On prépare les colonnes des articles
-                const articlesColumns = getTabulatorColumnsFromSchema(window.gceSchemas["articles_devis"]);
+                const articlesColumns = getTabulatorColumnsFromSchema(window.gceSchemas["articles_devis"], 'articles_devis');
                 
                 // 2. On ajoute la colonne "Actions" avec les icônes Modifier et Supprimer
                 articlesColumns.push({

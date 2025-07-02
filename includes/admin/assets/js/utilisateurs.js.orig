@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
         schema = fetchedSchema;
         window.gceUserSchema = schema;
 
-        const columns = getTabulatorColumnsFromSchema(schema, 'utilisateurs');
+        const columns = getTabulatorColumnsFromSchema(schema);
         columns.unshift({
     title: "Delete",
     formatter: "buttonCross",

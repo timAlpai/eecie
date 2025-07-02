@@ -252,14 +252,3 @@ div[class^="gce-"] .tabulator {
   color: #fff;
   border: 1px solid #888;
 }
-
-      
-/* Style pour indiquer qu'une cellule est cliquable (pour ouvrir un popup) */
-.gce-clickable-cell {
-    cursor: pointer;
-    background-color: rgba(255, 255, 255, 0.05); /* Léger fond pour se démarquer */
-}
-
-    
-
-IGNORE_WHEN_COPYING_START

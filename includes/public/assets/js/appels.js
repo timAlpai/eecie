@@ -36,12 +36,43 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const appelsAvecChildren = appels.map(appel => ({
             ...appel,
-            _children: groupedInteractions[appel.id] || []
+            _children: groupedInteractions[appel.id] || [],
         }));
 
-        const columns = getTabulatorColumnsFromSchema(appelsSchema);
+        const columns = getTabulatorColumnsFromSchema(appelsSchema, 'appels');
+
+        // Ajout du bouton pour créer une nouvelle interaction
+        columns.push({
+            title: "➕ Interaction",
+            formatter: () => "<button class='button button-small'>+ Interaction</button>",
+            width: 140,
+            hozAlign: "center",
+            headerSort: false,
+            cellClick: (e, cell) => {
+                const appel = cell.getRow().getData();
+                
+                if (!appelsSchema.length || !interactionsSchema.length) {
+                    alert("Erreur: Les schémas de données sont incomplets.");
+                    return;
+                }
+
+                // Trouve l'ID de la table des appels à partir de son schéma
+                const appelsTableId = appelsSchema[0].table_id;
+                // Trouve le champ dans les interactions qui pointe vers la table des appels
+                const linkField = interactionsSchema.find(f => f.type === 'link_row' && f.link_row_table_id === appelsTableId);
+
+                if (!linkField) {
+                    alert("Erreur: Le champ de liaison vers les Appels est introuvable.");
+                    return;
+                }
+
+                const popupData = { [linkField.name]: [{ id: appel.id, value: `Appel #${appel.id}` }] };
+                gceShowModal(popupData, "interactions", "ecriture", ["Nom", "Type", "Description", linkField.name]);
+            }
+        });
 
         const tableEl = document.createElement('div');
+        tableEl.className = 'gce-tabulator'; // On ajoute la classe pour le style
         container.innerHTML = '';
         container.appendChild(tableEl);
 
@@ -68,7 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // ============== DÉBUT DE LA MODIFICATION ==============
                 // 1. Obtenir les colonnes de base pour les interactions
-                const interactionColumns = getTabulatorColumnsFromSchema(window.gceSchemas["interactions"]);
+                const interactionColumns = getTabulatorColumnsFromSchema(window.gceSchemas["interactions"], 'interactions');
 
                 // 2. Ajouter la colonne "Actions" avec les icônes
                 interactionColumns.push({

@@ -21,6 +21,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }).then(r => r.json())
     ])
         .then(([taskData, taskSchema, usersData]) => {
+            window.gceSchemas = window.gceSchemas || {};
+            window.gceSchemas['taches'] = taskSchema;
             const userRow = usersData.results.find(u =>
                 u.Email?.toLowerCase() === userEmail.toLowerCase()
             );
@@ -48,7 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tableEl.className = 'gce-tabulator';
             container.appendChild(tableEl);
 
-            const cols = getTabulatorColumnsFromSchema(taskSchema);
+            const cols = getTabulatorColumnsFromSchema(taskSchema, 'taches');
             cols.unshift({
                 title: "✅ Accepter",
                 formatter: "buttonTick",

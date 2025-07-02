@@ -63,7 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const rawTableName = link.dataset.table;
         const rowId = link.dataset.id;
         const mode = link.dataset.mode || "lecture";
-        
+
         // On traduit le nom brut en slug REST.
         let tableSlug = rawNameToSlugMap[rawTableName.toLowerCase()];
 
@@ -107,7 +107,7 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
     const schema = window.gceSchemas?.[tableName];
     if (!schema || !Array.isArray(schema)) {
         console.warn(`Schema for '${tableName}' not pre-loaded. Attempting to fetch.`);
-        fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/${tableName}/schema`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce }})
+        fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/${tableName}/schema`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } })
             .then(r => r.ok ? r.json() : Promise.reject('Failed to fetch schema'))
             .then(fetchedSchema => {
                 window.gceSchemas = window.gceSchemas || {};
@@ -187,6 +187,19 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
                 ).join("");
                 return `<div class="gce-field-row">${label}<select name="${fieldKey}" id="${fieldKey}"><option value="">-</option>${options}</select></div>`;
             }
+            if (field.type === 'long_text' && mode === 'ecriture') {
+                // Pour le texte riche, on crée un conteneur qui sera rempli plus tard par l'API
+                // On ajoute un attribut data pour le retrouver et lui passer le contenu initial
+                return `
+                    <div class="gce-field-row" style="flex-direction: column; align-items: stretch;">
+                        ${label}
+                        <div class="gce-wp-editor-container" 
+                             data-field-key="${fieldKey}"
+                             data-initial-content="${encodeURIComponent(value || '')}">
+                            Chargement de l'éditeur...
+                        </div>
+                    </div>`;
+            }
 
             const inputType = field.type === 'number' ? 'number' : 'text';
             return `
@@ -207,6 +220,43 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
 
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
+    // Gérer le chargement asynchrone des éditeurs WP Editor
+    modal.querySelectorAll('.gce-wp-editor-container').forEach(async (container) => {
+        const fieldKey = container.dataset.fieldKey;
+        const initialContent = decodeURIComponent(container.dataset.initialContent);
+
+        try {
+            const res = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/get-wp-editor`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-WP-Nonce': EECIE_CRM.nonce
+                },
+                body: JSON.stringify({
+                    content: initialContent,
+                    editor_id: fieldKey // Utiliser la clé du champ comme ID unique
+                })
+            });
+
+            if (!res.ok) throw new Error('Failed to load editor HTML');
+
+            const data = await res.json();
+            container.innerHTML = data.html;
+
+            const editorSettings = data.settings || {}; // Récupère les settings de l'API
+            editorSettings.selector = `#${fieldKey}`; // L'API ne connaît pas l'ID, on le définit ici
+
+            if (window.tinymce) {
+                window.tinymce.execCommand('mceRemoveEditor', true, fieldKey);
+                window.tinymce.init(editorSettings);
+            }
+        } catch (err) {
+            container.innerHTML = `<textarea id="${fieldKey}" name="${fieldKey}" rows="5">${initialContent}</textarea><p style="color:red;">L'éditeur riche n'a pas pu être chargé.</p>`;
+            console.error("WP Editor load failed:", err);
+        }
+    });
+
+
 
     const close = () => overlay.remove();
     overlay.addEventListener("click", (e) => {
@@ -222,24 +272,43 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
 
             for (let field of filteredSchema) {
                 if (field.read_only) continue;
-                const key = `field_${field.id}`;
-                if (!formData.has(key)) continue;
 
-                const rawValue = formData.get(key);
-                if (rawValue === null || rawValue === '') continue;
-                
+                const key = `field_${field.id}`;
+                let rawValue;
+
+                // Logique spéciale pour récupérer le contenu de l'éditeur riche
+                if (field.type === 'long_text' && window.tinymce && window.tinymce.get(key)) {
+                    // On récupère le contenu HTML directement depuis l'instance de l'éditeur
+                    rawValue = window.tinymce.get(key).getContent();
+                } else {
+                    // Logique standard pour tous les autres types de champs
+                    if (!formData.has(key)) continue; // Le champ n'est pas dans le formulaire, on passe
+                    rawValue = formData.get(key);
+                }
+
+                // On ignore les champs vides, sauf pour les booléens (car 'false' est une valeur valide)
+                if (rawValue === null || (rawValue === '' && field.type !== 'boolean')) {
+                    continue;
+                }
+
+                // Traitement de la valeur en fonction du type de champ Baserow
                 if (field.type === "boolean") {
                     payload[key] = rawValue === "true";
                 } else if (field.type === "number" || field.type === "decimal") {
                     payload[key] = Number(rawValue);
                 } else if (field.type === "single_select") {
-                    payload[key] = parseInt(rawValue, 10);
+                    // On s'assure de ne pas envoyer de valeur vide si rien n'est sélectionné
+                    const intValue = parseInt(rawValue, 10);
+                    if (!isNaN(intValue)) {
+                        payload[key] = intValue;
+                    }
                 } else if (field.type === "link_row") {
                     const id = parseInt(rawValue, 10);
                     if (!isNaN(id)) {
                         payload[key] = [id]; // L'API attend un tableau d'IDs
                     }
                 } else {
+                    // Pour les champs 'text', 'long_text', 'date', etc.
                     payload[key] = rawValue;
                 }
             }
@@ -259,18 +328,25 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
                     body: JSON.stringify(payload),
                 });
 
-                if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
-                
+                if (!res.ok) {
+                    const errorData = await res.json();
+                    console.error('Erreur API:', errorData);
+                    throw new Error(`Erreur HTTP ${res.status}: ${errorData.message || 'Erreur inconnue'}`);
+                }
+
                 const result = await res.json();
                 console.log(`✅ Record ${method === 'POST' ? 'created' : 'updated'}:`, result);
-                
+
                 close();
-                gceRefreshVisibleTable();
-                location.reload();
+                // On rafraîchit la table principale pour voir les changements
+                if (typeof gceRefreshVisibleTable === 'function') {
+                    gceRefreshVisibleTable();
+                }
+                location.reload(); // Solution simple et efficace pour tout mettre à jour
 
             } catch (err) {
-                console.error("❌ Save error:", err);
-                alert("An error occurred while saving.");
+                console.error("❌ Erreur de sauvegarde:", err);
+                alert("Une erreur est survenue lors de la sauvegarde : " + err.message);
             }
         });
     }

@@ -91,3 +91,6 @@
   flex: 0 0 120px;
   color: #444;
 }
+.tox-tinymce-aux {
+    z-index: 10000 !important;
+}
