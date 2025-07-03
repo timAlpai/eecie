@@ -72,6 +72,37 @@ function gce_enqueue_front_scripts()
             'email' => $current_user->user_email,
         ]);
     }
+    // AJOUTER TOUT LE BLOC CI-DESSOUS
+    if ($page_slug === 'fournisseurs') {
+        // Dépendances communes (Tabulator, etc.)
+        wp_enqueue_style('tabulator-css', 'https://unpkg.com/tabulator-tables@6.3/dist/css/tabulator.min.css', [], '6.3');
+        wp_enqueue_script('tabulator-js', 'https://unpkg.com/tabulator-tables@6.3/dist/js/tabulator.min.js', [], '6.3', true);
+        wp_enqueue_script('luxon-js', 'https://cdn.jsdelivr.net/npm/luxon@3.4.3/build/global/luxon.min.js', [], '3.4.3', true);
+
+        // Scripts partagés pour Tabulator
+        wp_enqueue_script('gce-tabulator-editors', plugin_dir_url(__FILE__) . '../shared/js/tabulator-editors.js', ['tabulator-js'], GCE_VERSION, true);
+        wp_enqueue_script('gce-tabulator-columns', plugin_dir_url(__FILE__) . '../shared/js/tabulator-columns.js', ['tabulator-js', 'gce-tabulator-editors'], GCE_VERSION, true);
+
+        // Styles et script du popup
+        wp_enqueue_style('gce-popup-css', plugin_dir_url(__FILE__) . '../shared/css/popup.css', [], GCE_VERSION);
+        
+        // !!! ON CHARGE NOTRE NOUVEAU GESTIONNAIRE DE POPUP SPÉCIFIQUE !!!
+        wp_enqueue_script('gce-popup-handler-fournisseur', plugin_dir_url(__FILE__) . 'assets/js/popup-handler-fournisseur.js', ['eecie-crm-rest'], GCE_VERSION, true);
+
+        // Le script principal de la page, qui dépend du nouveau handler de popup
+        wp_enqueue_script(
+            'gce-fournisseurs-js',
+            plugin_dir_url(__FILE__) . 'assets/js/fournisseurs.js',
+            ['eecie-crm-rest', 'tabulator-js', 'gce-tabulator-columns', 'gce-popup-handler-fournisseur'], // Dépendance mise à jour
+            GCE_VERSION,
+            true
+        );
+
+        $current_user = wp_get_current_user();
+        wp_localize_script('gce-fournisseurs-js', 'GCE_CURRENT_USER', [
+            'email' => $current_user->user_email,
+        ]);
+    }
 }
 
 
@@ -107,6 +138,7 @@ function gce_render_user_dashboard()
                 <li><a href="?gce-page=appels">📞 Flux de travail</a></li>
                 <li><a href="?gce-page=devis">📄 Devis</a></li>
                 <li><a href="?gce-page=contacts">📇 Mes contacts</a></li>
+                <li><a href="?gce-page=fournisseurs">🚚 Fournisseurs</a></li>
             </ul>
         </aside>
         <main class="gce-main-content">
@@ -139,6 +171,9 @@ function gce_render_dashboard_content($page)
             break;
         case 'contacts':
             include $base . 'contacts.php';
+            break;
+        case 'fournisseurs': // AJOUTER CE BLOC CASE
+            include $base . 'fournisseurs.php';
             break;
 
         default:

@@ -3,7 +3,9 @@ function getTabulatorColumnsFromSchema(schema, tableName = "") {
         const isRelation = field.type === "link_row";
         const isBoolean = field.type === "boolean";
         const isDate = field.type === "date";
-        const isSelect = field.type === "single_select" || field.type === "multiple_select";
+        const isSelect = field.type === "single_select";
+        const isMultiSelect = field.type === "multiple_select";
+        const isZoneDesservie = field.name === "Zone_desservie";
         const isRollup = field.type === "formula" || field.type === "lookup";
         const isAttachment = field.type === "file";
         const isStatus = field.name === "Status";
@@ -47,7 +49,36 @@ function getTabulatorColumnsFromSchema(schema, tableName = "") {
                 return `<span class="gce-badge gce-color-${color}">${label}</span>`;
             };
             column.formatterParams = { allowHTML: true };
+         } else if (isMultiSelect && Array.isArray(field.select_options)) {
+            column.editor = false; // L'édition en ligne est désactivée
+            column.formatter = function (cell) {
+                const values = cell.getValue();
+                if (!Array.isArray(values) || values.length === 0) return '—';
+                
+                return values.map(val => {
+                    if (!val || typeof val !== 'object') return '';
+                    const label = val.value || val.name || '';
+                    const color = val.color || 'gray';
+                    return `<span class="gce-badge gce-color-${color}" style="margin-right: 4px;">${label}</span>`;
+                }).join(' ');
+            };
+            column.formatterParams = { allowHTML: true };
 
+        } else if (isZoneDesservie) {
+            column.editor = false; // Pas d'édition en ligne
+            column.formatter = function (cell) {
+                const values = cell.getValue(); // Devrait être un tableau d'objets [{id: 3, value: "Montreal"}]
+                if (!Array.isArray(values) || values.length === 0) return '—';
+                
+                // On utilise le même rendu que pour un multi-select, mais sans couleur spécifique
+                return values.map(val => {
+                    if (!val || typeof val !== 'object') return '';
+                    const label = val.value || val.name || `ID ${val.id}`;
+                    // On utilise une couleur par défaut
+                    return `<span class="gce-badge gce-color-blue" style="margin-right: 4px;">${label}</span>`;
+                }).join(' ');
+            };
+            column.formatterParams = { allowHTML: true };
         } else if (field.type === 'long_text') {
             column.editor = false; // On désactive l'éditeur en ligne
             column.cellClick = function (e, cell) {

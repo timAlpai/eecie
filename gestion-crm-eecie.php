@@ -36,7 +36,8 @@ function gce_get_table_id_to_slug_map() {
         'Appels'        => 'appels',
         'Fournisseur'   => 'fournisseurs',
         'T1_user'       => 'utilisateurs',
-        'Articles_devis' => 'articles_devis', // Ajouté pour être complet
+        'Articles_devis' => 'articles_devis', 
+        'Zone_geo'      => 'zone_geo',
     ];
 
     $map = [];

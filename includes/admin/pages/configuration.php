@@ -11,6 +11,7 @@ $known_usages = [
     'Interactions'  => 'interactions',
     'Appels'        => 'appels',
     'Fournisseur'   => 'fournisseurs',
+    'Zone_geo'       => 'zone_geo',
     'T1_user'       => 'utilisateurs',
 ];
 

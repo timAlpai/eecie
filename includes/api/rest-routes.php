@@ -75,6 +75,216 @@ add_action('rest_api_init', function () {
                 wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
         },
     ]);
+
+    // ==========================================
+    // ==         ROUTES POUR FOURNISSEURS       ==
+    // ==========================================
+
+    // GET /fournisseurs -> Récupère tous les fournisseurs
+    register_rest_route('eecie-crm/v1', '/fournisseurs', [
+        'methods'  => 'GET',
+        'callback' => function () {
+            $table_id = get_option('gce_baserow_table_fournisseurs') ?: eecie_crm_guess_table_id('Fournisseur');
+            if (!$table_id) return new WP_Error('no_table', 'Table Fournisseur introuvable', ['status' => 500]);
+            return eecie_crm_baserow_get("rows/table/$table_id/", ['user_field_names' => 'true']);
+        },
+        'permission_callback' => 'eecie_crm_check_capabilities',
+    ]);
+
+    // GET /fournisseurs/schema -> Récupère la structure de la table
+    register_rest_route('eecie-crm/v1', '/fournisseurs/schema', [
+        'methods'  => 'GET',
+        'callback' => function () {
+            $table_id = get_option('gce_baserow_table_fournisseurs') ?: eecie_crm_guess_table_id('Fournisseur');
+            if (!$table_id) return new WP_Error('no_table', 'Table Fournisseur introuvable', ['status' => 500]);
+            return eecie_crm_baserow_get_fields($table_id);
+        },
+        'permission_callback' => 'eecie_crm_check_capabilities',
+    ]);
+
+    // POST /fournisseurs -> Crée un nouveau fournisseur
+    register_rest_route('eecie-crm/v1', '/fournisseurs', [
+        'methods'  => 'POST',
+        'callback' => function (WP_REST_Request $request) {
+            $table_id = get_option('gce_baserow_table_fournisseurs') ?: eecie_crm_guess_table_id('Fournisseur');
+            if (!$table_id) return new WP_Error('no_table', 'Table Fournisseur introuvable');
+            $body = $request->get_json_params();
+            return eecie_crm_baserow_post("rows/table/$table_id/", $body);
+        },
+        'permission_callback' => 'eecie_crm_check_capabilities',
+    ]);
+
+    // PATCH /fournisseurs/{id} -> Met à jour un fournisseur
+    register_rest_route('eecie-crm/v1', '/fournisseurs/(?P<id>\d+)', [
+        'methods'  => 'PATCH',
+        'callback' => function (WP_REST_Request $request) {
+            $id = (int)$request['id'];
+            $table_id = get_option('gce_baserow_table_fournisseurs') ?: eecie_crm_guess_table_id('Fournisseur');
+            if (!$table_id) return new WP_Error('no_table', 'Table Fournisseur introuvable');
+            
+            $baseUrl = rtrim(get_option('gce_baserow_url'), '/');
+            $token = get_option('gce_baserow_api_key');
+            $url = "$baseUrl/api/database/rows/table/$table_id/$id/";
+            $body = $request->get_json_params();
+
+            $response = wp_remote_request($url, [
+                'method' => 'PATCH',
+                'headers' => ['Authorization' => 'Token ' . $token, 'Content-Type'  => 'application/json'],
+                'body' => json_encode($body)
+            ]);
+
+            if (is_wp_error($response)) return $response;
+            $code = wp_remote_retrieve_response_code($response);
+            $body = json_decode(wp_remote_retrieve_body($response), true);
+            if ($code !== 200) return new WP_Error('baserow_error', "Erreur PATCH ($code)", ['status' => $code, 'body' => $body]);
+            return rest_ensure_response($body);
+        },
+        'permission_callback' => 'eecie_crm_check_capabilities',
+    ]);
+
+    // DELETE /fournisseurs/{id} -> Supprime un fournisseur
+    register_rest_route('eecie-crm/v1', '/fournisseurs/(?P<id>\d+)', [
+        'methods'  => 'DELETE',
+        'callback' => function (WP_REST_Request $request) {
+            $id = (int)$request['id'];
+            $table_id = get_option('gce_baserow_table_fournisseurs') ?: eecie_crm_guess_table_id('Fournisseur');
+            if (!$table_id) return new WP_Error('no_table', 'Table Fournisseur introuvable');
+            return eecie_crm_baserow_delete("rows/table/$table_id/$id/");
+        },
+        'permission_callback' => 'eecie_crm_check_capabilities',
+    ]);
+
+
+    // ==========================================
+    // ==         ROUTES POUR ZONE_GEO         ==
+    // ==========================================
+
+    // GET /zone_geo -> Récupère toutes les zones
+    register_rest_route('eecie-crm/v1', '/zone_geo', [
+        'methods'  => 'GET',
+        'callback' => function () {
+            $table_id = get_option('gce_baserow_table_zone_geo') ?: eecie_crm_guess_table_id('Zone_geo');
+            if (!$table_id) return new WP_Error('no_table', 'Table Zone_geo introuvable', ['status' => 500]);
+            return eecie_crm_baserow_get("rows/table/$table_id/", ['user_field_names' => 'true']);
+        },
+        'permission_callback' => 'eecie_crm_check_capabilities',
+    ]);
+
+    // GET /zone_geo/schema -> Récupère la structure
+    register_rest_route('eecie-crm/v1', '/zone_geo/schema', [
+        'methods'  => 'GET',
+        'callback' => function () {
+            $table_id = get_option('gce_baserow_table_zone_geo') ?: eecie_crm_guess_table_id('Zone_geo');
+            if (!$table_id) return new WP_Error('no_table', 'Table Zone_geo introuvable', ['status' => 500]);
+            return eecie_crm_baserow_get_fields($table_id);
+        },
+        'permission_callback' => 'eecie_crm_check_capabilities',
+    ]);
+
+    // POST /zone_geo -> Crée une nouvelle zone
+    register_rest_route('eecie-crm/v1', '/zone_geo', [
+        'methods'  => 'POST',
+        'callback' => function (WP_REST_Request $request) {
+            $table_id = get_option('gce_baserow_table_zone_geo') ?: eecie_crm_guess_table_id('Zone_geo');
+            if (!$table_id) return new WP_Error('no_table', 'Table Zone_geo introuvable');
+            $body = $request->get_json_params();
+            return eecie_crm_baserow_post("rows/table/$table_id/", $body);
+        },
+        'permission_callback' => 'eecie_crm_check_capabilities',
+    ]);
+
+    // PATCH /zone_geo/{id} -> Met à jour une zone
+    register_rest_route('eecie-crm/v1', '/zone_geo/(?P<id>\d+)', [
+        'methods'  => 'PATCH',
+        'callback' => function (WP_REST_Request $request) {
+            $id = (int)$request['id'];
+            $table_id = get_option('gce_baserow_table_zone_geo') ?: eecie_crm_guess_table_id('Zone_geo');
+            if (!$table_id) return new WP_Error('no_table', 'Table Zone_geo introuvable');
+
+            $baseUrl = rtrim(get_option('gce_baserow_url'), '/');
+            $token = get_option('gce_baserow_api_key');
+            $url = "$baseUrl/api/database/rows/table/$table_id/$id/";
+            $body = $request->get_json_params();
+
+            $response = wp_remote_request($url, [
+                'method' => 'PATCH',
+                'headers' => ['Authorization' => 'Token ' . $token, 'Content-Type'  => 'application/json'],
+                'body' => json_encode($body)
+            ]);
+
+            if (is_wp_error($response)) return $response;
+            $code = wp_remote_retrieve_response_code($response);
+            $body = json_decode(wp_remote_retrieve_body($response), true);
+            if ($code !== 200) return new WP_Error('baserow_error', "Erreur PATCH ($code)", ['status' => $code, 'body' => $body]);
+            return rest_ensure_response($body);
+        },
+        'permission_callback' => 'eecie_crm_check_capabilities',
+    ]);
+    
+    // DELETE /zone_geo/{id} -> Supprime une zone
+    register_rest_route('eecie-crm/v1', '/zone_geo/(?P<id>\d+)', [
+        'methods'  => 'DELETE',
+        'callback' => function (WP_REST_Request $request) {
+            $id = (int)$request['id'];
+            $table_id = get_option('gce_baserow_table_zone_geo') ?: eecie_crm_guess_table_id('Zone_geo');
+            if (!$table_id) return new WP_Error('no_table', 'Table Zone_geo introuvable');
+            return eecie_crm_baserow_delete("rows/table/$table_id/$id/");
+        },
+        'permission_callback' => 'eecie_crm_check_capabilities',
+    ]);
+     register_rest_route('eecie-crm/v1', '/fournisseurs/create-with-contact', [
+        'methods'  => 'POST',
+        'callback' => function (WP_REST_Request $request) {
+            $payload = $request->get_json_params();
+
+            // 1. Valider les données reçues
+            if (empty($payload['fournisseur_data']) || empty($payload['contact_data'])) {
+                return new WP_Error('invalid_payload', 'Données du fournisseur ou du contact manquantes.', ['status' => 400]);
+            }
+
+            $contact_data = $payload['contact_data'];
+            $fournisseur_data = $payload['fournisseur_data'];
+
+            if (empty($contact_data['Nom'])) {
+                return new WP_Error('missing_contact_name', 'Le nom du contact est requis.', ['status' => 400]);
+            }
+
+            // 2. Trouver l'ID de la table des Contacts
+            $contact_table_id = get_option('gce_baserow_table_contacts') ?: eecie_crm_guess_table_id('Contacts');
+            if (!$contact_table_id) {
+                return new WP_Error('no_contact_table', 'Table des Contacts introuvable.', ['status' => 500]);
+            }
+            
+            // 3. Créer le contact D'ABORD
+            $new_contact = eecie_crm_baserow_post("rows/table/$contact_table_id/", $contact_data);
+            if (is_wp_error($new_contact)) {
+                // Si la création du contact échoue, on arrête tout et on renvoie l'erreur.
+                return new WP_Error('contact_creation_failed', 'La création du contact a échoué.', ['status' => 500, 'details' => $new_contact->get_error_message()]);
+            }
+            $new_contact_id = $new_contact['id'];
+
+            // 4. Préparer les données du fournisseur en injectant l'ID du nouveau contact
+            $fournisseur_table_id = get_option('gce_baserow_table_fournisseurs') ?: eecie_crm_guess_table_id('Fournisseur');
+            if (!$fournisseur_table_id) {
+                return new WP_Error('no_supplier_table', 'Table des Fournisseurs introuvable.', ['status' => 500]);
+            }
+
+            // Le champ de liaison 'Contacts' attend un tableau d'IDs
+            $fournisseur_data['Contacts'] = [$new_contact_id];
+
+            // 5. Créer le fournisseur
+            $new_fournisseur = eecie_crm_baserow_post("rows/table/$fournisseur_table_id/", $fournisseur_data);
+            if (is_wp_error($new_fournisseur)) {
+                // Idéalement, il faudrait supprimer le contact orphelin ici, mais pour l'instant on signale l'erreur.
+                return new WP_Error('supplier_creation_failed', 'Le contact a été créé, mais la création du fournisseur a échoué.', ['status' => 500, 'details' => $new_fournisseur->get_error_message()]);
+            }
+
+            // 6. Tout s'est bien passé, on renvoie le nouveau fournisseur
+            return rest_ensure_response($new_fournisseur);
+        },
+        'permission_callback' => 'eecie_crm_check_capabilities',
+    ]);
+
     register_rest_route('eecie-crm/v1', '/contacts', [
         'methods'  => 'GET',
         'callback' => 'eecie_crm_get_contacts',
