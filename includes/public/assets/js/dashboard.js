@@ -4,7 +4,35 @@ function gceToggleSidebar() {
 }
 
 
+function gceToggleSidebar() {
+  const sidebar = document.getElementById("gce-sidebar");
+  sidebar.classList.toggle("active");
+}
 
+/**
+ * Affiche une notification de statut en haut à droite de l'écran.
+ * @param {string} message Le texte à afficher.
+ * @param {boolean} isSuccess Si true, la notification sera verte (succès), sinon rouge (erreur).
+ */
+function showStatusUpdate(message, isSuccess = true) {
+  // Supprime toute notification existante pour éviter les doublons
+  const existing = document.getElementById('gce-status-update');
+  if (existing) {
+    existing.remove();
+  }
+
+  // Crée le nouvel élément de notification
+  const statusDiv = document.createElement('div');
+  statusDiv.id = 'gce-status-update';
+  statusDiv.className = 'gce-status-update';
+  if (!isSuccess) {
+    statusDiv.classList.add('error');
+  }
+  statusDiv.textContent = message;
+
+  // Ajoute la notification au corps de la page
+  document.body.appendChild(statusDiv);
+}
 
 
 

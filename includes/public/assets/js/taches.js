@@ -66,6 +66,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         return;
                     }
 
+                    // Désactive le bouton pour éviter les double-clics
+                    const button = e.target;
+                    button.disabled = true;
+
                     // Envoi au webhook N8N
                     fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/proxy/start-task', {
                         method: 'POST',
@@ -75,16 +79,26 @@ document.addEventListener('DOMContentLoaded', () => {
                         },
                         body: JSON.stringify(rowData)
                     })
-                        .then(res => res.json())
+                        .then(res => {
+                            if (!res.ok) throw new Error('La requête a échoué.');
+                            return res.json();
+                        })
                         .then(resp => {
-                            alert("✅ Tâche envoyée à N8N via proxy !");
-                            console.log("Réponse N8N :", resp);
+                            // Affiche la notification de succès
+                            showStatusUpdate('Tâche mise à jour avec succès !');
+                            
+                            // Attend 2 secondes avant de recharger
+                            setTimeout(() => {
+                                location.reload();
+                            }, 2000); // 2000 millisecondes = 2 secondes
                         })
                         .catch(err => {
                             console.error("Erreur proxy :", err);
-                            alert("❌ Erreur lors de l’envoi.");
+                            // Affiche une notification d'erreur
+                            showStatusUpdate('❌ Erreur lors de l’envoi.', false);
+                            // Réactive le bouton en cas d'erreur
+                            button.disabled = false;
                         });
-
                 }
             });
 

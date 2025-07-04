@@ -148,29 +148,56 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
 
         if (mode === "lecture") {
             let displayValue = '';
-            if (Array.isArray(value)) {
-                displayValue = value.map(v => (typeof v === 'object' && v !== null) ? v.value : v).join(', ');
-            } else if (typeof value === 'object' && value !== null) {
+
+                
+
+                if (field.type === "link_row" && Array.isArray(value)) {
+                    // Si c'est un champ de liaison, on crée des liens cliquables
+                    const rawNameToSlugMap = {'t1_user':'utilisateurs','assigne':'utilisateurs','contacts':'contacts','contact':'contacts','task_input':'opportunites','opportunite':'opportunites','opportunité':'opportunites','appel':'appels','appels':'appels','interaction':'interactions','interactions':'interactions','devis':'devis','articles_devis':'articles_devis','article':'articles_devis'};
+                    const tableSlug = rawNameToSlugMap[field.name.toLowerCase()] || field.name.toLowerCase();
+                    
+                    displayValue = value.map(obj => {
+                        if (!obj || !obj.id) return '';
+                        return `<span style="display: inline-flex; align-items: center; gap: 5px;">
+                                    <a href="#" class="gce-popup-link" data-table="${tableSlug}" data-id="${obj.id}" data-mode="lecture">${obj.value || 'Détail'}</a>
+                                    <a href="#" class="gce-popup-link" data-table="${tableSlug}" data-id="${obj.id}" data-mode="ecriture" title="Modifier">✏️</a>
+                                </span>`;
+                    }).join(', ');
+
+                } else if (field.type === "file" && Array.isArray(value)) { // Ajout pour afficher les fichiers existants
+                    displayValue = value.map(file => 
+                        `<a href="${file.url}" target="_blank" rel="noopener noreferrer">${file.visible_name}</a>`
+                    ).join('<br>');
+                }
+                 else if (typeof value === 'object' && value !== null) {
                 displayValue = value.value || '';
             } else {
                 displayValue = value || '';
             }
             return `<div class="gce-field-row"><strong>${field.name}</strong><div>${displayValue}</div></div>`;
         } else { // Mode 'ecriture'
+            
+            if (field.type === "link_row") {
+                    let displayValue = '—';
+                    let hiddenInputValue = '';
+                    if (Array.isArray(value) && value.length > 0) {
+                        if(value[0]?.id) { hiddenInputValue = value[0].id; }
+                        const rawNameToSlugMap = {'t1_user':'utilisateurs','assigne':'utilisateurs','contacts':'contacts','contact':'contacts','task_input':'opportunites','opportunite':'opportunites','opportunité':'opportunites','appel':'appels','appels':'appels','interaction':'interactions','interactions':'interactions','devis':'devis','articles_devis':'articles_devis','article':'articles_devis'};
+                        const tableSlug = rawNameToSlugMap[field.name.toLowerCase()] || field.name.toLowerCase();
+                        displayValue = value.map(obj => {
+                            if (!obj || !obj.id) return '';
+                            return `<a href="#" class="gce-popup-link" data-table="${tableSlug}" data-id="${obj.id}" data-mode="lecture">${obj.value || 'Détail'}</a>`;
+                        }).join(', ');
+                    }
+                    return `<div class="gce-field-row">${label}<div>${displayValue}</div><input type="hidden" id="${fieldKey}" name="${fieldKey}" value="${hiddenInputValue}"></div>`;
+                }
+            
+            
             if (field.read_only) {
                 return `<div class="gce-field-row">${label}<input type="text" value="${value || ''}" readonly disabled></div>`;
             }
 
-            if (field.type === "link_row") {
-                const linkedRecord = Array.isArray(value) ? value[0] : null;
-                const recordId = linkedRecord ? linkedRecord.id : '';
-                return `
-                    <div class="gce-field-row">
-                        ${label}
-                        <input type="text" id="${fieldKey}" name="${fieldKey}" value="${recordId}" readonly style="background:#f0f0f0; border:1px solid #ddd; color: #555;">
-                    </div>`;
-            }
-
+            
             if (field.type === "boolean") {
                 return `
                     <div class="gce-field-row">${label}
