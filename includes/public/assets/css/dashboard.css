@@ -3,7 +3,7 @@
 .gce-color-dark-blue   { background-color: #2563EB; }
 .gce-color-blue        { background-color: #3B82F6; }
 .gce-color-light-blue  { background-color: #60A5FA; }
-
+.gce-color-light-cyan { background-color: #5aaaae; }
 .gce-color-darker-green { background-color: #047857; }
 .gce-color-dark-green   { background-color: #059669; }
 .gce-color-green        { background-color: #10B981; }
@@ -12,7 +12,7 @@
 .gce-color-dark-red   { background-color: #DC2626; }
 .gce-color-red        { background-color: #EF4444; }
 .gce-color-pink        { background-color: #f555ad; }
-
+.gce-color-light-purple {background-color: #c86dde;}
 .gce-color-orange  { background-color: #F97316; }
 .gce-color-darker-orange  { background-color: #fa6800; }
 .gce-color-yellow  { background-color: #EAB308; }
