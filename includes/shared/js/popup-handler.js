@@ -227,7 +227,7 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
                         </div>
                     </div>`;
             }
-
+          
             const inputType = field.type === 'number' ? 'number' : 'text';
             return `
                 <div class="gce-field-row">${label}
@@ -377,4 +377,32 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
             }
         });
     }
+}
+
+async function uploadFile(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const res = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/upload-file`, {
+        method: 'POST',
+        headers: {
+            'X-WP-Nonce': EECIE_CRM.nonce
+        },
+        body: formData
+    });
+
+    if (!res.ok) throw new Error('Erreur lors de l’upload du fichier');
+
+    return await res.json();
+}
+
+async function handleFiles(files) {
+    const uploadedFiles = [];
+
+    for (const file of files) {
+        const result = await uploadFile(file);
+        uploadedFiles.push(result.file_info);
+    }
+
+    return uploadedFiles; // Tableau compatible Baserow
 }

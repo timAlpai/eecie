@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const popupData = { [linkField.name]: [{ id: appel.id, value: `Appel #${appel.id}` }] };
-                gceShowModal(popupData, "interactions", "ecriture", ["Nom", "Type", "Description", linkField.name]);
+                gceShowModal(popupData, "interactions", "ecriture");
             }
         });
 
