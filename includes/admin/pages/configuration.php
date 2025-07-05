@@ -130,7 +130,7 @@ if (is_wp_error($tables)) {
                 <p class="description">Laisser vide pour utiliser l’ID détecté automatiquement.</p>
             </td>
         </tr>
-        <?php endforeach; // CORRECTION: Cette ligne était manquante ?>
+        <?php endforeach; ?>
         </table>
 
         <?php submit_button('Enregistrer'); ?>

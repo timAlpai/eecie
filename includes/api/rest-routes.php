@@ -1999,6 +1999,37 @@ add_action('rest_api_init', function () {
         },
 
     ]);
+
+    register_rest_route('eecie-crm/v1', '/upload-file', [
+        'methods'  => 'POST',
+        'callback' => function (WP_REST_Request $request) {
+            $files = $request->get_file_params();
+
+            if (empty($files['file'])) {
+                return new WP_Error('no_file', 'Aucun fichier n\'a été envoyé.', ['status' => 400]);
+            }
+
+            $file = $files['file']; // ['name' => ..., 'type' => ..., 'tmp_name' => ..., 'error' => ..., 'size' => ...]
+
+            // Utilise notre nouvelle fonction proxy
+            $result = eecie_crm_baserow_upload_file($file['tmp_name'], $file['name']);
+
+            if (is_wp_error($result)) {
+                return $result;
+            }
+
+            // Baserow renvoie un objet avec les détails du fichier. On le renvoie au client.
+            return rest_ensure_response($result);
+        },
+        'permission_callback' => function () {
+            // Sécurité : utilisateur connecté + nonce valide
+            return is_user_logged_in() &&
+                isset($_SERVER['HTTP_X_WP_NONCE']) &&
+                wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+        },
+    ]);
+
+
 });
    
 

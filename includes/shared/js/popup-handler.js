@@ -176,6 +176,21 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
             }
             return `<div class="gce-field-row"><strong>${field.name}</strong><div>${displayValue}</div></div>`;
         } else { // Mode 'ecriture'
+
+                        if (field.type === "file") {
+                let existingFilesHtml = '';
+                if (Array.isArray(value) && value.length > 0) {
+                    existingFilesHtml = '<div>Fichiers actuels: ' + value.map(f => `<a href="${f.url}" target="_blank">${f.visible_name}</a>`).join(', ') + '</div>';
+                }
+                // Note : On ne peut pas pré-remplir un <input type="file"> pour des raisons de sécurité.
+                // On affiche les fichiers existants et on propose un champ pour en ajouter de nouveaux.
+                return `
+                    <div class="gce-field-row" style="flex-direction: column; align-items: stretch;">
+                        ${label}
+                        ${existingFilesHtml}
+                        <input type="file" id="${fieldKey}" name="${fieldKey}" multiple style="margin-top: 5px;">
+                    </div>`;
+            }
             
             if (field.type === "link_row") {
                     let displayValue = '—';
@@ -291,92 +306,104 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
     });
     modal.querySelector(".gce-modal-close").addEventListener("click", close);
 
-    if (mode === "ecriture") {
+   if (mode === "ecriture") {
         modal.querySelector("form").addEventListener("submit", async (e) => {
             e.preventDefault();
-            const formData = new FormData(e.target);
-            const payload = {};
-
-            for (let field of filteredSchema) {
-                if (field.read_only) continue;
-
-                const key = `field_${field.id}`;
-                let rawValue;
-
-                // Logique spéciale pour récupérer le contenu de l'éditeur riche
-                if (field.type === 'long_text' && window.tinymce && window.tinymce.get(key)) {
-                    // On récupère le contenu HTML directement depuis l'instance de l'éditeur
-                    rawValue = window.tinymce.get(key).getContent();
-                } else {
-                    // Logique standard pour tous les autres types de champs
-                    if (!formData.has(key)) continue; // Le champ n'est pas dans le formulaire, on passe
-                    rawValue = formData.get(key);
-                }
-
-                // On ignore les champs vides, sauf pour les booléens (car 'false' est une valeur valide)
-                if (rawValue === null || (rawValue === '' && field.type !== 'boolean')) {
-                    continue;
-                }
-
-                // Traitement de la valeur en fonction du type de champ Baserow
-                if (field.type === "boolean") {
-                    payload[key] = rawValue === "true";
-                } else if (field.type === "number" || field.type === "decimal") {
-                    payload[key] = Number(rawValue);
-                } else if (field.type === "single_select") {
-                    // On s'assure de ne pas envoyer de valeur vide si rien n'est sélectionné
-                    const intValue = parseInt(rawValue, 10);
-                    if (!isNaN(intValue)) {
-                        payload[key] = intValue;
-                    }
-                } else if (field.type === "link_row") {
-                    const id = parseInt(rawValue, 10);
-                    if (!isNaN(id)) {
-                        payload[key] = [id]; // L'API attend un tableau d'IDs
-                    }
-                } else {
-                    // Pour les champs 'text', 'long_text', 'date', etc.
-                    payload[key] = rawValue;
-                }
-            }
-
-            const method = data.id ? "PATCH" : "POST";
-            const url = data.id ?
-                `${EECIE_CRM.rest_url}eecie-crm/v1/${tableName}/${data.id}` :
-                `${EECIE_CRM.rest_url}eecie-crm/v1/${tableName}`;
+            
+            const submitButton = e.target.querySelector('button[type="submit"]');
+            submitButton.disabled = true;
+            submitButton.textContent = 'Sauvegarde...';
 
             try {
+                // ================== NOUVELLE LOGIQUE D'UPLOAD ==================
+                const form = e.target;
+                const fileInputs = form.querySelectorAll('input[type="file"]');
+                const newFilesPayload = {};
+
+                // Boucle sur chaque champ de fichier pour uploader les fichiers
+                for (const input of fileInputs) {
+                    if (input.files.length > 0) {
+                        const fieldKey = input.name;
+                        newFilesPayload[fieldKey] = [];
+                        
+                        // Uploader chaque fichier sélectionné pour ce champ
+                        for (const file of input.files) {
+                            const formData = new FormData();
+                            formData.append('file', file);
+
+                            const res = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/upload-file`, {
+                                method: 'POST',
+                                headers: { 'X-WP-Nonce': EECIE_CRM.nonce },
+                                body: formData
+                            });
+
+                            if (!res.ok) throw new Error(`L'upload du fichier ${file.name} a échoué.`);
+                            
+                            const uploadedFile = await res.json();
+                            newFilesPayload[fieldKey].push(uploadedFile);
+                        }
+                    }
+                }
+                // ================== FIN DE LA LOGIQUE D'UPLOAD ==================
+
+                if (window.tinymce) tinymce.triggerSave();
+                const standardFormData = new FormData(form);
+                const payload = {};
+
+                for (let field of filteredSchema) {
+                    if (field.read_only) continue;
+
+                    const key = `field_${field.id}`;
+                    
+                    // ================== LOGIQUE DE PAYLOAD MODIFIÉE ==================
+                    if (field.type === "file") {
+                        const existingFiles = Array.isArray(data[field.name]) ? data[field.name] : [];
+                        const newFiles = newFilesPayload[key] || [];
+                        // On combine les fichiers existants avec les nouveaux
+                        payload[key] = [...existingFiles, ...newFiles];
+                        continue; // On passe au champ suivant
+                    }
+                    // ================== FIN DE LA MODIFICATION ==================
+
+                    if (!standardFormData.has(key)) continue;
+                    let rawValue = standardFormData.get(key);
+
+                    if (rawValue === null || (rawValue === '' && field.type !== 'boolean')) continue;
+
+                    if (field.type === "boolean") payload[key] = rawValue === "true";
+                    else if (["number", "decimal", "single_select"].includes(field.type)) payload[key] = parseInt(rawValue, 10);
+                    else if (field.type === "link_row") payload[key] = [parseInt(rawValue, 10)];
+                    else payload[key] = rawValue;
+                }
+
+                const method = data.id ? "PATCH" : "POST";
+                const url = data.id ?
+                    `${EECIE_CRM.rest_url}eecie-crm/v1/${tableName}/${data.id}` :
+                    `${EECIE_CRM.rest_url}eecie-crm/v1/${tableName}`;
+
                 const res = await fetch(url, {
                     method,
-                    headers: {
-                        "Content-Type": "application/json",
-                        "X-WP-Nonce": EECIE_CRM.nonce,
-                    },
+                    headers: { "Content-Type": "application/json", "X-WP-Nonce": EECIE_CRM.nonce },
                     body: JSON.stringify(payload),
                 });
 
                 if (!res.ok) {
                     const errorData = await res.json();
-                    console.error('Erreur API:', errorData);
                     throw new Error(`Erreur HTTP ${res.status}: ${errorData.message || 'Erreur inconnue'}`);
                 }
 
-                const result = await res.json();
-                console.log(`✅ Record ${method === 'POST' ? 'created' : 'updated'}:`, result);
-
                 close();
-                // On rafraîchit la table principale pour voir les changements
-                if (typeof gceRefreshVisibleTable === 'function') {
-                    gceRefreshVisibleTable();
-                }
-                location.reload(); // Solution simple et efficace pour tout mettre à jour
+                location.reload(); // La solution la plus simple pour voir tous les changements
 
             } catch (err) {
                 console.error("❌ Erreur de sauvegarde:", err);
                 alert("Une erreur est survenue lors de la sauvegarde : " + err.message);
+                submitButton.disabled = false;
+                submitButton.textContent = '💾 Enregistrer';
             }
         });
     }
+
 }
 
 async function uploadFile(file) {

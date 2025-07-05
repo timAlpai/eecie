@@ -71,3 +71,63 @@ function eecie_crm_baserow_get_fields($table_id)
 {
     return eecie_crm_baserow_get("fields/table/$table_id/");
 }
+/**
+ * Fonction pour téléverser un fichier à Baserow en utilisant cURL pour plus de fiabilité.
+ *
+ * @param string $file_path Chemin temporaire du fichier sur le serveur
+ * @param string $file_name Nom original du fichier
+ * @return array|WP_Error Les informations du fichier téléversé ou une erreur
+ */
+function eecie_crm_baserow_upload_file($file_path, $file_name)
+{
+    $baseUrl = rtrim(get_option('gce_baserow_url'), '/');
+    $token = get_option('gce_baserow_api_key');
+
+    if (empty($baseUrl) || empty($token)) {
+        return new WP_Error('missing_credentials', 'Baserow credentials not configured.', ['status' => 500]);
+    }
+
+    $url = "$baseUrl/api/user-files/upload-file/";
+
+    if (!function_exists('curl_init')) {
+        return new WP_Error('curl_missing', 'L\'extension cURL de PHP est requise.', ['status' => 500]);
+    }
+    
+    if (!class_exists('CURLFile')) {
+        return new WP_Error('curlfile_missing', 'La classe CURLFile est requise.', ['status' => 500]);
+    }
+
+    $cfile = new CURLFile($file_path, mime_content_type($file_path), $file_name);
+    $post_data = ['file' => $cfile];
+
+    $ch = curl_init();
+
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_POST, 1);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $post_data);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Authorization: Token ' . sanitize_text_field($token),
+        // IMPORTANT: Ne pas définir 'Content-Type' manuellement, cURL le fait pour nous
+        // avec la bonne délimitation (boundary) pour les requêtes multipart.
+    ]);
+
+    $response_body = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curl_error = curl_error($ch);
+
+    curl_close($ch);
+
+    if ($curl_error) {
+        return new WP_Error('curl_error', $curl_error, ['status' => 502]);
+    }
+
+    if ($http_code !== 200) {
+        // Essayons de décoder le message d'erreur de Baserow pour plus de clarté
+        $error_details = json_decode($response_body, true);
+        $error_message = $error_details['detail'] ?? "Erreur d'upload Baserow ($http_code)";
+        return new WP_Error('baserow_api_upload_error', $error_message, ['status' => $http_code]);
+    }
+
+    return json_decode($response_body, true);
+}
