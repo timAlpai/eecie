@@ -23,10 +23,15 @@ function loadAndBuildDevisTable() {
         fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/fournisseurs/schema', { cache: 'no-cache', headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json())
    
     ])
-    .then(([devisData, articlesData, devisSchema, articlesSchema]) => {
+    .then(([devisData, articlesData, devisSchema, articlesSchema, fournisseursData, fournisseursSchema]) => {
         window.gceSchemas = window.gceSchemas || {};
         window.gceSchemas["devis"] = devisSchema;
         window.gceSchemas["articles_devis"] = articlesSchema;
+        // === AJOUTS CI-DESSOUS ===
+        window.gceSchemas["fournisseurs"] = fournisseursSchema;
+        window.gceDataCache = window.gceDataCache || {};
+        window.gceDataCache["fournisseurs"] = fournisseursData.results || [];
+
 
         const devis = devisData.results || [];
         const articles = articlesData.results || [];
@@ -142,11 +147,8 @@ function loadAndBuildDevisTable() {
                 holderEl.appendChild(tableEl);
                 row.getElement().appendChild(holderEl);
 
-                // ================== MODIFICATION CI-DESSOUS ==================
-                // 1. On prépare les colonnes des articles
                 const articlesColumns = getTabulatorColumnsFromSchema(window.gceSchemas["articles_devis"], 'articles_devis');
                 
-                // 2. On ajoute la colonne "Actions" avec les icônes Modifier et Supprimer
                 articlesColumns.push({
                     title: "Actions",
                     headerSort: false,
@@ -154,14 +156,11 @@ function loadAndBuildDevisTable() {
                     hozAlign: "center",
                     formatter: (cell) => {
                         const rowData = cell.getRow().getData();
-                        // L'icône Modifier déclenche le popup-handler.js existant
                         const editIcon = `<a href="#" class="gce-popup-link" data-id="${rowData.id}" data-table="articles_devis" data-mode="ecriture" title="Modifier">✏️</a>`;
-                        // L'icône Supprimer sera gérée par cellClick
                         const deleteIcon = `<a href="#" class="gce-delete-article-btn" title="Supprimer">❌</a>`;
-                        return `${editIcon}   ${deleteIcon}`;
+                        return `${editIcon}   ${deleteIcon}`;
                     },
                     cellClick: (e, cell) => {
-                        // On agit uniquement sur le clic du bouton supprimer
                         if (!e.target.closest('.gce-delete-article-btn')) return;
 
                         e.preventDefault();
@@ -176,8 +175,6 @@ function loadAndBuildDevisTable() {
                             .then(res => {
                                 if (!res.ok) throw new Error('La suppression a échoué.');
                                 console.log(`✅ Article ${rowData.id} supprimé.`);
-                                // On rafraîchit toute la table des devis pour mettre à jour
-                                // l'état (y compris les totaux s'il y en a).
                                 gceRefreshVisibleTable(); 
                                  location.reload();
                             })
@@ -189,17 +186,15 @@ function loadAndBuildDevisTable() {
                     }
                 });
 
-                // 3. On crée la sous-table avec les colonnes modifiées
                 const innerTable = new Tabulator(tableEl, {
                     data: data,
                     layout: "fitColumns",
                     height: "auto",
-                    columns: articlesColumns, // On utilise nos colonnes personnalisées
+                    columns: articlesColumns,
                     columnDefaults: { resizable: true, widthGrow: 1 },
                     placeholder: "Aucun article dans ce devis."
                 });
 
-                // 4. On améliore le handler "cellEdited" pour sauvegarder AVANT de rafraîchir
                 innerTable.on("cellEdited", function (cell) {
                     const rowData = cell.getRow().getData();
                     const schema = window.gceSchemas["articles_devis"];
@@ -224,7 +219,6 @@ function loadAndBuildDevisTable() {
                         alert("La sauvegarde de l'article a échoué.");
                     });
                 });
-                // =================== FIN DE LA MODIFICATION ===================
             }
         });
 
@@ -245,3 +239,4 @@ function loadAndBuildDevisTable() {
 document.addEventListener('DOMContentLoaded', () => {
     loadAndBuildDevisTable();
 });
+

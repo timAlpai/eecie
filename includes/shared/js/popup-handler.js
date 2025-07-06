@@ -179,7 +179,7 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
             return `<div class="gce-field-row"><strong>${field.name}</strong><div>${displayValue}</div></div>`;
         } else { // Mode 'ecriture'
 
-                        if (field.type === "file") {
+            if (field.type === "file") {
                 let existingFilesHtml = '';
                 if (Array.isArray(value) && value.length > 0) {
                     existingFilesHtml = '<div>Fichiers actuels: ' + value.map(f => `<a href="${f.url}" target="_blank">${f.visible_name}</a>`).join(', ') + '</div>';
@@ -194,8 +194,16 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
                     </div>`;
             }
             
-            if (field.type === "link_row") {
-                    let displayValue = '—';
+           if (field.type === "link_row") {
+                    // CAS SPÉCIAL : Le champ 'Fournisseur' quand on édite un 'devis'.
+                    if (tableName === 'devis' && field.name === 'Fournisseur') {
+                        const targetSlug = 'fournisseurs';
+                        const options = window.gceDataCache?.[targetSlug] || [];
+                        const selectedIds = Array.isArray(value) ? value.map(v => v.id) : [];
+                        const optionHtml = options.map(opt => `<option value="${opt.id}" ${selectedIds.includes(opt.id) ? 'selected' : ''}>${opt.Nom || opt.Name || `ID: ${opt.id}`}</option>`).join('');
+                        return `<div class="gce-field-row" style="flex-direction: column; align-items: stretch;">${label}<select name="${fieldKey}" id="${fieldKey}" multiple style="min-height: 100px;">${optionHtml}</select></div>`;
+                    } else {
+                       let displayValue = '—';
                     let hiddenInputValue = '';
                     if (Array.isArray(value) && value.length > 0) {
                         if(value[0]?.id) { hiddenInputValue = value[0].id; }
@@ -207,6 +215,7 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
                         }).join(', ');
                     }
                     return `<div class="gce-field-row">${label}<div>${displayValue}</div><input type="hidden" id="${fieldKey}" name="${fieldKey}" value="${hiddenInputValue}"></div>`;
+               }
                 }
             
             
@@ -365,8 +374,12 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
                         payload[key] = [...existingFiles, ...newFiles];
                         continue; // On passe au champ suivant
                     }
-                    // ================== FIN DE LA MODIFICATION ==================
-
+                    
+                     if (field.type === 'link_row' && tableName === 'devis' && field.name === 'Fournisseur') {
+                            // On récupère toutes les valeurs sélectionnées pour le champ fournisseur
+                            payload[key] = Array.from(form.querySelector(`select[name="${key}"]`).selectedOptions).map(opt => parseInt(opt.value));
+                            continue; // On passe au champ suivant
+                        }
                     if (!standardFormData.has(key)) continue;
                     let rawValue = standardFormData.get(key);
 
@@ -377,7 +390,7 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
                     else if (field.type === "link_row") payload[key] = [parseInt(rawValue, 10)];
                     else payload[key] = rawValue;
                 }
-
+                // ================== FIN DE LA MODIFICATION ==================
                 const method = data.id ? "PATCH" : "POST";
                 const url = data.id ?
                     `${EECIE_CRM.rest_url}eecie-crm/v1/${tableName}/${data.id}` :
