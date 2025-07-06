@@ -57,7 +57,9 @@ document.addEventListener('DOMContentLoaded', () => {
             'interactions': 'interactions',
             'devis': 'devis',
             'articles_devis': 'articles_devis',
-            'article': 'articles_devis'
+            'article': 'articles_devis',
+            'fournisseur': 'fournisseurs', 
+            'fournisseurs': 'fournisseurs' 
         };
 
         const rawTableName = link.dataset.table;
@@ -153,7 +155,7 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
 
                 if (field.type === "link_row" && Array.isArray(value)) {
                     // Si c'est un champ de liaison, on crée des liens cliquables
-                    const rawNameToSlugMap = {'t1_user':'utilisateurs','assigne':'utilisateurs','contacts':'contacts','contact':'contacts','task_input':'opportunites','opportunite':'opportunites','opportunité':'opportunites','appel':'appels','appels':'appels','interaction':'interactions','interactions':'interactions','devis':'devis','articles_devis':'articles_devis','article':'articles_devis'};
+                    const rawNameToSlugMap = {'t1_user':'utilisateurs','assigne':'utilisateurs','contacts':'contacts','contact':'contacts','task_input':'opportunites','opportunite':'opportunites','opportunité':'opportunites','appel':'appels','appels':'appels','interaction':'interactions','interactions':'interactions','devis':'devis','articles_devis':'articles_devis','article':'articles_devis','fournisseur': 'fournisseurs', 'fournisseurs': 'fournisseurs'};
                     const tableSlug = rawNameToSlugMap[field.name.toLowerCase()] || field.name.toLowerCase();
                     
                     displayValue = value.map(obj => {
