@@ -56,55 +56,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
+                // Trouve l'ID de la table des appels à partir de son schéma
                 const appelsTableId = appelsSchema[0].table_id;
-                const appelLinkFieldInInteractions = interactionsSchema.find(f => f.type === 'link_row' && f.link_row_table_id === appelsTableId);
-                
-                if (!appelLinkFieldInInteractions) {
-                    alert("Erreur: Le champ de liaison vers les Appels est introuvable dans les Interactions.");
+                // Trouve le champ dans les interactions qui pointe vers la table des appels
+                const linkField = interactionsSchema.find(f => f.type === 'link_row' && f.link_row_table_id === appelsTableId);
+
+                if (!linkField) {
+                    alert("Erreur: Le champ de liaison vers les Appels est introuvable.");
                     return;
                 }
 
-                // --- DÉBUT DE LA MODIFICATION PRINCIPALE ---
-                // On prépare un objet qui contiendra toutes les données à pré-remplir
-                const popupData = {};
-
-                // 1. Lier l'interaction à l'appel parent (ce que vous aviez déjà)
-                popupData[appelLinkFieldInInteractions.name] = [{ id: appel.id, value: `Appel #${appel.id}` }];
-
-                // 2. Transférer les informations liées de l'appel vers l'interaction
-                // On fait correspondre les champs de l'appel aux champs de l'interaction.
-                // Ex: Le champ "Opportunité" de l'appel correspond au champ "opportunité" de l'interaction.
-                if (appel.Opportunité) popupData.opportunité = appel.Opportunité;
-                if (appel.Employé)     popupData.effectue_par = appel.Employé;
-                if (appel.Contact)      popupData.contact = appel.Contact;
-                
-                // 3. Pré-remplir le type d'interaction sur "Appel Telephonique"
-                const typeInteractionField = interactionsSchema.find(f => f.name === 'types_interactions');
-                if (typeInteractionField) {
-                    const optionAppel = typeInteractionField.select_options.find(opt => opt.value === 'Appel Telephonique');
-                    if (optionAppel) {
-                        // On passe l'objet complet pour que le popup puisse afficher la valeur et utiliser l'ID
-                        popupData[typeInteractionField.name] = { id: optionAppel.id, value: optionAppel.value };
-                    }
-                }
-
-                // 4. Pré-remplir la date et l'heure actuelles
-                const dateField = interactionsSchema.find(f => f.name === 'date_heure');
-                if(dateField) {
-                    // Formate la date en 'YYYY-MM-DDTHH:mm' pour l'input datetime-local
-                    const now = new Date();
-                    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-                    popupData[dateField.name] = now.toISOString().slice(0,16);
-                }
-
-                // On appelle le modal avec le nouvel objet `popupData` enrichi
+                const popupData = { [linkField.name]: [{ id: appel.id, value: `Appel #${appel.id}` }] };
                 gceShowModal(popupData, "interactions", "ecriture");
-                // --- FIN DE LA MODIFICATION PRINCIPALE ---
             }
         });
 
         const tableEl = document.createElement('div');
-        tableEl.className = 'gce-tabulator';
+        tableEl.className = 'gce-tabulator'; // On ajoute la classe pour le style
         container.innerHTML = '';
         container.appendChild(tableEl);
 
@@ -116,6 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
             height: "auto",
             placeholder: "Aucun appel trouvé.",
             responsiveLayout: "collapse",
+
             rowFormatter: function (row) {
                 const data = row.getData()._children;
                 if (!Array.isArray(data) || data.length === 0) return;
@@ -128,7 +97,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 holderEl.appendChild(tableEl);
                 row.getElement().appendChild(holderEl);
 
+                // ============== DÉBUT DE LA MODIFICATION ==============
+                // 1. Obtenir les colonnes de base pour les interactions
                 const interactionColumns = getTabulatorColumnsFromSchema(window.gceSchemas["interactions"], 'interactions');
+
+                // 2. Ajouter la colonne "Actions" avec les icônes
                 interactionColumns.push({
                     title: "Actions",
                     headerSort: false,
@@ -136,7 +109,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     hozAlign: "center",
                     formatter: (cell) => {
                         const rowData = cell.getRow().getData();
+                        // L'icône Modifier utilise le popup-handler existant
                         const editIcon = `<a href="#" class="gce-popup-link" data-id="${rowData.id}" data-table="interactions" data-mode="ecriture" title="Modifier">✏️</a>`;
+                        // L'icône Supprimer est gérée par cellClick
                         const deleteIcon = `<a href="#" class="gce-delete-interaction-btn" title="Supprimer">❌</a>`;
                         return `${editIcon}   ${deleteIcon}`;
                     },
@@ -154,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             .then(res => {
                                 if (!res.ok) throw new Error('La suppression a échoué.');
                                 console.log(`✅ Interaction ${rowData.id} supprimée.`);
-                                location.reload();
+                                location.reload(); // Recharger la page
                             })
                             .catch(err => {
                                 console.error('❌ Erreur de suppression:', err);
@@ -168,10 +143,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     data: data,
                     layout: "fitColumns",
                     height: "auto",
-                    columns: interactionColumns,
+                    columns: interactionColumns, // Utilisation des colonnes modifiées
                     placeholder: "Aucune interaction.",
                 });
 
+                // 3. Mettre à jour le handler "cellEdited" pour recharger la page
                 innerTable.on("cellEdited", function (cell) {
                     const rowData = cell.getRow().getData();
                     const schema = window.gceSchemas["interactions"];
@@ -188,16 +164,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     .then(res => {
                         if (!res.ok) throw new Error("Erreur HTTP " + res.status);
                         console.log("✅ Interaction mise à jour.");
-                        location.reload();
+                        location.reload(); // Recharger la page
                     })
                     .catch(err => {
                         console.error("❌ Erreur de mise à jour de l'interaction :", err);
                         alert("La sauvegarde a échoué.");
                     });
                 });
+                // =============== FIN DE LA MODIFICATION ===============
             }
         });
 
+        // Mettre à jour également le handler de la table principale pour la cohérence
         table.on("cellEdited", function (cell) {
             const rowData = cell.getRow().getData();
             const schema = window.gceSchemas["appels"];
@@ -211,7 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(res => {
                 if (!res.ok) throw new Error("La sauvegarde de l'appel a échoué.");
                 console.log(`✅ Appel ${rowData.id} mis à jour.`);
-                location.reload();
+                location.reload(); // Recharger la page
             })
             .catch(err => {
                 console.error("❌ Erreur de mise à jour de l'appel :", err);

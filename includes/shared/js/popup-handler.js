@@ -218,6 +218,12 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
                }
                 }
             
+            if (field.type === "date" && field.date_include_time) {
+                return `
+                    <div class="gce-field-row">${label}
+                        <input type="datetime-local" id="${fieldKey}" name="${fieldKey}" value="${value || ''}">
+                    </div>`;
+            }
             
             if (field.read_only) {
                 return `<div class="gce-field-row">${label}<input type="text" value="${value || ''}" readonly disabled></div>`;
