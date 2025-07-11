@@ -38,6 +38,7 @@ function gce_get_table_id_to_slug_map() {
         'T1_user'       => 'utilisateurs',
         'Articles_devis' => 'articles_devis', 
         'Zone_geo'      => 'zone_geo',
+        'Rappels'       => 'rappels'
     ];
 
     $map = [];

@@ -261,9 +261,12 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
             }
           
             const inputType = field.type === 'number' ? 'number' : 'text';
+            const numberAttributes = (inputType === 'number') ? 'step="0.01"' : '';
+            // --- FIN DU CHANGEMENT ---
+
             return `
                 <div class="gce-field-row">${label}
-                    <input type="${inputType}" id="${fieldKey}" name="${fieldKey}" value="${value || ''}">
+                    <input type="${inputType}" id="${fieldKey}" name="${fieldKey}" value="${value || ''}" ${numberAttributes}>
                 </div>`;
         }
     }).join("");
@@ -392,7 +395,8 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
                     if (rawValue === null || (rawValue === '' && field.type !== 'boolean')) continue;
 
                     if (field.type === "boolean") payload[key] = rawValue === "true";
-                    else if (["number", "decimal", "single_select"].includes(field.type)) payload[key] = parseInt(rawValue, 10);
+                    else if (["number", "decimal"].includes(field.type)) payload[key] = parseFloat(String(rawValue).replace(',', '.'));
+                    else if (["single_select"].includes(field.type)) payload[key] = parseInt(rawValue, 10);
                     else if (field.type === "link_row") payload[key] = [parseInt(rawValue, 10)];
                     else payload[key] = rawValue;
                 }
@@ -412,6 +416,8 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
                     const errorData = await res.json();
                     throw new Error(`Erreur HTTP ${res.status}: ${errorData.message || 'Erreur inconnue'}`);
                 }
+                const responseData = await res.json();
+                console.log("✅ Réponse du serveur reçue, sauvegarde confirmée:", responseData);
 
                 close();
                 location.reload(); // La solution la plus simple pour voir tous les changements

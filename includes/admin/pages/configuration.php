@@ -6,13 +6,14 @@ require_once GCE_PLUGIN_DIR. 'includes/api/baserow-proxy.php';
 $known_usages = [
     'Contacts'      => 'contacts',
     'Taches'        => 'taches',
-    'Task_input'    => 'opportunites', 
+    'Task_input'    => 'opportunites',
     'Devis'         => 'devis',
     'Interactions'  => 'interactions',
     'Appels'        => 'appels',
     'Fournisseur'   => 'fournisseurs',
-    'Zone_geo'       => 'zone_geo',
+    'Zone_geo'      => 'zone_geo',
     'T1_user'       => 'utilisateurs',
+    'Articles_devis' => 'articles_devis',
 ];
 
 $api_key = get_option('gce_baserow_api_key', '');
@@ -20,7 +21,7 @@ $baserow_url = get_option('gce_baserow_url', '');
 $tps_rate = get_option('gce_tps_rate', '0.05');
 $tvq_rate = get_option('gce_tvq_rate', '0.09975');
 
-if (isset($_POST['gce_config_submit'])) {
+if (isset($_POST['submit'])) {
     check_admin_referer('gce_config_save', 'gce_config_nonce');
 
     update_option('gce_baserow_url', esc_url_raw($_POST['gce_baserow_url']));
@@ -119,7 +120,7 @@ if (is_wp_error($tables)) {
             <th scope="row"><label for="<?php echo esc_attr($manual_key); ?>">Table pour <?php echo esc_html($expected_name); ?></label></th>
             <td>
                 <?php if ($auto_id): ?>
-                    <p>Détectée automatiquement : code><?php echo esc_html($auto_id); ?></code> (<?php echo esc_html($expected_name); ?>)</p>
+                    <p>Détectée automatiquement : <code><?php echo esc_html($auto_id); ?></code> (<?php echo esc_html($expected_name); ?>)</p>
                 <?php else: ?>
                     <p><em>Pas de table nommée "<?php echo esc_html($expected_name); ?>" détectée</em></p>
                 <?php endif; ?>
