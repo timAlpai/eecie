@@ -14,6 +14,8 @@ $known_usages = [
     'Zone_geo'      => 'zone_geo',
     'T1_user'       => 'utilisateurs',
     'Articles_devis' => 'articles_devis',
+    'Rappels'       =>'rappels',
+    'Input_mail_history' =>'input_mail_history'
 ];
 
 $api_key = get_option('gce_baserow_api_key', '');

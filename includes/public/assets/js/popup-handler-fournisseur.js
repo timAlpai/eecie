@@ -1,17 +1,27 @@
 /**
  * Fichier : includes/public/assets/js/popup-handler-fournisseur.js
- * Gère les popups pour la page de gestion des FOURNISSEURS.
+ * Gère les popups pour la page de gestion des FOURNISSEURS. (VERSION CORRIGÉE)
  */
 
+/**
+ * Rafraîchit la table des fournisseurs en mode AJAX.
+ */
 function gceRefreshFournisseursTable() {
-    console.log("▶️ Demande de rafraîchissement de la table des fournisseurs...");
-    if (typeof fetchDataAndBuildFournisseursTable === 'function') {
-        fetchDataAndBuildFournisseursTable();
+    console.log("▶️ Demande de rafraîchissement de la table des fournisseurs (Mode AJAX)...");
+    
+    // On vérifie si l'instance globale de la table (définie dans fournisseurs.js) existe.
+    if (window.fournisseursTable && typeof window.fournisseursTable.replaceData === 'function') {
+        console.log("✅ Instance trouvée. Appel de replaceData() pour re-fetch l'AJAX.");
+        // En mode Ajax, appeler replaceData() sans arguments force Tabulator 
+        // à recharger les données depuis l'ajaxURL configuré.
+        window.fournisseursTable.replaceData(); 
     } else {
-        console.warn("La fonction fetchDataAndBuildFournisseursTable() n'a pas été trouvée. Rechargement de la page par défaut.");
+        console.warn("L'instance window.fournisseursTable n'a pas été trouvée. Rechargement de la page par défaut.");
         location.reload();
     }
 }
+
+// ... Le reste du fichier popup-handler-fournisseur.js reste identique ...
 
 document.addEventListener('DOMContentLoaded', () => {
     document.body.addEventListener('click', async (e) => {
@@ -54,6 +64,13 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
             window.gceSchemas?.contacts || fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/contacts/schema`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json())
         ]).then(async ([f_schema, c_schema]) => {
             window.gceSchemas = { ...window.gceSchemas, fournisseurs: f_schema, contacts: c_schema };
+            
+            // --- DÉBUT DE LA CORRECTION PRINCIPALE ---
+            // On définit les listes de champs à ignorer lors de la création
+            const excludedFournisseurFields = ['Contacts', 'Devis'];
+            const excludedContactFields = ['Interactions', 'Taches', 'opportunités', 'Appels', 'T1_user', 'Fournisseur'];
+            // --- FIN DE LA CORRECTION PRINCIPALE ---
+
             const overlay = document.createElement("div");
             overlay.className = "gce-modal-overlay";
             const modal = document.createElement("div");
@@ -61,93 +78,96 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
             modal.innerHTML = `<button class="gce-modal-close">✖</button><h3>Nouveau Fournisseur</h3>`;
             const form = document.createElement('form');
             form.className = 'gce-modal-content';
+            
             let formHtml = '';
-            f_schema.forEach(field => { formHtml += renderField(field, '', data); });
+
+            // On filtre le schéma du fournisseur pour n'afficher que les champs pertinents
+            f_schema.filter(field => !excludedFournisseurFields.includes(field.name))
+                    .forEach(field => { formHtml += renderField(field, '', data); });
+            
             formHtml += `<hr style="margin: 20px 0;"><h4 style="margin-top:0;">Contact Principal</h4>`;
-            c_schema.forEach(field => { formHtml += renderField(field, 'contact_', data); });
+            
+            // On filtre le schéma du contact pour n'afficher que les champs pertinents
+            c_schema.filter(field => !excludedContactFields.includes(field.name))
+                    .forEach(field => { formHtml += renderField(field, 'contact_', data); });
+            
             form.innerHTML = formHtml + `<button type="submit" class="button button-primary" style="margin-top: 15px;">💾 Enregistrer</button>`;
+            
             modal.appendChild(form);
             overlay.appendChild(modal);
             document.body.appendChild(overlay);
             await initializeRichTextEditors(form);
 
             form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const payload = {
-        fournisseur_data: {},
-        contact_data: {}
-    };
+                e.preventDefault();
+                const payload = {
+                    fournisseur_data: {},
+                    contact_data: {}
+                };
 
-    // --- Boucle corrigée pour fournisseur_data ---
-    for (const field of f_schema) {
-        if (field.read_only || field.name === 'Contacts') continue;
-        const key = `field_${field.id}`; // La clé pour l'API
-        const formElement = form.querySelector(`[name="${key}"]`);
-        if (!formElement) continue;
+                if(window.tinymce) {
+                    tinymce.triggerSave();
+                }
 
-        if (field.type === 'long_text' && window.tinymce && window.tinymce.get(key)) {
-            payload.fournisseur_data[key] = tinymce.get(key).getContent(); // <- CORRIGÉ
-        } else if (field.type === 'multiple_select' || (field.type === 'link_row' && formElement.multiple)) {
-            payload.fournisseur_data[key] = Array.from(formElement.selectedOptions).map(opt => parseInt(opt.value, 10)); // <- CORRIGÉ
-        } else if (field.type === 'boolean') {
-            payload.fournisseur_data[key] = formElement.value === 'true'; // <- CORRIGÉ
-        } else if (formElement.value) {
-            payload.fournisseur_data[key] = formElement.value; // <- CORRIGÉ
-        }
-    }
+                // Collecte des données pour le fournisseur en respectant la liste d'exclusion
+                f_schema
+                    .filter(field => !field.read_only && !excludedFournisseurFields.includes(field.name))
+                    .forEach(field => {
+                        const value = getFieldValueFromForm(form, field, '');
+                        if (value !== undefined && value !== null) {
+                            // CORRECTION ICI : On utilise field.id pour construire la clé
+                            payload.fournisseur_data['field_' + field.id] = value;
+                        }
+                    });
 
-    // --- Boucle corrigée pour contact_data ---
-    for (const field of c_schema) {
-        if (excludedContactFields.includes(field.name)) continue;
-        const keyInForm = `contact_field_${field.id}`; // Le nom du champ dans le formulaire
-        const keyForApi = `field_${field.id}`; // La clé que l'API attend
-        const formElement = form.querySelector(`[name="${keyInForm}"]`);
-        if (!formElement) continue;
+                // Collecte des données pour le contact en utilisant la clé API 'field_ID'
+                c_schema
+                    .filter(field => !field.read_only && !excludedContactFields.includes(field.name))
+                    .forEach(field => {
+                        const value = getFieldValueFromForm(form, field, 'contact_');
+                        if (value !== undefined && value !== null) {
+                            // CORRECTION ICI : On utilise field.id pour construire la clé
+                            payload.contact_data['field_' + field.id] = value;
+                        }
+                    });
 
-        if (field.type === 'long_text' && window.tinymce && window.tinymce.get(keyInForm)) {
-            payload.contact_data[keyForApi] = tinymce.get(keyInForm).getContent(); // <- CORRIGÉ
-        } else if (field.type === 'boolean') {
-            payload.contact_data[keyForApi] = formElement.value === 'true'; // <- CORRIGÉ
-        } else if (formElement.value) {
-            payload.contact_data[keyForApi] = formElement.value; // <- CORRIGÉ
-        }
-    }
+                // Assignation manuelle du champ 'Type' du contact à 'Fournisseur'
+                const typeContactField = c_schema.find(f => f.name === 'Type');
+                if (typeContactField) {
+                    const optionFournisseur = typeContactField.select_options.find(opt => opt.value === 'Fournisseur');
+                    if (optionFournisseur) {
+                        // CORRECTION ICI : On utilise field.id pour construire la clé
+                        payload.contact_data['field_' + typeContactField.id] = optionFournisseur.id;
+                    }
+                }
+                
+                const url = `${EECIE_CRM.rest_url}eecie-crm/v1/fournisseurs/create-with-contact`;
+                try {
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: { "Content-Type": "application/json", "X-WP-Nonce": EECIE_CRM.nonce },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!res.ok) {
+                         const errData = await res.json();
+                         throw new Error(`Erreur ${res.status}: ${errData.message || 'Erreur API'}`);
+                    }
+                    overlay.remove();
+                    gceRefreshFournisseursTable();
+                } catch (err) {
+                    alert(`Échec de la création: ${err.message}`);
+                }
+            });
 
-    // --- Assignation du champ 'Type' corrigée ---
-    const typeContactField = c_schema.find(f => f.name === 'Type');
-    if (typeContactField) {
-        const optionFournisseur = typeContactField.select_options.find(opt => opt.value === 'Fournisseur');
-        if (optionFournisseur) {
-            const keyForApi = `field_${typeContactField.id}`; // La clé pour l'API
-            payload.contact_data[keyForApi] = optionFournisseur.id; // <- CORRIGÉ
-        }
-    }
-    
-    // Le reste de la fonction (l'appel fetch) est déjà correct
-    const url = `${EECIE_CRM.rest_url}eecie-crm/v1/fournisseurs/create-with-contact`;
-    try {
-        const res = await fetch(url, {
-            method: 'POST',
-            headers: { "Content-Type": "application/json", "X-WP-Nonce": EECIE_CRM.nonce },
-            body: JSON.stringify(payload)
-        });
-        if (!res.ok) {
-             const errData = await res.json();
-             throw new Error(`Erreur ${res.status}: ${errData.message || 'Erreur API'}`);
-        }
-        overlay.remove();
-        gceRefreshFournisseursTable();
-    } catch (err) {
-        alert(`Échec de la création: ${err.message}`);
-    }
-});
             const close = () => overlay.remove();
             overlay.addEventListener("click", ev => ev.target === overlay && close());
             modal.querySelector(".gce-modal-close").addEventListener("click", close);
+
         }).catch(err => { alert("Impossible de préparer le formulaire de création: " + err.message); });
         return;
     }
 
+    // Le reste de la fonction (pour l'édition) reste inchangé
     const schemaPromise = (window.gceSchemas?.[tableName])
         ? Promise.resolve(window.gceSchemas[tableName])
         : fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/${tableName}/schema`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.ok ? r.json() : Promise.reject(`Échec`)).then(s => { window.gceSchemas[tableName] = s; return s; });
@@ -166,14 +186,28 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
         const form = modal.querySelector('form');
         await initializeRichTextEditors(form);
 
+        // --- DÉBUT DE LA CORRECTION POUR L'ÉDITION ---
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             if (window.tinymce) tinymce.triggerSave();
+            
             const payload = {};
+            
             filteredSchema.forEach(field => {
+                // On s'assure que les champs non modifiables ne sont pas envoyés
+                if (field.read_only) return; 
+                
                 const value = getFieldValueFromForm(form, field, '');
-                if (value !== undefined) payload[`field_${field.id}`] = value;
+                
+                // La condition `value !== undefined` est importante pour ne pas envoyer de champs vides
+                // qui pourraient écraser des données existantes avec `null`.
+                if (value !== undefined) {
+                    // LA CORRECTION CLÉ EST ICI :
+                    // On utilise 'field_' + field.id pour la clé, et non field.name.
+                    payload['field_' + field.id] = value;
+                }
             });
+            
             try {
                 const res = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/${tableName}/${data.id}`, {
                     method: 'PATCH',
@@ -185,19 +219,25 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
                     throw new Error(`Erreur ${res.status}: ${errData.detail?.[0]?.error || 'Erreur API'}`);
                 }
                 const updatedData = await res.json();
-                alert("tim la c'est avant fermeture modale")
+                
                 overlay.remove();
+                
+                // On rafraîchit la table pour voir les changements
                 if (window.fournisseursTable) {
-                    window.fournisseursTable.updateData([updatedData]);
-                    console.log(`✅ Ligne #${updatedData.id} mise à jour localement dans Tabulator.`);
-                } else { gceRefreshFournisseursTable(); }
+                    console.log(`✅ Ligne #${updatedData.id} mise à jour. Rafraîchissement de la table.`);
+                    gceRefreshFournisseursTable();
+                }
+
             } catch (err) { alert(`Échec de la sauvegarde: ${err.message}`); }
         });
+        // --- FIN DE LA CORRECTION POUR L'ÉDITION ---
+        
         const close = () => overlay.remove();
         overlay.addEventListener("click", ev => ev.target === overlay && close());
         modal.querySelector(".gce-modal-close").addEventListener("click", close);
     }).catch(err => { alert("Impossible d'afficher le popup d'édition: " + err.message); });
 }
+
 function getFieldValueFromForm(form, field, prefix) {
     if (field.read_only) return undefined;
     
@@ -207,14 +247,20 @@ function getFieldValueFromForm(form, field, prefix) {
 
     switch (field.type) {
         case 'long_text':
-            // La méthode la plus fiable reste celle-ci
             if (window.tinymce && tinymce.get(key)) {
                 return tinymce.get(key).getContent();
             }
-            // Le fallback est maintenant fiable grâce à la correction PHP
             return formElement.value;
 
         case 'link_row':
+            if (formElement.multiple) {
+                 return Array.from(formElement.selectedOptions)
+                    .map(opt => parseInt(opt.value, 10))
+                    .filter(v => !isNaN(v));
+            }
+             const intVal = parseInt(formElement.value, 10);
+             return !isNaN(intVal) ? intVal : null;
+
         case 'multiple_select':
             return Array.from(formElement.selectedOptions)
                 .map(opt => parseInt(opt.value, 10))
@@ -250,7 +296,7 @@ function renderField(field, prefix = '', data = {}) {
         const isMultiple = field.link_row_multiple_relationships;
         const targetTableId = field.link_row_table_id;
         const targetSlug = EECIE_CRM.tableIdMap[targetTableId];
-        if (!targetSlug || !window.gceDataCache || !window.gceDataCache[targetSlug]) {   return `<div class="gce-field-row">${label}<p style="color:red">Erreur: cache manquant pour ${targetSlug}</p></div>`; }
+        if (!targetSlug || !window.gceDataCache || !window.gceDataCache[targetSlug]) {   return `<div class="gce-field-row">${label}<p style="color:red">Erreur: cache manquant pour ${targetSlug || 'table inconnue'}</p></div>`; }
         const options = window.gceDataCache[targetSlug];
         const selectedIds = Array.isArray(value) ? value.map(v => v.id) : [];
         const optionHtml = options.map(opt => `<option value="${opt.id}" ${selectedIds.includes(opt.id) ? 'selected' : ''}>${opt.Nom || opt.Name || opt.value || `ID: ${opt.id}`}</option>`).join('');
