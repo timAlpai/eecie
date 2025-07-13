@@ -20,7 +20,6 @@ $known_usages = [
 
 $api_key = get_option('gce_baserow_api_key', '');
 $baserow_url = get_option('gce_baserow_url', '');
-$database_id = get_option('gce_baserow_database_id', '');
 $tps_rate = get_option('gce_tps_rate', '0.05');
 $tvq_rate = get_option('gce_tvq_rate', '0.09975');
 
@@ -29,9 +28,6 @@ if (isset($_POST['submit'])) {
 
     update_option('gce_baserow_url', esc_url_raw($_POST['gce_baserow_url']));
     update_option('gce_baserow_api_key', sanitize_text_field($_POST['gce_baserow_api_key']));
-    if (isset($_POST['gce_baserow_database_id'])) {
-        update_option('gce_baserow_database_id', sanitize_text_field($_POST['gce_baserow_database_id']));
-    }
     
     // === CORRECTION POUR LA PRÉCISION DES TAXES ===
     // On valide que la valeur est numérique, mais on la sauvegarde en tant que chaîne.
@@ -61,7 +57,6 @@ if (isset($_POST['submit'])) {
     // Re-récupérer les valeurs après sauvegarde
     $api_key = get_option('gce_baserow_api_key', '');
     $baserow_url = get_option('gce_baserow_url', '');
-    $database_id = get_option('gce_baserow_database_id', '');
     $tps_rate = get_option('gce_tps_rate', '0.05');
     $tvq_rate = get_option('gce_tvq_rate', '0.09975');
 }
@@ -94,14 +89,6 @@ if (is_wp_error($tables)) {
                 <td>
                     <input type="text" name="gce_baserow_api_key" id="gce_baserow_api_key" class="regular-text" value="<?php echo esc_attr($api_key); ?>" />
                     <p class="description">Clé d’API personnelle liée à ton compte Baserow.</p>
-                </td>
-            </tr>
-
-            <tr>
-                <th scope="row"><label for="gce_baserow_database_id">ID de la base de données Baserow</label></th>
-                <td>
-                    <input type="number" name="gce_baserow_database_id" id="gce_baserow_database_id" class="regular-text" value="<?php echo esc_attr($database_id); ?>" />
-                    <p class="description">L'ID numérique de votre base de données dans Baserow. C'est le nombre dans l'URL après <code>/database/</code>.</p>
                 </td>
             </tr>
         </table>
