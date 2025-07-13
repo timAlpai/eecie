@@ -46,14 +46,7 @@ function eecie_crm_baserow_get($path, $queryParams = [])
 }
 function eecie_crm_baserow_get_all_tables()
 {
-    $database_id = get_option('gce_baserow_database_id');
-
-    if (empty($database_id)) {
-        return new WP_Error('missing_database_id', "L'ID de la base de données Baserow n'est pas configuré. Veuillez le définir dans la page de configuration du plugin.", ['status' => 500]);
-    }
-
-    // Standard Baserow API endpoint to list tables in a database
-    return eecie_crm_baserow_get("tables/database/{$database_id}/");
+    return eecie_crm_baserow_get('tables/all-tables/');
 }
 
 

@@ -1,0 +1,41 @@
+--- a/includes/admin/pages/configuration.php
++++ b/includes/admin/pages/configuration.php
+@@ -16,6 +16,7 @@
+ 
+ $api_key = get_option('gce_baserow_api_key', '');
+ $baserow_url = get_option('gce_baserow_url', '');
++$database_id = get_option('gce_baserow_database_id', '');
+ $tps_rate = get_option('gce_tps_rate', '0.05');
+ $tvq_rate = get_option('gce_tvq_rate', '0.09975');
+ 
+@@ -23,6 +24,7 @@
+     check_admin_referer('gce_config_save', 'gce_config_nonce');
+ 
+     update_option('gce_baserow_url', esc_url_raw($_POST['gce_baserow_url']));
++    update_option('gce_baserow_database_id', sanitize_text_field($_POST['gce_baserow_database_id']));
+     update_option('gce_baserow_api_key', sanitize_text_field($_POST['gce_baserow_api_key']));
+     
+     // === CORRECTION POUR LA PRÉCISION DES TAXES ===
+@@ -48,6 +50,7 @@
+     // Re-récupérer les valeurs après sauvegarde
+     $api_key = get_option('gce_baserow_api_key', '');
+     $baserow_url = get_option('gce_baserow_url', '');
++    $database_id = get_option('gce_baserow_database_id', '');
+     $tps_rate = get_option('gce_tps_rate', '0.05');
+     $tvq_rate = get_option('gce_tvq_rate', '0.09975');
+ }
+@@ -75,6 +78,14 @@
+                     <p class="description">Clé d’API personnelle liée à ton compte Baserow.</p>
+                 </td>
+             </tr>
++
++            <tr>
++                <th scope="row"><label for="gce_baserow_database_id">ID de la Base de Données</label></th>
++                <td>
++                    <input type="number" name="gce_baserow_database_id" id="gce_baserow_database_id" class="regular-text" value="<?php echo esc_attr($database_id); ?>" />
++                    <p class="description">L'ID numérique de la base de données Baserow à utiliser. Cela permet de cibler une structure précise.</p>
++                </td>
++            </tr>
+         </table>
+         
+         <h2><?php _e('Configuration des Taxes', 'gestion-crm-eecie'); ?></h2>

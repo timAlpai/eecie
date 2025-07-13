@@ -28,10 +28,8 @@ if (isset($_POST['submit'])) {
     check_admin_referer('gce_config_save', 'gce_config_nonce');
 
     update_option('gce_baserow_url', esc_url_raw($_POST['gce_baserow_url']));
+    update_option('gce_baserow_database_id', sanitize_text_field($_POST['gce_baserow_database_id']));
     update_option('gce_baserow_api_key', sanitize_text_field($_POST['gce_baserow_api_key']));
-    if (isset($_POST['gce_baserow_database_id'])) {
-        update_option('gce_baserow_database_id', sanitize_text_field($_POST['gce_baserow_database_id']));
-    }
     
     // === CORRECTION POUR LA PRÉCISION DES TAXES ===
     // On valide que la valeur est numérique, mais on la sauvegarde en tant que chaîne.
@@ -98,10 +96,10 @@ if (is_wp_error($tables)) {
             </tr>
 
             <tr>
-                <th scope="row"><label for="gce_baserow_database_id">ID de la base de données Baserow</label></th>
+                <th scope="row"><label for="gce_baserow_database_id">ID de la Base de Données</label></th>
                 <td>
                     <input type="number" name="gce_baserow_database_id" id="gce_baserow_database_id" class="regular-text" value="<?php echo esc_attr($database_id); ?>" />
-                    <p class="description">L'ID numérique de votre base de données dans Baserow. C'est le nombre dans l'URL après <code>/database/</code>.</p>
+                    <p class="description">L'ID numérique de la base de données Baserow à utiliser. Cela permet de cibler une structure précise.</p>
                 </td>
             </tr>
         </table>
