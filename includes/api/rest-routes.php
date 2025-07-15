@@ -504,8 +504,11 @@ add_action('rest_api_init', function () {
         'callback' => function () {
             $table_id = get_option('gce_baserow_table_taches') ?: eecie_crm_guess_table_id('Taches');
             if (!$table_id) return new WP_Error('no_table', 'Table Tâches introuvable', ['status' => 500]);
-
-            $rows = eecie_crm_baserow_get("rows/table/$table_id/", ['user_field_names' => 'true']);
+            $params = [
+    'user_field_names' => 'true',
+    'size' => 1000 // <-- Votre nouveau paramètre ici
+];
+$rows = eecie_crm_baserow_get("rows/table/$table_id/", $params);
             return is_wp_error($rows) ? $rows : rest_ensure_response($rows);
         },
         'permission_callback' => function () {
@@ -513,7 +516,7 @@ add_action('rest_api_init', function () {
             return is_user_logged_in() && $nonce_valid;
         },
     ]);
-
+    
     register_rest_route('eecie-crm/v1', '/taches/schema', [
         'methods' => 'GET',
         'callback' => function () {
@@ -1348,20 +1351,7 @@ add_action('rest_api_init', function () {
             return is_user_logged_in() && $nonce_valid;
         },
     ]);
-    register_rest_route('eecie-crm/v1', '/taches', [
-        'methods'  => 'GET',
-        'callback' => function () {
-            $table_id = get_option('gce_baserow_table_taches') ?: eecie_crm_guess_table_id('Taches');
-            if (!$table_id) return new WP_Error('no_table', 'Table Tâches introuvable', ['status' => 500]);
-
-            $rows = eecie_crm_baserow_get("rows/table/$table_id/", ['user_field_names' => 'true']);
-            return is_wp_error($rows) ? $rows : rest_ensure_response($rows);
-        },
-        'permission_callback' => function () {
-            $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) && wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
-            return is_user_logged_in() && $nonce_valid;
-        },
-    ]);
+    
 
     register_rest_route('eecie-crm/v1', '/taches/schema', [
         'methods' => 'GET',
