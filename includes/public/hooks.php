@@ -38,70 +38,65 @@ function gce_enqueue_front_scripts()
         return;
     }
 
-    // === MODIFICATION : Déplacement des scripts du dashboard ici ===
+    // Scripts et styles communs pour le dashboard principal
     wp_enqueue_style('gce-dashboard-css', plugin_dir_url(__FILE__) . 'assets/css/dashboard.css', [], GCE_VERSION);
     wp_enqueue_script('gce-popup-handler', plugin_dir_url(__FILE__) . '../shared/js/popup-handler.js', ['eecie-crm-rest'], GCE_VERSION, true);
     wp_enqueue_style('gce-popup-css', plugin_dir_url(__FILE__) . '../shared/css/popup.css', [], GCE_VERSION);
-    wp_enqueue_script('gce-dashboard-js', plugin_dir_url(__FILE__) . 'assets/js/dashboard.js', ['gce-popup-handler'], '1.0', true);
+    wp_enqueue_script('gce-dashboard-js', plugin_dir_url(__FILE__) . 'assets/js/dashboard.js', ['gce-popup-handler'], GCE_VERSION, true);
     wp_enqueue_editor();
     
-    // === FIN DE LA MODIFICATION ===
-
-    // Le code existant pour les pages spécifiques (opportunites, taches) reste valide
+    // --- NOUVELLE LOGIQUE DE CHARGEMENT CORRIGÉE ---
+    
     $page_slug = isset($_GET['gce-page']) ? sanitize_text_field($_GET['gce-page']) : '';
-    if (in_array($page_slug, ['opportunites', 'taches'])) {
-        // Tabulator + dépendances
+    $current_user = wp_get_current_user();
+
+    // Dépendances communes pour les pages avec Tabulator
+    if (in_array($page_slug, ['opportunites', 'taches', 'fournisseurs', 'contacts', 'appels', 'devis'])) {
         wp_enqueue_style('tabulator-css', 'https://unpkg.com/tabulator-tables@6.3/dist/css/tabulator.min.css', [], '6.3');
         wp_enqueue_script('tabulator-js', 'https://unpkg.com/tabulator-tables@6.3/dist/js/tabulator.min.js', [], '6.3', true);
         wp_enqueue_script('luxon-js', 'https://cdn.jsdelivr.net/npm/luxon@3.4.3/build/global/luxon.min.js', [], '3.4.3', true);
 
         wp_enqueue_script('gce-tabulator-editors', plugin_dir_url(__FILE__) . '../shared/js/tabulator-editors.js', ['tabulator-js'], GCE_VERSION, true);
         wp_enqueue_script('gce-tabulator-columns', plugin_dir_url(__FILE__) . '../shared/js/tabulator-columns.js', ['tabulator-js', 'gce-tabulator-editors'], GCE_VERSION, true);
-
-        // Script opportunités
-        wp_enqueue_script(
-            'gce-opportunites-js',
-            plugin_dir_url(__FILE__) . 'assets/js/opportunites.js',
-            ['eecie-crm-rest', 'tabulator-js', 'gce-tabulator-editors', 'gce-tabulator-columns'],
-            GCE_VERSION,
-            true
-        );
-
-        $current_user = wp_get_current_user();
-        wp_localize_script('gce-opportunites-js', 'GCE_CURRENT_USER', [
-            'email' => $current_user->user_email,
-        ]);
     }
-    // AJOUTER TOUT LE BLOC CI-DESSOUS
-    if ($page_slug === 'fournisseurs') {
-        // Dépendances communes (Tabulator, etc.)
-        wp_enqueue_style('tabulator-css', 'https://unpkg.com/tabulator-tables@6.3/dist/css/tabulator.min.css', [], '6.3');
-        wp_enqueue_script('tabulator-js', 'https://unpkg.com/tabulator-tables@6.3/dist/js/tabulator.min.js', [], '6.3', true);
-        wp_enqueue_script('luxon-js', 'https://cdn.jsdelivr.net/npm/luxon@3.4.3/build/global/luxon.min.js', [], '3.4.3', true);
 
-        // Scripts partagés pour Tabulator
-        wp_enqueue_script('gce-tabulator-editors', plugin_dir_url(__FILE__) . '../shared/js/tabulator-editors.js', ['tabulator-js'], GCE_VERSION, true);
-        wp_enqueue_script('gce-tabulator-columns', plugin_dir_url(__FILE__) . '../shared/js/tabulator-columns.js', ['tabulator-js', 'gce-tabulator-editors'], GCE_VERSION, true);
+    // Chargement du script spécifique à la page
+    switch ($page_slug) {
+        case 'opportunites':
+            wp_enqueue_script(
+                'gce-opportunites-js',
+                plugin_dir_url(__FILE__) . 'assets/js/opportunites.js',
+                ['eecie-crm-rest', 'tabulator-js', 'gce-tabulator-columns'],
+                GCE_VERSION,
+                true
+            );
+            wp_localize_script('gce-opportunites-js', 'GCE_CURRENT_USER', ['email' => $current_user->user_email]);
+            break;
 
-        // Styles et script du popup
-        wp_enqueue_style('gce-popup-css', plugin_dir_url(__FILE__) . '../shared/css/popup.css', [], GCE_VERSION);
+        case 'taches':
+            wp_enqueue_script(
+                'gce-taches-js', // Le bon handle
+                plugin_dir_url(__FILE__) . 'assets/js/taches.js', // Le bon fichier
+                ['eecie-crm-rest', 'tabulator-js', 'gce-tabulator-columns'],
+                GCE_VERSION,
+                true
+            );
+            wp_localize_script('gce-taches-js', 'GCE_CURRENT_USER', ['email' => $current_user->user_email]);
+            break;
         
-        // !!! ON CHARGE NOTRE NOUVEAU GESTIONNAIRE DE POPUP SPÉCIFIQUE !!!
-        wp_enqueue_script('gce-popup-handler-fournisseur', plugin_dir_url(__FILE__) . 'assets/js/popup-handler-fournisseur.js', ['eecie-crm-rest'], GCE_VERSION, true);
-
-        // Le script principal de la page, qui dépend du nouveau handler de popup
-        wp_enqueue_script(
-            'gce-fournisseurs-js',
-            plugin_dir_url(__FILE__) . 'assets/js/fournisseurs.js',
-            ['eecie-crm-rest', 'tabulator-js', 'gce-tabulator-columns', 'gce-popup-handler-fournisseur'], // Dépendance mise à jour
-            GCE_VERSION,
-            true
-        );
-
-        $current_user = wp_get_current_user();
-        wp_localize_script('gce-fournisseurs-js', 'GCE_CURRENT_USER', [
-            'email' => $current_user->user_email,
-        ]);
+        case 'fournisseurs':
+            wp_enqueue_script('gce-popup-handler-fournisseur', plugin_dir_url(__FILE__) . 'assets/js/popup-handler-fournisseur.js', ['eecie-crm-rest'], GCE_VERSION, true);
+            wp_enqueue_script(
+                'gce-fournisseurs-js',
+                plugin_dir_url(__FILE__) . 'assets/js/fournisseurs.js',
+                ['eecie-crm-rest', 'tabulator-js', 'gce-tabulator-columns', 'gce-popup-handler-fournisseur'],
+                GCE_VERSION,
+                true
+            );
+            wp_localize_script('gce-fournisseurs-js', 'GCE_CURRENT_USER', ['email' => $current_user->user_email]);
+            break;
+        
+        // Ajoutez ici d'autres cas pour les futures pages si nécessaire (contacts, devis, appels)
     }
 }
 
@@ -113,12 +108,6 @@ function gce_render_user_dashboard()
     if (!is_user_logged_in()) {
         return '<p>Vous devez être connecté pour accéder à cet espace.</p>';
     }
-
-    // SUPPRESSION : Ces lignes sont maintenant dans gce_enqueue_front_scripts
-    // wp_enqueue_style('gce-dashboard-css', ...);
-    // wp_enqueue_script('gce-popup-handler', ...);
-    // wp_enqueue_style('gce-popup-css', ...);
-    // wp_enqueue_script('gce-dashboard-js', ...);
     
     $current_page = isset($_GET['gce-page']) ? sanitize_text_field($_GET['gce-page']) : 'dashboard';
 
@@ -172,7 +161,7 @@ function gce_render_dashboard_content($page)
         case 'contacts':
             include $base . 'contacts.php';
             break;
-        case 'fournisseurs': // AJOUTER CE BLOC CASE
+        case 'fournisseurs':
             include $base . 'fournisseurs.php';
             break;
 

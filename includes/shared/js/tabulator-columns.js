@@ -38,9 +38,11 @@ function getTabulatorColumnsFromSchema(schema, tableName = "") {
             };
             column.formatterParams = { allowHTML: true };
 
-        } else if (isSelect && Array.isArray(field.select_options)) {
+        }
+        else if (isSelect && Array.isArray(field.select_options)) {
             const options = field.select_options.map(opt => opt.value || opt.name || opt.id);
-            column.editor = selectEditor(options);
+
+            // The formatter is the same for all single-selects, so we set it here.
             column.formatter = function (cell) {
                 const val = cell.getValue();
                 if (!val || typeof val !== 'object') return '';
@@ -49,12 +51,23 @@ function getTabulatorColumnsFromSchema(schema, tableName = "") {
                 return `<span class="gce-badge gce-color-${color}">${label}</span>`;
             };
             column.formatterParams = { allowHTML: true };
-         } else if (isMultiSelect && Array.isArray(field.select_options)) {
+
+            // Now, we decide if it should be editable or not.
+            if (tableName === 'appels' && field.name === 'Appel_result') {
+                // This specific column should NOT be editable.
+                console.log("Blocking editor for 'Appel_result' in 'appels' table.");
+                column.editor = false; // Explicitly set editor to false
+                column.editable = function (cell) { return false; }; // The most robust way to block editing.
+            } else {
+                // All other single-select columns ARE editable.
+                column.editor = selectEditor(options);
+            }
+        } else if (isMultiSelect && Array.isArray(field.select_options)) {
             column.editor = false; // L'édition en ligne est désactivée
             column.formatter = function (cell) {
                 const values = cell.getValue();
                 if (!Array.isArray(values) || values.length === 0) return '—';
-                
+
                 return values.map(val => {
                     if (!val || typeof val !== 'object') return '';
                     const label = val.value || val.name || '';
@@ -69,7 +82,7 @@ function getTabulatorColumnsFromSchema(schema, tableName = "") {
             column.formatter = function (cell) {
                 const values = cell.getValue(); // Devrait être un tableau d'objets [{id: 3, value: "Montreal"}]
                 if (!Array.isArray(values) || values.length === 0) return '—';
-                
+
                 // On utilise le même rendu que pour un multi-select, mais sans couleur spécifique
                 return values.map(val => {
                     if (!val || typeof val !== 'object') return '';

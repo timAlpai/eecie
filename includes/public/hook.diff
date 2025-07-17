@@ -1,0 +1,62 @@
+--- a/includes/public/hooks.php
++++ b/includes/public/hooks.php
+@@ -35,21 +35,37 @@
+     
+     // === FIN DE LA MODIFICATION ===
+ 
+-    // Le code existant pour les pages spécifiques (opportunites, taches) reste valide
++    // Le code existant pour les pages spécifiques (opportunites, taches, etc.) reste valide
+     $page_slug = isset($_GET['gce-page']) ? sanitize_text_field($_GET['gce-page']) : '';
+-    if (in_array($page_slug, ['opportunites', 'taches'])) {
+-        // Tabulator + dépendances
++    
++    // --- CORRECTION : Logique de chargement des scripts séparée par page ---
++    
++    // Dépendances communes pour les pages avec Tabulator
++    if (in_array($page_slug, ['opportunites', 'taches', 'fournisseurs', 'contacts', 'appels', 'devis'])) {
+         wp_enqueue_style('tabulator-css', 'https://unpkg.com/tabulator-tables@6.3/dist/css/tabulator.min.css', [], '6.3');
+         wp_enqueue_script('tabulator-js', 'https://unpkg.com/tabulator-tables@6.3/dist/js/tabulator.min.js', [], '6.3', true);
+         wp_enqueue_script('luxon-js', 'https://cdn.jsdelivr.net/npm/luxon@3.4.3/build/global/luxon.min.js', [], '3.4.3', true);
+ 
+         wp_enqueue_script('gce-tabulator-editors', plugin_dir_url(__FILE__) . '../shared/js/tabulator-editors.js', ['tabulator-js'], GCE_VERSION, true);
+         wp_enqueue_script('gce-tabulator-columns', plugin_dir_url(__FILE__) . '../shared/js/tabulator-columns.js', ['tabulator-js', 'gce-tabulator-editors'], GCE_VERSION, true);
+-
+-        // Script opportunités
++    }
++
++    if ($page_slug === 'opportunites') {
+         wp_enqueue_script(
+             'gce-opportunites-js',
+             plugin_dir_url(__FILE__) . 'assets/js/opportunites.js',
+             ['eecie-crm-rest', 'tabulator-js', 'gce-tabulator-editors', 'gce-tabulator-columns'],
++            GCE_VERSION,
++            true
++        );
++
++        $current_user = wp_get_current_user();
++        wp_localize_script('gce-opportunites-js', 'GCE_CURRENT_USER', [
++            'email' => $current_user->user_email,
++        ]);
++    } elseif ($page_slug === 'taches') { // On utilise "elseif" pour une logique claire
++        wp_enqueue_script(
++            'gce-taches-js', // On utilise le bon handle
++            plugin_dir_url(__FILE__) . 'assets/js/taches.js', // On charge le bon script
++            ['eecie-crm-rest', 'tabulator-js', 'gce-tabulator-editors', 'gce-tabulator-columns'],GCE_VERSION, true );
+@@ -58,15 +74,9 @@
+         wp_localize_script('gce-opportunites-js', 'GCE_CURRENT_USER', [ 'email' => $current_user->user_email, ]);
+-    }
+-    // AJOUTER TOUT LE BLOC CI-DESSOUS
+-    if ($page_slug === 'fournisseurs') {
+-        // Dépendances communes (Tabulator, etc.)
+-        wp_enqueue_style('tabulator-css', 'https://unpkg.com/tabulator-tables@6.3/dist/css/tabulator.min.css', [], '6.3');
+-        wp_enqueue_script('tabulator-js', 'https://unpkg.com/tabulator-tables@6.3/dist/js/tabulator.min.js', [], '6.3', true);
+-        wp_enqueue_script('luxon-js', 'https://cdn.jsdelivr.net/npm/luxon@3.4.3/build/global/luxon.min.js', [], '3.4.3', true);
+-
+-        // Scripts partagés pour Tabulator
+-        wp_enqueue_script('gce-tabulator-editors', plugin_dir_url(__FILE__) . '../shared/js/tabulator-editors.js', ['tabulator-js'], GCE_VERSION, true);
+-        wp_enqueue_script('gce-tabulator-columns', plugin_dir_url(__FILE__) . '../shared/js/tabulator-columns.js', ['tabulator-js', 'gce-tabulator-editors'], GCE_VERSION, true);
+-
++    } elseif ($page_slug === 'fournisseurs') {
+         // Styles et script du popup
+         wp_enqueue_style('gce-popup-css', plugin_dir_url(__FILE__) . '../shared/css/popup.css', [], GCE_VERSION);
+         

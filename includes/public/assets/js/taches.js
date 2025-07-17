@@ -21,6 +21,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }).then(r => r.json())
     ])
         .then(([taskData, taskSchema, usersData]) => {
+            if (!taskData || !Array.isArray(taskData.results)) {
+                // Si taskData.results n'est pas un tableau, c'est que l'API a renvoyé une erreur.
+                const errorMessage = taskData.message || 'La réponse de l\'API pour les tâches est dans un format inattendu.';
+                console.error('API Error Response (Taches):', taskData);
+                container.innerHTML = `<p style="color: red;"><strong>Erreur API :</strong> ${errorMessage}</p>`;
+                return; // Arrêter l'exécution pour éviter le crash.
+            }
             window.gceSchemas = window.gceSchemas || {};
             window.gceSchemas['taches'] = taskSchema;
             const userRow = usersData.results.find(u =>

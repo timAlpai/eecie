@@ -506,7 +506,7 @@ add_action('rest_api_init', function () {
             if (!$table_id) return new WP_Error('no_table', 'Table Tâches introuvable', ['status' => 500]);
             $params = [
     'user_field_names' => 'true',
-    'size' => 1000 // <-- Votre nouveau paramètre ici
+    'size' => 200 // <-- Votre nouveau paramètre ici
 ];
 $rows = eecie_crm_baserow_get("rows/table/$table_id/", $params);
             return is_wp_error($rows) ? $rows : rest_ensure_response($rows);
@@ -2197,61 +2197,68 @@ function eecie_crm_calculate_and_forward_devis_to_n8n(WP_REST_Request $request)
     // URL du webhook N8N
     $n8n_webhook_url = "https://n8n.eecie.ca/webhook/fc9a0dba-704b-4391-9190-4db7a33a85b0";
 
-    // Récupérer le corps de la requête
-    $body = $request->get_json_params();
+    // 1. Recevoir juste l'ID du devis depuis le JavaScript
+    $params = $request->get_json_params();
+    $devis_id = $params['devis_id'] ?? null;
 
-    // Valider les données d'entrée
-    if (empty($body) || !isset($body['_children']) || !is_array($body['_children'])) {
-        return new WP_Error('invalid_payload', 'Le corps de la requête est invalide.', ['status' => 400]);
+    if (!$devis_id) {
+        return new WP_Error('invalid_payload', 'ID du devis manquant.', ['status' => 400]);
     }
 
-    // --- NOUVELLE LOGIQUE D'ENRICHISSEMENT ---
+    // 2. Récupérer les données complètes et fraîches du devis
+    $devis_data = eecie_crm_get_row_by_slug_and_id('devis', $devis_id);
+    if (is_wp_error($devis_data)) {
+        return $devis_data;
+    }
+
+    // 3. Récupérer manuellement les articles liés (les _children)
+    $articles_list_for_calc = [];
+    if (isset($devis_data['Articles_devis']) && is_array($devis_data['Articles_devis'])) {
+        foreach ($devis_data['Articles_devis'] as $article_link) {
+            $article_data = eecie_crm_get_row_by_slug_and_id('articles_devis', $article_link['id']);
+            if (!is_wp_error($article_data)) {
+                $articles_list_for_calc[] = $article_data;
+            }
+        }
+    }
+    // On attache les articles récupérés à notre objet principal pour la suite du traitement
+    $devis_data['_children'] = $articles_list_for_calc;
+
+
+    // 4. Enrichir avec les informations du contact (logique existante)
     $contact_details = null;
-
-    // 1. Extraire l'ID de l'opportunité
-    $opportunity_id = $body['Task_input'][0]['id'] ?? null;
-
+    $opportunity_id = $devis_data['Task_input'][0]['id'] ?? null;
     if ($opportunity_id) {
-        // 2. Récupérer les données complètes de l'opportunité
         $opportunity_data = eecie_crm_get_row_by_slug_and_id('opportunites', $opportunity_id);
-
         if (!is_wp_error($opportunity_data)) {
-            // 3. Extraire l'ID du premier contact lié à l'opportunité
-            // Le nom du champ de liaison est 'Contacts'
             $contact_id = $opportunity_data['Contacts'][0]['id'] ?? null;
-
             if ($contact_id) {
-                // 4. Récupérer les données complètes du contact
                 $contact_data = eecie_crm_get_row_by_slug_and_id('contacts', $contact_id);
-
                 if (!is_wp_error($contact_data)) {
-                    // 5. On ne garde que les champs utiles pour N8N
                     $contact_details = [
                         'id' => $contact_data['id'],
                         'nom' => $contact_data['Nom'] ?? null,
                         'email' => $contact_data['Email'] ?? null,
-                        'tel' => $contact_data['Tel'] ?? null,
+                        'tel' => $contact_data['Tel'] ?? null, // Note: le nom du champ dans Contacts est 'Telephone'
                         'adresse' => $contact_data['Adresse'] ?? null,
                         'code postal' => $contact_data["Code_postal"] ?? null,
                         'ville' => $contact_data['Ville'] ?? null,
-
                     ];
                 }
             }
         }
     }
-    // --- FIN DE LA LOGIQUE D'ENRICHISSEMENT ---
 
-    // Calculs du devis (inchangé)
-    $articles_list = [];
+    // 5. Calculer les totaux (logique existante)
+    $articles_list_for_n8n = [];
     $total_ht = 0.0;
-    foreach ($body['_children'] as $article) {
+    foreach ($devis_data['_children'] as $article) {
         if (!isset($article['Quantités']) || !isset($article['Prix_unitaire'])) continue;
         $quantite = floatval($article['Quantités']);
         $prix_unitaire = floatval($article['Prix_unitaire']);
         $sous_total_ht = $quantite * $prix_unitaire;
         $total_ht += $sous_total_ht;
-        $articles_list[] = [
+        $articles_list_for_n8n[] = [
             'nom' => $article['Nom'] ?? 'Article sans nom',
             'quantite' => $quantite,
             'prix_unitaire' => $prix_unitaire,
@@ -2259,40 +2266,36 @@ function eecie_crm_calculate_and_forward_devis_to_n8n(WP_REST_Request $request)
         ];
     }
 
-    // Taxes (inchangé)
     $tps_rate = floatval(get_option('gce_tps_rate', '0.05'));
     $tvq_rate = floatval(get_option('gce_tvq_rate', '0.09975'));
-    if (!defined('TPS_RATE')) define('TPS_RATE',  $tps_rate);
-    if (!defined('TVQ_RATE')) define('TVQ_RATE', $tvq_rate);
-    $tps = $total_ht * TPS_RATE;
-    $tvq = $total_ht * TVQ_RATE;
+    $tps = $total_ht * $tps_rate;
+    $tvq = $total_ht * $tvq_rate;
     $total_ttc = $total_ht + $tps + $tvq;
 
-    // Assemblage du payload final pour N8N (maintenant avec les détails du contact)
+    // 6. Assembler le payload final pour N8N
     $n8n_payload = [
-        'devis_id'       => $body['id'] ?? null,
-        'opportunity_id' => $body['Task_input'][0]['id'] ?? null,
-        'opportunity_name' => $body['Task_input'][0]['value'] ?? null,
-        'contact'        => $contact_details, // <-- AJOUT IMPORTANT
-        'notes'          => $body['Notes'] ?? '',
+        'devis_id'       => $devis_data['id'] ?? null,
+        'opportunity_id' => $devis_data['Task_input'][0]['id'] ?? null,
+        'opportunity_name' => $devis_data['Task_input'][0]['value'] ?? null,
+        'contact'        => $contact_details,
+        'notes'          => $devis_data['Notes'] ?? '',
         'summary'        => [
             'total_hors_taxe' => round($total_ht, 2),
             'tps_amount'      => round($tps, 2),
             'tvq_amount'      => round($tvq, 2),
             'total_ttc'       => round($total_ttc, 2),
         ],
-        'articles'       => $articles_list,
-        'raw_data'       => $body,
+        'articles'       => $articles_list_for_n8n,
+        'raw_data'       => $devis_data, // On envoie les données fraîches complètes
     ];
 
-    // Envoi à N8N (inchangé)
+    // 7. Envoyer à N8N (logique existante)
     $response_to_n8n = wp_remote_post($n8n_webhook_url, [
         'headers' => ['Content-Type' => 'application/json'],
         'body'    => json_encode($n8n_payload),
         'timeout' => 30
     ]);
 
-    // Gestion de la réponse (inchangé)
     if (is_wp_error($response_to_n8n)) {
         return new WP_Error('n8n_proxy_failed', 'Erreur de communication avec N8N: ' . $response_to_n8n->get_error_message(), ['status' => 502]);
     }

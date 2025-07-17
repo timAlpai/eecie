@@ -89,22 +89,28 @@ function loadAndBuildDevisTable() {
             cellClick: (e, cell) => {
                 const button = e.target;
                 const rowData = cell.getRow().getData();
+                const devisId = rowData.id;
+
+                if (!devisId) {
+                    alert("ID du devis introuvable.");
+                    return;
+                }
 
                 // Prévenir les clics multiples et informer l'utilisateur
                 button.disabled = true;
                 button.textContent = 'Calcul en cours...';
 
+                // On envoie SEULEMENT l'ID du devis. Le backend s'occupe du reste.
                 fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/proxy/calculate-devis`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-WP-Nonce': EECIE_CRM.nonce
                     },
-                    body: JSON.stringify(rowData) // On envoie toutes les données du devis à n8n
+                    body: JSON.stringify({ devis_id: devisId }) // <-- ENVOI SIMPLIFIÉ
                 })
                 .then(res => {
                     if (!res.ok) {
-                        // Si la réponse n'est pas OK, on essaie de lire le message d'erreur
                         return res.json().then(err => Promise.reject(err));
                     }
                     return res.json();
@@ -116,11 +122,10 @@ function loadAndBuildDevisTable() {
                 })
                 .catch(err => {
                     console.error("❌ Erreur lors du calcul du devis via n8n:", err);
-                    const errorMessage = err.details || err.message || "Une erreur inconnue est survenue.";
+                    const errorMessage = err.message || "Une erreur inconnue est survenue.";
                     alert(`Le calcul a échoué : ${errorMessage}`);
-                    // Réactiver le bouton en cas d'erreur
                     button.disabled = false;
-                    button.textContent = 'Calculer';
+                    button.textContent = 'Calculer Devis';
                 });
             }
         });
