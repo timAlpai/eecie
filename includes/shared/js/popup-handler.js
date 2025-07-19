@@ -433,6 +433,22 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
 
 }
 
+/**
+ * Rafraîchit la table Tabulator actuellement active sur la page.
+ * Repose sur une variable globale window.gceActiveTableInstance définie par chaque page.
+ */
+function gceRefreshCurrentTable() {
+    console.log("🔁 Tentative de rafraîchissement de la table active...");
+    if (window.gceActiveTableInstance && typeof window.gceActiveTableInstance.replaceData === 'function') {
+        // En mode AJAX, replaceData() force Tabulator à recharger les données depuis son ajaxURL.
+        window.gceActiveTableInstance.replaceData();
+        console.log("✅ Table rafraîchie via AJAX.");
+    } else {
+        console.warn("Aucune instance de table active (window.gceActiveTableInstance) n'a été trouvée. Rechargement de la page par défaut.");
+        location.reload(); // Solution de secours
+    }
+}
+
 async function uploadFile(file) {
     const formData = new FormData();
     formData.append('file', file);
