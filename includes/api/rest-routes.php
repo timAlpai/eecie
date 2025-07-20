@@ -2018,12 +2018,14 @@ $rows = eecie_crm_baserow_get("rows/table/$table_id/", $params);
                 wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
         },
     ]);
-
+ 
+   
 
 });
    
 
-   
+
+
 
 function eecie_crm_get_utilisateurs(WP_REST_Request $request)
 {
