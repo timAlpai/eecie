@@ -44,11 +44,28 @@ function eecie_crm_baserow_get($path, $queryParams = [])
 
     return json_decode($body, true);
 }
+
+/**
+ * Récupère toutes les tables de la base de données configurée.
+ * @return array|WP_Error
+ */
 function eecie_crm_baserow_get_all_tables()
 {
-    return eecie_crm_baserow_get('tables/all-tables/');
-}
+    $database_id = get_option('gce_baserow_database_id');
 
+    if (empty($database_id)) {
+        return new WP_Error(
+            'missing_database_id',
+            'L\'ID de la base de données Baserow n\'est pas configuré. Veuillez le définir dans la page de configuration du plugin.',
+            ['status' => 500]
+        );
+    }
+
+    // Utilisation de l'endpoint standard de Baserow pour lister les tables d'une base de données spécifique.
+    $path = "tables/database/" . intval($database_id) . "/";
+
+    return eecie_crm_baserow_get($path);
+}
 
 function eecie_crm_guess_table_id($target_name)
 {

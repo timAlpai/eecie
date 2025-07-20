@@ -89,3 +89,37 @@ function eecie_crm_register_global_rest_nonce() {
 
 add_action('wp_enqueue_scripts', 'eecie_crm_register_global_rest_nonce');
 add_action('admin_enqueue_scripts', 'eecie_crm_register_global_rest_nonce');
+
+/**
+ * Crée la table de base de données personnalisée pour les tâches (jobs).
+ * Cette fonction est appelée à l'activation du plugin.
+ */
+function gce_create_jobs_table() {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'gce_jobs';
+    $charset_collate = $wpdb->get_charset_collate();
+
+    // On a besoin de cette fonction pour dbDelta
+    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+
+    $sql = "CREATE TABLE $table_name (
+        id BIGINT(20) NOT NULL AUTO_INCREMENT,
+        job_type VARCHAR(10) NOT NULL, -- 'EXPORT' or 'IMPORT'
+        baserow_job_id INT(11) DEFAULT NULL,
+        workspace_id INT(11) NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+        created_by_user_id BIGINT(20) UNSIGNED NOT NULL,
+        created_at DATETIME NOT NULL,
+        finished_at DATETIME DEFAULT NULL,
+        progress_percentage TINYINT(3) UNSIGNED NOT NULL DEFAULT 0,
+        error_message TEXT DEFAULT NULL,
+        bundle_file_path VARCHAR(255) DEFAULT NULL,
+        metadata_file_path VARCHAR(255) DEFAULT NULL,
+        PRIMARY KEY (id)
+    ) $charset_collate;";
+
+    dbDelta($sql);
+}
+
+// Enregistre la fonction pour qu'elle s'exécute à l'activation du plugin
+register_activation_hook(__FILE__, 'gce_create_jobs_table');

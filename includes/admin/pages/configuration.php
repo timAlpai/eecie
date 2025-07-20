@@ -20,6 +20,7 @@ $known_usages = [
 
 $api_key = get_option('gce_baserow_api_key', '');
 $baserow_url = get_option('gce_baserow_url', '');
+$workspace_id = get_option('gce_baserow_workspace_id', ''); // Ajout
 $database_id = get_option('gce_baserow_database_id', '');
 $tps_rate = get_option('gce_tps_rate', '0.05');
 $tvq_rate = get_option('gce_tvq_rate', '0.09975');
@@ -28,25 +29,17 @@ if (isset($_POST['submit'])) {
     check_admin_referer('gce_config_save', 'gce_config_nonce');
 
     update_option('gce_baserow_url', esc_url_raw($_POST['gce_baserow_url']));
+    update_option('gce_baserow_workspace_id', sanitize_text_field($_POST['gce_baserow_workspace_id'])); // Ajout de la sauvegarde
     update_option('gce_baserow_database_id', sanitize_text_field($_POST['gce_baserow_database_id']));
     update_option('gce_baserow_api_key', sanitize_text_field($_POST['gce_baserow_api_key']));
     
-    // === CORRECTION POUR LA PRÉCISION DES TAXES ===
-    // On valide que la valeur est numérique, mais on la sauvegarde en tant que chaîne.
-    if (isset($_POST['gce_tps_rate'])) {
-        $tps_value = $_POST['gce_tps_rate'];
-        if (is_numeric($tps_value)) {
-            update_option('gce_tps_rate', $tps_value);
-        }
+    if (isset($_POST['gce_tps_rate']) && is_numeric($_POST['gce_tps_rate'])) {
+        update_option('gce_tps_rate', $_POST['gce_tps_rate']);
     }
-    if (isset($_POST['gce_tvq_rate'])) {
-        $tvq_value = $_POST['gce_tvq_rate'];
-        if (is_numeric($tvq_value)) {
-            update_option('gce_tvq_rate', $tvq_value);
-        }
+    if (isset($_POST['gce_tvq_rate']) && is_numeric($_POST['gce_tvq_rate'])) {
+        update_option('gce_tvq_rate', $_POST['gce_tvq_rate']);
     }
 
-    // CORRECTION: Boucle de sauvegarde correcte pour les tables
     foreach ($known_usages as $name => $slug) {
         $key = 'gce_baserow_table_' . $slug;
         if (isset($_POST[$key])) {
@@ -59,6 +52,7 @@ if (isset($_POST['submit'])) {
     // Re-récupérer les valeurs après sauvegarde
     $api_key = get_option('gce_baserow_api_key', '');
     $baserow_url = get_option('gce_baserow_url', '');
+    $workspace_id = get_option('gce_baserow_workspace_id', ''); // Ajout
     $database_id = get_option('gce_baserow_database_id', '');
     $tps_rate = get_option('gce_tps_rate', '0.05');
     $tvq_rate = get_option('gce_tvq_rate', '0.09975');
@@ -86,7 +80,6 @@ if (is_wp_error($tables)) {
                     <p class="description">Ex : https://baserow.eecie.ca (sans slash à la fin)</p>
                 </td>
             </tr>
-
             <tr>
                 <th scope="row"><label for="gce_baserow_api_key">Clé API Baserow</label></th>
                 <td>
@@ -94,7 +87,15 @@ if (is_wp_error($tables)) {
                     <p class="description">Clé d’API personnelle liée à ton compte Baserow.</p>
                 </td>
             </tr>
-
+             <!-- CHAMP WORKSPACE AJOUTÉ -->
+            <tr>
+                <th scope="row"><label for="gce_baserow_workspace_id">ID du Workspace Principal</label></th>
+                <td>
+                    <input type="number" name="gce_baserow_workspace_id" id="gce_baserow_workspace_id" class="regular-text" value="<?php echo esc_attr($workspace_id); ?>" />
+                    <p class="description">L'ID numérique du Workspace à utiliser pour les sauvegardes et autres opérations.</p>
+                </td>
+            </tr>
+             <!-- FIN CHAMP WORKSPACE -->
             <tr>
                 <th scope="row"><label for="gce_baserow_database_id">ID de la Base de Données</label></th>
                 <td>
@@ -155,5 +156,4 @@ if (is_wp_error($tables)) {
     <p><button id="gce-explorer-structure" class="button">🔍 Voir la structure</button></p>
     <div id="gce-baserow-structure-output" style="white-space: pre-wrap; background: #f8f8f8; padding: 10px; border: 1px solid #ccc; max-height: 400px; overflow: auto;"></div>
     
-
 </div>
