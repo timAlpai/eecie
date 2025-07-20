@@ -506,7 +506,7 @@ add_action('rest_api_init', function () {
             if (!$table_id) return new WP_Error('no_table', 'Table Tâches introuvable', ['status' => 500]);
             $params = [
     'user_field_names' => 'true',
-    'size' => 500 // <-- Votre nouveau paramètre ici
+    'size' => 200 // <-- Votre nouveau paramètre ici
 ];
 $rows = eecie_crm_baserow_get("rows/table/$table_id/", $params);
             return is_wp_error($rows) ? $rows : rest_ensure_response($rows);
@@ -2051,7 +2051,11 @@ function eecie_crm_get_opportunites(WP_REST_Request $request)
         return new WP_Error('no_table', 'Table Opportunités introuvable', ['status' => 500]);
     }
     // On récupère tout pour filtrer côté client
-    $rows = eecie_crm_baserow_get("rows/table/$table_id/", ['user_field_names' => 'true']);
+    $params = [
+        'user_field_names' => 'true',
+        'size'             => 200, // Augmenter la limite pour récupérer plus de 100 lignes
+    ];
+    $rows = eecie_crm_baserow_get("rows/table/$table_id/", $params);
     return is_wp_error($rows) ? $rows : rest_ensure_response($rows);
 }
 

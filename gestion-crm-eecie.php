@@ -39,6 +39,7 @@ function gce_get_table_id_to_slug_map() {
         'Articles_devis' => 'articles_devis', 
         'Zone_geo'      => 'zone_geo',
         'Rappels'       => 'rappels',
+        'Input_mail_history' => "input_mail_history",
         
     ];
 
