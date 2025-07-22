@@ -64,12 +64,13 @@ function gce_get_table_id_to_slug_map() {
     return $map;
 }
 
-
+require_once GCE_PLUGIN_DIR . 'includes/shared/security.php'; 
 // Admin zone
 require_once GCE_PLUGIN_DIR . 'includes/admin/menu.php';
 
 // Front/public zone
 require_once GCE_PLUGIN_DIR . 'includes/public/hooks.php';
+require_once GCE_PLUGIN_DIR . 'includes/api/baserow-proxy.php';
 
 // API REST - routes sécurisées pour accès Baserow
 require_once GCE_PLUGIN_DIR . 'includes/api/rest-routes.php';
