@@ -61,6 +61,41 @@ document.addEventListener('DOMContentLoaded', () => {
             reactiveData: false,
             height: "auto",
             cellClick: function (e, cell) {
+                if (e.target.classList.contains('gce-change-password-btn')) {
+                    const rowData = cell.getRow().getData();
+                    const newPassword = prompt(`Entrez le nouveau mot de passe pour l'utilisateur "${rowData.Name}":`);
+
+                    if (newPassword === null) return; // L'utilisateur a annulé
+
+                    if (newPassword.trim() === "") {
+                        alert("Le mot de passe ne peut pas être vide.");
+                        return;
+                    }
+
+                    // On envoie le nouveau mot de passe à notre nouvelle route API
+                    fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/utilisateurs/${rowData.id}/update-password`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-WP-Nonce': EECIE_CRM.nonce
+                        },
+                        body: JSON.stringify({ password: newPassword })
+                    })
+                    .then(res => {
+                        if (!res.ok) {
+                            alert("Erreur lors de la mise à jour du mot de passe !");
+                            throw new Error("Password update failed");
+                        }
+                        return res.json();
+                    })
+                    .then(json => {
+                        console.log("✅ Mot de passe mis à jour !");
+                        alert("Le mot de passe a été mis à jour avec succès.");
+                    })
+                    .catch(err => {
+                        console.error("Erreur PATCH password:", err);
+                    });
+                }
                 console.log("Click sur :", cell.getField(), "→", cell.getValue());
             }
         });

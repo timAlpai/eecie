@@ -7,3 +7,5 @@ includes/shared/js/temporaire/
 includes/shared/js/temporaire/*.js
 
 includes/shared/js/temporaire/popup-handler.js
+gce-secrets.php
+shared/security.php

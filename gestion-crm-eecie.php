@@ -12,9 +12,13 @@
 
 // Fichier : gestion-crm-eecie.php
 
-// ... (au début du fichier)
 
 defined('ABSPATH') || exit;
+// Charger le fichier de secrets s'il existe.
+$secrets_file = __DIR__ . '/gce-secrets.php';
+if (file_exists($secrets_file)) {
+    require_once $secrets_file;
+}
 
 // Constants
 define('GCE_VERSION', '0.1.0');

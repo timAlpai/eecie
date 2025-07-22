@@ -10,6 +10,8 @@ function getTabulatorColumnsFromSchema(schema, tableName = "") {
         const isAttachment = field.type === "file";
         const isStatus = field.name === "Status";
         const isStatut = field.name === "statut";
+        const isSec1 = field.name === 'sec1'; 
+
 
         const column = {
             title: field.name,
@@ -17,8 +19,17 @@ function getTabulatorColumnsFromSchema(schema, tableName = "") {
             editor: false,
             formatter: false,
         };
-
-        if (isAttachment) {
+        if (isSec1) {
+            column.headerSort = false;
+            column.formatter = function(cell, formatterParams, onRendered) {
+                // On retourne un bouton qui déclenchera une action dans le JS principal
+                return `<button class="button button-small gce-change-password-btn">Changer MDP</button>`;
+            };
+            column.formatterParams = { allowHTML: true };
+            column.editor = false; // Jamais éditable en ligne
+            column.editable = false;
+        }
+        else if (isAttachment) {
             column.formatter = function (cell) {
                 const files = cell.getValue();
                 if (!Array.isArray(files)) return '';
