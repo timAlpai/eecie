@@ -284,3 +284,96 @@ div[class^="gce-"] .tabulator {
   border-color: #f5c6cb;
 }
     
+/* ===== STYLES POUR LA VUE "FLUX DE TRAVAIL" (CARTES D'APPELS) ===== */
+
+.gce-appels-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 20px;
+}
+
+.gce-appel-card {
+  background-color: #f9f9f9;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+}
+
+.gce-appel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+}
+
+.gce-appel-header h3 {
+  margin: 0;
+  font-size: 1.2em;
+}
+
+.gce-appel-details p {
+  margin: 5px 0;
+}
+
+.gce-appel-interactions-container {
+    margin-top: 15px;
+    border-top: 1px dashed #ccc;
+    padding-top: 15px;
+}
+
+/* Ajustement pour que la table Tabulator dans la carte ait l'air correcte */
+.gce-appel-interactions-container .tabulator {
+    font-size: 0.9em;
+    border: none;
+    background-color: transparent;
+}
+
+.gce-appel-interactions-container .tabulator-header {
+  background-color: #e9e9e9;
+}
+
+/* Style pour le modal de détail (VERSION RENFORCÉE) */
+.gce-detail-modal-overlay {
+  position: fixed; /* Très important pour être au-dessus de tout */
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 99998 !important; /* On augmente massivement pour passer par-dessus tout */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+}
+
+.gce-detail-modal {
+  background: #ffffff; /* Assurons-nous qu'il n'est pas transparent */
+  color: #333; /* Et que le texte est visible */
+  padding: 25px;
+  max-width: 900px;
+  width: 95%;
+  border-radius: 10px;
+  position: relative;
+  box-shadow: 0 5px 25px rgba(0,0,0,0.2);
+  max-height: 90vh;
+  overflow-y: auto;
+  z-index: 99998 !important; /* Doit être supérieur à l'overlay */
+}
+
+.gce-detail-modal .gce-modal-close {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 1.5rem;
+    color: #666;
+    background: none;
+    border: none;
+    cursor: pointer;
+    z-index: 99998 !important; /* Au-dessus du contenu du modal */
+}

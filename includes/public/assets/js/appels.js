@@ -1,228 +1,159 @@
+// Fichier : includes/public/assets/js/appels.js (VERSION FINALE AVEC MODAL DYNAMIQUE)
+
 document.addEventListener('DOMContentLoaded', () => {
-    const container = document.getElementById('gce-appels-table');
-    if (!container) return;
+    const mainContainer = document.getElementById('gce-appels-table');
+    if (!mainContainer) return;
+    mainContainer.innerHTML = 'Chargement du flux de travail...';
 
-    container.innerHTML = 'Chargement des appels…';
+    // 1. Définir la configuration de la vue pour les "Appels"
+    const appelsViewConfig = {
+        
+        // Fonction pour dessiner la carte de résumé (inchangée)
+        summaryRenderer: (appel) => {
+            const card = document.createElement('div');
+            card.className = 'gce-appel-summary-card'; 
+            const oppName = appel.Opportunité?.[0]?.value || 'Opportunité inconnue';
+            const contactName = appel.Contact?.[0]?.value || 'Non spécifié';
+            const statutAppel = appel.Appel_result?.value || 'N/A';
+            const statutColor = appel.Appel_result?.color || 'gray';
+            card.innerHTML = `
+                <h4>${oppName}</h4>
+                <p><strong>Contact:</strong> ${contactName}</p>
+                <p><strong>Statut:</strong> <span class="gce-badge gce-color-${statutColor}">${statutAppel}</span></p>
+            `;
+            return card;
+        },
 
-    const userEmail = window.GCE_CURRENT_USER?.email;
-    if (!userEmail) {
-        container.innerHTML = '<p>Utilisateur non identifié.</p>';
-        return;
-    }
+        // Fonction pour dessiner la vue détaillée dans le modal (mise à jour majeure)
+        detailRenderer: (appel) => {
+            const container = document.createElement('div');
+            container.className = 'gce-appel-card';
 
-    Promise.all([
-        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/appels', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
-        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/interactions', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
-        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/appels/schema', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
-        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/interactions/schema', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json())
-    ])
-    .then(([appelsData, interactionsData, appelsSchema, interactionsSchema]) => {
-        window.gceSchemas = window.gceSchemas || {};
-        window.gceSchemas["appels"] = appelsSchema;
-        window.gceSchemas["interactions"] = interactionsSchema;
-
-        const appels = appelsData.results || [];
-        const interactions = interactionsData.results || [];
-
-        const groupedInteractions = {};
-        interactions.forEach(inter => {
-            const appelField = Object.keys(inter).find(k => k.toLowerCase().startsWith("appel"));
-            if (!appelField || !Array.isArray(inter[appelField])) return;
-            inter[appelField].forEach(link => {
-                if (!groupedInteractions[link.id]) groupedInteractions[link.id] = [];
-                groupedInteractions[link.id].push(inter);
-            });
-        });
-
-        const appelsAvecChildren = appels.map(appel => ({
-            ...appel,
-            _children: groupedInteractions[appel.id] || [],
-        }));
-
-        const columns = getTabulatorColumnsFromSchema(appelsSchema, 'appels');
-
-        // Ajout du bouton pour créer une nouvelle interaction
-        columns.push({
-            title: "➕ Interaction",
-            formatter: () => "<button class='button button-small'>+ Interaction</button>",
-            width: 140,
-            hozAlign: "center",
-            headerSort: false,
-            cellClick: (e, cell) => {
-                const appel = cell.getRow().getData();
-                
-                if (!appelsSchema.length || !interactionsSchema.length) {
-                    alert("Erreur: Les schémas de données sont incomplets.");
-                    return;
-                }
-
-                const appelsTableId = appelsSchema[0].table_id;
-                const appelLinkFieldInInteractions = interactionsSchema.find(f => f.type === 'link_row' && f.link_row_table_id === appelsTableId);
-                
-                if (!appelLinkFieldInInteractions) {
-                    alert("Erreur: Le champ de liaison vers les Appels est introuvable dans les Interactions.");
-                    return;
-                }
-
-                // --- DÉBUT DE LA MODIFICATION PRINCIPALE ---
-                // On prépare un objet qui contiendra toutes les données à pré-remplir
+            const oppLink = `<a href="#" class="gce-popup-link" data-table="opportunites" data-id="${appel.Opportunité?.[0]?.id}">${appel.Opportunité?.[0]?.value || ''}</a>`;
+            const contactLink = `<a href="#" class="gce-popup-link" data-table="contacts" data-id="${appel.Contact?.[0]?.id}">${appel.Contact?.[0]?.value || ''}</a>`;
+            const employeLink = `<a href="#" class="gce-popup-link" data-table="utilisateurs" data-id="${appel.Employé?.[0]?.id}">${appel.Employé?.[0]?.value || ''}</a>`;
+            const statutBadge = `<span class="gce-badge gce-color-${appel.Appel_result?.color || 'gray'}">${appel.Appel_result?.value || 'N/A'}</span>`;
+            
+            // --- CORRECTION : CRÉATION DU HEADER ET DU BOUTON ---
+            const header = document.createElement('div');
+            header.className = 'gce-appel-header';
+            header.innerHTML = `<h3>Dossier: ${oppLink}</h3>`;
+            
+            const addButton = document.createElement('button');
+            addButton.className = 'button button-primary'; // Style plus visible
+            addButton.textContent = '➕ Interaction';
+            addButton.onclick = () => { 
                 const popupData = {};
-
-                // 1. Lier l'interaction à l'appel parent (ce que vous aviez déjà)
-                popupData[appelLinkFieldInInteractions.name] = [{ id: appel.id, value: `Appel #${appel.id}` }];
-
-                // 2. Transférer les informations liées de l'appel vers l'interaction
-                // On fait correspondre les champs de l'appel aux champs de l'interaction.
-                // Ex: Le champ "Opportunité" de l'appel correspond au champ "opportunité" de l'interaction.
+                const interactionsSchema = window.gceSchemas.interactions;
+                const appelsTableId = window.gceSchemas.appels[0].table_id;
+                const linkField = interactionsSchema.find(f => f.type === 'link_row' && f.link_row_table_id === appelsTableId);
+                if (linkField) popupData[linkField.name] = [{ id: appel.id, value: `Appel #${appel.id}` }];
                 if (appel.Opportunité) popupData.opportunité = appel.Opportunité;
-                if (appel.Employé)     popupData.effectue_par = appel.Employé;
-                if (appel.Contact)      popupData.contact = appel.Contact;
-                
-                // 3. Pré-remplir le type d'interaction sur "Appel Telephonique"
-                const typeInteractionField = interactionsSchema.find(f => f.name === 'types_interactions');
-                if (typeInteractionField) {
-                    const optionAppel = typeInteractionField.select_options.find(opt => opt.value === 'Appel Telephonique');
-                    if (optionAppel) {
-                        // On passe l'objet complet pour que le popup puisse afficher la valeur et utiliser l'ID
-                        popupData[typeInteractionField.name] = { id: optionAppel.id, value: optionAppel.value };
-                    }
+                if (appel.Employé) popupData.effectue_par = appel.Employé;
+                if (appel.Contact) popupData.contact = appel.Contact;
+                const typeField = interactionsSchema.find(f => f.name === 'types_interactions');
+                if(typeField) {
+                    const option = typeField.select_options.find(o => o.value === 'Appel Telephonique');
+                    if(option) popupData[typeField.name] = { id: option.id, value: option.value };
                 }
-
-                // 4. Pré-remplir la date et l'heure actuelles
                 const dateField = interactionsSchema.find(f => f.name === 'date_heure');
                 if(dateField) {
-                    // Formate la date en 'YYYY-MM-DDTHH:mm' pour l'input datetime-local
                     const now = new Date();
                     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
                     popupData[dateField.name] = now.toISOString().slice(0,16);
                 }
-
-                // On appelle le modal avec le nouvel objet `popupData` enrichi
                 gceShowModal(popupData, "interactions", "ecriture");
-                // --- FIN DE LA MODIFICATION PRINCIPALE ---
-            }
-        });
+            };
+            header.appendChild(addButton);
+            // --- FIN CORRECTION ---
 
-        const tableEl = document.createElement('div');
-        tableEl.className = 'gce-tabulator';
-        container.innerHTML = '';
-        container.appendChild(tableEl);
+            const details = document.createElement('div');
+            details.className = 'gce-appel-details';
+            details.innerHTML = `
+                <p><strong>Contact:</strong> ${contactLink}</p>
+                <p><strong>Chargé de projet:</strong> ${employeLink}</p>
+                <p><strong>Statut du dossier:</strong> ${statutBadge}</p>
+            `;
+            
+            const interactionsContainer = document.createElement('div');
+            interactionsContainer.className = 'gce-appel-interactions-container';
+            const tableDiv = document.createElement('div');
+            interactionsContainer.appendChild(tableDiv);
 
-        const table = new Tabulator(tableEl, {
-            data: appelsAvecChildren,
-            layout: "fitColumns",
-            columns: columns,
-            columnDefaults: { resizable: true, widthGrow: 1 },
-            height: "auto",
-            placeholder: "Aucun appel trouvé.",
-            responsiveLayout: "collapse",
-            rowFormatter: function (row) {
-                const data = row.getData()._children;
-                if (!Array.isArray(data) || data.length === 0) return;
+            container.appendChild(header);
+            container.appendChild(details);
+            container.appendChild(interactionsContainer);
 
-                const holderEl = document.createElement("div");
-                holderEl.style.margin = "10px";
-                holderEl.style.borderTop = "1px solid #ddd";
-
-                const tableEl = document.createElement("div");
-                holderEl.appendChild(tableEl);
-                row.getElement().appendChild(holderEl);
-
-                const interactionColumns = getTabulatorColumnsFromSchema(window.gceSchemas["interactions"], 'interactions');
-                interactionColumns.push({
-                    title: "Actions",
-                    headerSort: false,
-                    width: 100,
-                    hozAlign: "center",
-                    formatter: (cell) => {
-                        const rowData = cell.getRow().getData();
-                        const editIcon = `<a href="#" class="gce-popup-link" data-id="${rowData.id}" data-table="interactions" data-mode="ecriture" title="Modifier">✏️</a>`;
-                        const deleteIcon = `<a href="#" class="gce-delete-interaction-btn" title="Supprimer">❌</a>`;
-                        return `${editIcon}   ${deleteIcon}`;
-                    },
-                    cellClick: (e, cell) => {
-                        if (!e.target.closest('.gce-delete-interaction-btn')) return;
-                        e.preventDefault();
-                        const rowData = cell.getRow().getData();
-                        const nomInteraction = rowData.Nom || `l'interaction #${rowData.id}`;
-
-                        if (confirm(`Voulez-vous vraiment supprimer "${nomInteraction}" ?`)) {
-                            fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/interactions/${rowData.id}`, {
-                                method: 'DELETE',
-                                headers: { 'X-WP-Nonce': EECIE_CRM.nonce }
-                            })
-                            .then(res => {
-                                if (!res.ok) throw new Error('La suppression a échoué.');
-                                console.log(`✅ Interaction ${rowData.id} supprimée.`);
-                                location.reload();
-                            })
-                            .catch(err => {
-                                console.error('❌ Erreur de suppression:', err);
-                                alert(err.message);
-                            });
-                        }
-                    }
-                });
-
-                const innerTable = new Tabulator(tableEl, {
-                    data: data,
-                    layout: "fitColumns",
-                    height: "auto",
-                    columns: interactionColumns,
-                    placeholder: "Aucune interaction.",
-                });
-
-                innerTable.on("cellEdited", function (cell) {
+            // --- CORRECTION : INITIALISATION DE TABULATOR DANS LE MODAL ---
+            const interactionColumns = getTabulatorColumnsFromSchema(window.gceSchemas["interactions"], 'interactions');
+            interactionColumns.push({
+                title: "Actions", headerSort: false, width: 80, hozAlign: "center",
+                formatter: (cell) => {
                     const rowData = cell.getRow().getData();
-                    const schema = window.gceSchemas["interactions"];
-                    const cleaned = sanitizeRowBeforeSave(rowData, schema);
+                    const editIcon = `<a href="#" class="gce-popup-link" data-id="${rowData.id}" data-table="interactions" data-mode="ecriture" title="Modifier">✏️</a>`;
+                    const deleteIcon = `<a href="#" class="gce-delete-interaction-btn" data-id="${rowData.id}" title="Supprimer">❌</a>`;
+                    return `${editIcon}   ${deleteIcon}`;
+                }
+            });
+
+            const interactionsTable = new Tabulator(tableDiv, {
+                data: appel._children || [],
+                layout: "fitColumns",
+                columns: interactionColumns,
+                placeholder: "Aucune interaction pour ce dossier.",
+                cellEdited: function(cell) {
+                    const rowData = cell.getRow().getData();
+                    const cleaned = sanitizeRowBeforeSave(rowData, window.gceSchemas.interactions);
 
                     fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/interactions/${rowData.id}`, {
                         method: 'PATCH',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-WP-Nonce': EECIE_CRM.nonce
-                        },
+                        headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce },
                         body: JSON.stringify(cleaned)
                     })
                     .then(res => {
-                        if (!res.ok) throw new Error("Erreur HTTP " + res.status);
-                        console.log("✅ Interaction mise à jour.");
+                        if (!res.ok) throw new Error("La sauvegarde a échoué.");
+                        console.log("Interaction mise à jour. Rechargement...");
+                        // Recharger la page est la solution la plus simple pour garantir la fraîcheur de toutes les données.
                         location.reload();
                     })
                     .catch(err => {
-                        console.error("❌ Erreur de mise à jour de l'interaction :", err);
-                        alert("La sauvegarde a échoué.");
+                        alert("Erreur de sauvegarde: " + err.message);
+                        location.reload(); // Recharger même en cas d'erreur pour annuler le changement visuel.
                     });
-                });
-            }
-        });
-
-        table.on("cellEdited", function (cell) {
-            const rowData = cell.getRow().getData();
-            const schema = window.gceSchemas["appels"];
-            const cleaned = sanitizeRowBeforeSave(rowData, schema);
-
-            fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/appels/${rowData.id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce },
-                body: JSON.stringify(cleaned)
-            })
-            .then(res => {
-                if (!res.ok) throw new Error("La sauvegarde de l'appel a échoué.");
-                console.log(`✅ Appel ${rowData.id} mis à jour.`);
-                location.reload();
-            })
-            .catch(err => {
-                console.error("❌ Erreur de mise à jour de l'appel :", err);
-                alert(err.message);
+                }
             });
-        });
+            
+            return container;
+        }
+    };
 
-        window.appelsTable = table;
-    })
-    .catch(err => {
-        console.error("Erreur appels.js :", err);
-        container.innerHTML = `<p>Erreur réseau ou serveur : ${err.message}</p>`;
+    // Charger les données et initialiser la vue (inchangé)
+    Promise.all([
+        fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/appels/schema`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
+        fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/interactions/schema`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
+        fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/appels`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json())
+    ]).then(([appelsSchema, interactionsSchema, appelsData]) => {
+        window.gceSchemas = { ...window.gceSchemas, "appels": appelsSchema, "interactions": interactionsSchema };
+        gce.initializeCardView(mainContainer, appelsData, appelsViewConfig);
+    }).catch(err => {
+        mainContainer.innerHTML = `<p style="color:red;">Erreur: ${err.message}</p>`;
+    });
+
+    // Gestionnaire délégué pour les boutons de suppression (inchangé)
+    document.body.addEventListener('click', (e) => {
+        const deleteBtn = e.target.closest('.gce-delete-interaction-btn');
+        if (deleteBtn) {
+            e.preventDefault();
+            const interactionId = deleteBtn.dataset.id;
+            if (confirm(`Supprimer l'interaction #${interactionId} ?`)) {
+                fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/interactions/${interactionId}`, {
+                    method: 'DELETE',
+                    headers: { 'X-WP-Nonce': EECIE_CRM.nonce }
+                }).then(res => {
+                    if (!res.ok) throw new Error('Échec de la suppression.');
+                    location.reload();
+                }).catch(err => alert(err.message));
+            }
+        }
     });
 });

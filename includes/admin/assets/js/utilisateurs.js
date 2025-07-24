@@ -23,33 +23,88 @@ document.addEventListener('DOMContentLoaded', () => {
         schema = fetchedSchema;
         window.gceUserSchema = schema;
 
-        const columns = getTabulatorColumnsFromSchema(schema, 'utilisateurs');
-        columns.unshift({
-    title: "Delete",
-    formatter: "buttonCross",
-    width: 80,
-    hozAlign: "center",
-    headerSort: false,
-    cellClick: function (e, cell) {
-        const row = cell.getRow();
-        const data = row.getData();
-        if (confirm(`Supprimer l'utilisateur ${data.Name || data.Nom || 'inconnu'} ?`)) {
-            fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/utilisateurs/${data.id}`, {
-                method: 'DELETE',
-                headers: {
-                    'X-WP-Nonce': EECIE_CRM.nonce
+        // On exclut le champ 'sec1' de l'affichage automatique
+        const filteredSchema = fetchedSchema.filter(field => field.name !== 'sec1');
+        const columns = getTabulatorColumnsFromSchema(filteredSchema, 'utilisateurs');
+        
+        // --- DÉBUT DE LA MODIFICATION PRINCIPALE ---
+
+        // Colonne pour changer le mot de passe
+        const passwordColumn = {
+            title: "Mot de passe",
+            headerSort: false,
+            width: 150,
+            hozAlign: "center",
+            formatter: function(cell, formatterParams, onRendered) {
+                return `<button class="button button-small">Changer MDP</button>`;
+            },
+            cellClick: function(e, cell) {
+                const rowData = cell.getRow().getData();
+                const newPassword = prompt(`Entrez le nouveau mot de passe pour l'utilisateur "${rowData.Name}":`);
+
+                if (newPassword === null) return; // L'utilisateur a cliqué sur "Annuler"
+
+                if (newPassword.trim() === "") {
+                    alert("Le mot de passe ne peut pas être vide.");
+                    return;
                 }
-            }).then(res => {
-                if (!res.ok) {
-                    alert("Erreur de suppression !");
-                } else {
-                    row.delete();
-                    console.log("✅ Utilisateur supprimé !");
+
+                // Appel à la nouvelle route API sécurisée
+                fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/utilisateurs/${rowData.id}/update-password`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-WP-Nonce': EECIE_CRM.nonce
+                    },
+                    body: JSON.stringify({ password: newPassword })
+                })
+                .then(res => {
+                    if (!res.ok) {
+                        alert("Erreur lors de la mise à jour du mot de passe !");
+                        throw new Error("Password update failed");
+                    }
+                    return res.json();
+                })
+                .then(json => {
+                    console.log("✅ Mot de passe mis à jour !");
+                    alert("Le mot de passe a été mis à jour avec succès.");
+                })
+                .catch(err => {
+                    console.error("Erreur PATCH password:", err);
+                });
+            }
+        };
+
+        // Colonne pour supprimer l'utilisateur
+        const deleteColumn = {
+            title: "Supprimer",
+            formatter: "buttonCross",
+            width: 100,
+            hozAlign: "center",
+            headerSort: false,
+            cellClick: function (e, cell) {
+                const row = cell.getRow();
+                const data = row.getData();
+                if (confirm(`Supprimer l'utilisateur ${data.Name || 'inconnu'} ?`)) {
+                    fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/utilisateurs/${data.id}`, {
+                        method: 'DELETE',
+                        headers: { 'X-WP-Nonce': EECIE_CRM.nonce }
+                    }).then(res => {
+                        if (!res.ok) {
+                            alert("Erreur de suppression !");
+                        } else {
+                            row.delete();
+                            console.log("✅ Utilisateur supprimé !");
+                        }
+                    });
                 }
-            });
-        }
-    }
-});
+            }
+        };
+        
+        // On ajoute les colonnes d'action au début
+        columns.unshift(passwordColumn);
+        columns.unshift(deleteColumn);
+        
         container.innerHTML = '';
         const tableEl = document.createElement('div');
         container.appendChild(tableEl);
@@ -60,45 +115,11 @@ document.addEventListener('DOMContentLoaded', () => {
             columns: columns,
             reactiveData: false,
             height: "auto",
-            cellClick: function (e, cell) {
-                if (e.target.classList.contains('gce-change-password-btn')) {
-                    const rowData = cell.getRow().getData();
-                    const newPassword = prompt(`Entrez le nouveau mot de passe pour l'utilisateur "${rowData.Name}":`);
-
-                    if (newPassword === null) return; // L'utilisateur a annulé
-
-                    if (newPassword.trim() === "") {
-                        alert("Le mot de passe ne peut pas être vide.");
-                        return;
-                    }
-
-                    // On envoie le nouveau mot de passe à notre nouvelle route API
-                    fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/utilisateurs/${rowData.id}/update-password`, {
-                        method: 'PATCH',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-WP-Nonce': EECIE_CRM.nonce
-                        },
-                        body: JSON.stringify({ password: newPassword })
-                    })
-                    .then(res => {
-                        if (!res.ok) {
-                            alert("Erreur lors de la mise à jour du mot de passe !");
-                            throw new Error("Password update failed");
-                        }
-                        return res.json();
-                    })
-                    .then(json => {
-                        console.log("✅ Mot de passe mis à jour !");
-                        alert("Le mot de passe a été mis à jour avec succès.");
-                    })
-                    .catch(err => {
-                        console.error("Erreur PATCH password:", err);
-                    });
-                }
-                console.log("Click sur :", cell.getField(), "→", cell.getValue());
-            }
+            // ON SUPPRIME LE cellClick GÉNÉRAL QUI CAUSAIT LE PROBLÈME
         });
+
+        // --- FIN DE LA MODIFICATION PRINCIPALE ---
+
 
         window.gceUserTable = tableInstance;
 

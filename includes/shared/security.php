@@ -27,13 +27,18 @@ function gce_decrypt_password() {
  * @param string $data La donnée à chiffrer.
  * @return string|false La donnée chiffrée et encodée en base64, ou false en cas d'erreur.
  */
+/**
+ * Chiffre une donnée avec la clé partagée.
+ * @param string $data La donnée à chiffrer.
+ * @return string|false La donnée chiffrée et encodée en base64, ou false en cas d'erreur.
+ */
 function gce_encrypt_shared_data($data) {
     if (empty($data) || !defined('GCE_SHARED_SECRET_KEY') || !defined('GCE_SHARED_IV')) {
         return false;
     }
-    return base64_encode(openssl_encrypt($data, 'aes-256-cbc', GCE_SHARED_SECRET_KEY, 0, GCE_SHARED_IV));
+    // LA CORRECTION EST ICI : On utilise OPENSSL_RAW_DATA
+    return base64_encode(openssl_encrypt($data, 'aes-256-cbc', GCE_SHARED_SECRET_KEY, OPENSSL_RAW_DATA, GCE_SHARED_IV));
 }
-
 /**
  * Déchiffre une donnée avec la clé partagée.
  * @param string $encrypted_data La donnée chiffrée (encodée en base64).

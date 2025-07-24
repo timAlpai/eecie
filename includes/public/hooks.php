@@ -45,6 +45,10 @@ function gce_enqueue_front_scripts()
     wp_enqueue_script('gce-dashboard-js', plugin_dir_url(__FILE__) . 'assets/js/dashboard.js', ['gce-popup-handler'], GCE_VERSION, true);
     wp_enqueue_editor();
     
+    // --- NOUVEAU SCRIPT PARTAGÉ ---
+    // On enregistre notre nouveau moteur de vue. Il sera chargé si une page en a besoin.
+    wp_enqueue_script('gce-card-view-handler', plugin_dir_url(__FILE__) . '../shared/js/card-view-handler.js', ['eecie-crm-rest'], GCE_VERSION, true);
+    
     // --- NOUVELLE LOGIQUE DE CHARGEMENT CORRIGÉE ---
     
     $page_slug = isset($_GET['gce-page']) ? sanitize_text_field($_GET['gce-page']) : '';
@@ -58,7 +62,7 @@ function gce_enqueue_front_scripts()
 
         wp_enqueue_script('gce-tabulator-editors', plugin_dir_url(__FILE__) . '../shared/js/tabulator-editors.js', ['tabulator-js'], GCE_VERSION, true);
         wp_enqueue_script('gce-tabulator-columns', plugin_dir_url(__FILE__) . '../shared/js/tabulator-columns.js', ['tabulator-js', 'gce-tabulator-editors'], GCE_VERSION, true);
-    }
+   }
 
     // Chargement du script spécifique à la page
     switch ($page_slug) {
@@ -96,6 +100,11 @@ function gce_enqueue_front_scripts()
             wp_localize_script('gce-fournisseurs-js', 'GCE_CURRENT_USER', ['email' => $current_user->user_email]);
             break;
         
+        case 'appels':
+            // ICI, on déclare que 'gce-appels-js' DÉPEND de 'gce-card-view-handler'
+            wp_enqueue_script('gce-appels-js', plugin_dir_url(__FILE__) . 'assets/js/appels.js', ['eecie-crm-rest', 'tabulator-js', 'gce-tabulator-columns', 'gce-popup-handler', 'gce-card-view-handler'], GCE_VERSION, true);
+            wp_localize_script('gce-appels-js', 'GCE_CURRENT_USER', ['email' => $current_user->user_email]);
+            break;
         // Ajoutez ici d'autres cas pour les futures pages si nécessaire (contacts, devis, appels)
     }
 }
