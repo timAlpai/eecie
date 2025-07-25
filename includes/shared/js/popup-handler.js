@@ -31,6 +31,37 @@ function gceRefreshVisibleTable() {
     });
 }
 
+function initializeRatingInputs(modal) {
+    modal.querySelectorAll('.gce-rating-input').forEach(container => {
+        const hiddenInput = container.querySelector('input[type="hidden"]');
+        const stars = container.querySelectorAll('.star');
+
+        const updateStars = (rating) => {
+            stars.forEach(star => {
+                star.classList.toggle('selected', star.dataset.value <= rating);
+            });
+        };
+
+        container.addEventListener('mouseover', (e) => {
+            if (e.target.classList.contains('star')) {
+                updateStars(e.target.dataset.value);
+            }
+        });
+
+        container.addEventListener('mouseout', () => {
+            updateStars(hiddenInput.value);
+        });
+
+        container.addEventListener('click', (e) => {
+            if (e.target.classList.contains('star')) {
+                const value = e.target.dataset.value;
+                hiddenInput.value = value;
+                updateStars(value);
+            }
+        });
+    });
+}
+
 /**
  * Initialise l'écouteur d'événements principal pour les liens de popup.
  */
@@ -58,8 +89,8 @@ document.addEventListener('DOMContentLoaded', () => {
             'devis': 'devis',
             'articles_devis': 'articles_devis',
             'article': 'articles_devis',
-            'fournisseur': 'fournisseurs', 
-            'fournisseurs': 'fournisseurs' 
+            'fournisseur': 'fournisseurs',
+            'fournisseurs': 'fournisseurs'
         };
 
         const rawTableName = link.dataset.table;
@@ -105,6 +136,7 @@ document.addEventListener('DOMContentLoaded', () => {
  * @param {string} mode - 'lecture' (lecture seule) ou 'ecriture' (formulaire d'édition).
  * @param {string[]|null} visibleFields - Tableau optionnel de noms de champs à afficher.
  */
+
 function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = null) {
     const schema = window.gceSchemas?.[tableName];
     if (!schema || !Array.isArray(schema)) {
@@ -122,12 +154,16 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
             });
         return;
     }
-
+    
     let filteredSchema = schema;
     if (Array.isArray(visibleFields)) {
         filteredSchema = schema.filter(f =>
             visibleFields.includes(f.name) || visibleFields.includes(`field_${f.id}`)
         );
+    }
+     if (mode === 'ecriture' && data.Lock === true) {
+        alert("Cet enregistrement est verrouillé et ne peut pas être modifié.");
+        mode = 'lecture'; // On bascule en mode lecture
     }
 
     const overlay = document.createElement("div");
@@ -151,31 +187,54 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
         if (mode === "lecture") {
             let displayValue = '';
 
-                
 
-                if (field.type === "link_row" && Array.isArray(value)) {
-                    // Si c'est un champ de liaison, on crée des liens cliquables
-                    const rawNameToSlugMap = {'t1_user':'utilisateurs','assigne':'utilisateurs','contacts':'contacts','contact':'contacts','task_input':'opportunites','opportunite':'opportunites','opportunité':'opportunites','appel':'appels','appels':'appels','interaction':'interactions','interactions':'interactions','devis':'devis','articles_devis':'articles_devis','article':'articles_devis','fournisseur': 'fournisseurs', 'fournisseurs': 'fournisseurs'};
-                    const tableSlug = rawNameToSlugMap[field.name.toLowerCase()] || field.name.toLowerCase();
-                    
-                    displayValue = value.map(obj => {
-                        if (!obj || !obj.id) return '';
-                        return `<span style="display: inline-flex; align-items: center; gap: 5px;">
+
+            if (field.type === "link_row" && Array.isArray(value)) {
+                // Si c'est un champ de liaison, on crée des liens cliquables
+                const rawNameToSlugMap = { 't1_user': 'utilisateurs', 'assigne': 'utilisateurs', 'contacts': 'contacts', 'contact': 'contacts', 'task_input': 'opportunites', 'opportunite': 'opportunites', 'opportunité': 'opportunites', 'appel': 'appels', 'appels': 'appels', 'interaction': 'interactions', 'interactions': 'interactions', 'devis': 'devis', 'articles_devis': 'articles_devis', 'article': 'articles_devis', 'fournisseur': 'fournisseurs', 'fournisseurs': 'fournisseurs' };
+                const tableSlug = rawNameToSlugMap[field.name.toLowerCase()] || field.name.toLowerCase();
+
+                displayValue = value.map(obj => {
+                    if (!obj || !obj.id) return '';
+                    return `<span style="display: inline-flex; align-items: center; gap: 5px;">
                                     <a href="#" class="gce-popup-link" data-table="${tableSlug}" data-id="${obj.id}" data-mode="lecture">${obj.value || 'Détail'}</a>
                                     <a href="#" class="gce-popup-link" data-table="${tableSlug}" data-id="${obj.id}" data-mode="ecriture" title="Modifier">✏️</a>
                                 </span>`;
-                    }).join(', ');
+                }).join(', ');
 
-                } else if (field.type === "file" && Array.isArray(value)) { // Ajout pour afficher les fichiers existants
-                    displayValue = value.map(file => 
-                        `<a href="${file.url}" target="_blank" rel="noopener noreferrer">${file.visible_name}</a>`
-                    ).join('<br>');
+            } else if (field.type === "file" && Array.isArray(value)) { // Ajout pour afficher les fichiers existants
+                displayValue = value.map(file =>
+                    `<a href="${file.url}" target="_blank" rel="noopener noreferrer">${file.visible_name}</a>`
+                ).join('<br>');
+            } else
+                if (field.type === "rating") {
+                    const fieldKey = `field_${field.id}`;
+                    const label = `<label for="${fieldKey}"><strong>${field.name}</strong></label>`;
+                    const currentValue = data[field.name] || 0;
+                    const maxRating = field.max_value || 5;
+
+                    let starsHtml = '';
+                    for (let i = 1; i <= maxRating; i++) {
+                        const isSelected = i <= currentValue ? 'selected' : '';
+                        starsHtml += `<span class="star ${isSelected}" data-value="${i}">★</span>`;
+                    }
+
+                    return `
+                    <div class="gce-field-row">
+                        ${label}
+                        <div class="gce-rating-input">
+                            ${starsHtml}
+                            <input type="hidden" name="${fieldKey}" value="${currentValue}">
+                        </div>
+                    </div>
+                `;
                 }
-                 else if (typeof value === 'object' && value !== null) {
-                displayValue = value.value || '';
-            } else {
-                displayValue = value || '';
-            }
+
+                else if (typeof value === 'object' && value !== null) {
+                    displayValue = value.value || '';
+                } else {
+                    displayValue = value || '';
+                }
             return `<div class="gce-field-row"><strong>${field.name}</strong><div>${displayValue}</div></div>`;
         } else { // Mode 'ecriture'
 
@@ -193,21 +252,21 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
                         <input type="file" id="${fieldKey}" name="${fieldKey}" multiple style="margin-top: 5px;">
                     </div>`;
             }
-            
-           if (field.type === "link_row") {
-                    // CAS SPÉCIAL : Le champ 'Fournisseur' quand on édite un 'devis'.
-                    if (tableName === 'devis' && field.name === 'Fournisseur') {
-                        const targetSlug = 'fournisseurs';
-                        const options = window.gceDataCache?.[targetSlug] || [];
-                        const selectedIds = Array.isArray(value) ? value.map(v => v.id) : [];
-                        const optionHtml = options.map(opt => `<option value="${opt.id}" ${selectedIds.includes(opt.id) ? 'selected' : ''}>${opt.Nom || opt.Name || `ID: ${opt.id}`}</option>`).join('');
-                        return `<div class="gce-field-row" style="flex-direction: column; align-items: stretch;">${label}<select name="${fieldKey}" id="${fieldKey}" multiple style="min-height: 100px;">${optionHtml}</select></div>`;
-                    } else {
-                       let displayValue = '—';
+
+            if (field.type === "link_row") {
+                // CAS SPÉCIAL : Le champ 'Fournisseur' quand on édite un 'devis'.
+                if (tableName === 'devis' && field.name === 'Fournisseur') {
+                    const targetSlug = 'fournisseurs';
+                    const options = window.gceDataCache?.[targetSlug] || [];
+                    const selectedIds = Array.isArray(value) ? value.map(v => v.id) : [];
+                    const optionHtml = options.map(opt => `<option value="${opt.id}" ${selectedIds.includes(opt.id) ? 'selected' : ''}>${opt.Nom || opt.Name || `ID: ${opt.id}`}</option>`).join('');
+                    return `<div class="gce-field-row" style="flex-direction: column; align-items: stretch;">${label}<select name="${fieldKey}" id="${fieldKey}" multiple style="min-height: 100px;">${optionHtml}</select></div>`;
+                } else {
+                    let displayValue = '—';
                     let hiddenInputValue = '';
                     if (Array.isArray(value) && value.length > 0) {
-                        if(value[0]?.id) { hiddenInputValue = value[0].id; }
-                        const rawNameToSlugMap = {'t1_user':'utilisateurs','assigne':'utilisateurs','contacts':'contacts','contact':'contacts','task_input':'opportunites','opportunite':'opportunites','opportunité':'opportunites','appel':'appels','appels':'appels','interaction':'interactions','interactions':'interactions','devis':'devis','articles_devis':'articles_devis','article':'articles_devis'};
+                        if (value[0]?.id) { hiddenInputValue = value[0].id; }
+                        const rawNameToSlugMap = { 't1_user': 'utilisateurs', 'assigne': 'utilisateurs', 'contacts': 'contacts', 'contact': 'contacts', 'task_input': 'opportunites', 'opportunite': 'opportunites', 'opportunité': 'opportunites', 'appel': 'appels', 'appels': 'appels', 'interaction': 'interactions', 'interactions': 'interactions', 'devis': 'devis', 'articles_devis': 'articles_devis', 'article': 'articles_devis' };
                         const tableSlug = rawNameToSlugMap[field.name.toLowerCase()] || field.name.toLowerCase();
                         displayValue = value.map(obj => {
                             if (!obj || !obj.id) return '';
@@ -215,21 +274,34 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
                         }).join(', ');
                     }
                     return `<div class="gce-field-row">${label}<div>${displayValue}</div><input type="hidden" id="${fieldKey}" name="${fieldKey}" value="${hiddenInputValue}"></div>`;
-               }
                 }
-            
-            if (field.type === "date" && field.date_include_time) {
-                return `
-                    <div class="gce-field-row">${label}
-                        <input type="datetime-local" id="${fieldKey}" name="${fieldKey}" value="${value || ''}">
-                    </div>`;
             }
-            
+
+            // BLOC CORRIGÉ
+if (field.type === "date") {
+    let dateValue = value || '';
+    // Si on a une date (ex: "2025-07-23T16:26:00Z"), on la formate
+    if (dateValue) {
+        const d = new Date(dateValue);
+        // On ajuste la date au fuseau horaire du navigateur pour l'affichage
+        d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); 
+
+        if (field.date_include_time) {
+            // Format pour datetime-local: YYYY-MM-DDTHH:mm
+            dateValue = d.toISOString().slice(0, 16);
+        } else {
+            // Format pour date: YYYY-MM-DD
+            dateValue = d.toISOString().slice(0, 10);
+        }
+    }
+    const inputType = field.date_include_time ? "datetime-local" : "date";
+    return `<div class="gce-field-row">${label}<input type="${inputType}" id="${fieldKey}" name="${fieldKey}" value="${dateValue}"></div>`;
+}
             if (field.read_only) {
                 return `<div class="gce-field-row">${label}<input type="text" value="${value || ''}" readonly disabled></div>`;
             }
 
-            
+
             if (field.type === "boolean") {
                 return `
                     <div class="gce-field-row">${label}
@@ -259,7 +331,28 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
                         </div>
                     </div>`;
             }
-          
+            if (field.type === "rating") {
+                const fieldKey = `field_${field.id}`;
+                const label = `<label for="${fieldKey}"><strong>${field.name}</strong></label>`;
+                const currentValue = data[field.name] || 0;
+                const maxRating = field.max_value || 5;
+
+                let starsHtml = '';
+                for (let i = 1; i <= maxRating; i++) {
+                    const isSelected = i <= currentValue ? 'selected' : '';
+                    starsHtml += `<span class="star ${isSelected}" data-value="${i}">★</span>`;
+                }
+
+                return `
+                    <div class="gce-field-row">
+                        ${label}
+                        <div class="gce-rating-input">
+                            ${starsHtml}
+                            <input type="hidden" name="${fieldKey}" value="${currentValue}">
+                        </div>
+                    </div>
+                `;
+            }
             const inputType = field.type === 'number' ? 'number' : 'text';
             const numberAttributes = (inputType === 'number') ? 'step="0.01"' : '';
             // --- FIN DU CHANGEMENT ---
@@ -326,10 +419,10 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
     });
     modal.querySelector(".gce-modal-close").addEventListener("click", close);
 
-   if (mode === "ecriture") {
+    if (mode === "ecriture") {
         modal.querySelector("form").addEventListener("submit", async (e) => {
             e.preventDefault();
-            
+
             const submitButton = e.target.querySelector('button[type="submit"]');
             submitButton.disabled = true;
             submitButton.textContent = 'Sauvegarde...';
@@ -345,7 +438,7 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
                     if (input.files.length > 0) {
                         const fieldKey = input.name;
                         newFilesPayload[fieldKey] = [];
-                        
+
                         // Uploader chaque fichier sélectionné pour ce champ
                         for (const file of input.files) {
                             const formData = new FormData();
@@ -358,7 +451,7 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
                             });
 
                             if (!res.ok) throw new Error(`L'upload du fichier ${file.name} a échoué.`);
-                            
+
                             const uploadedFile = await res.json();
                             newFilesPayload[fieldKey].push(uploadedFile);
                         }
@@ -372,9 +465,13 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
 
                 for (let field of filteredSchema) {
                     if (field.read_only) continue;
-
-                    const key = `field_${field.id}`;
                     
+                    const key = `field_${field.id}`;
+                    // On déclare rawValue une seule fois au début, accessible à tous les 'else if'.
+                        let rawValue = standardFormData.get(key);
+
+                        if (rawValue === null || (rawValue === '' && field.type !== 'boolean')) continue;
+
                     // ================== LOGIQUE DE PAYLOAD MODIFIÉE ==================
                     if (field.type === "file") {
                         const existingFiles = Array.isArray(data[field.name]) ? data[field.name] : [];
@@ -383,16 +480,20 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
                         payload[key] = [...existingFiles, ...newFiles];
                         continue; // On passe au champ suivant
                     }
-                    
-                     if (field.type === 'link_row' && tableName === 'devis' && field.name === 'Fournisseur') {
-                            // On récupère toutes les valeurs sélectionnées pour le champ fournisseur
-                            payload[key] = Array.from(form.querySelector(`select[name="${key}"]`).selectedOptions).map(opt => parseInt(opt.value));
-                            continue; // On passe au champ suivant
-                        }
-                    if (!standardFormData.has(key)) continue;
-                    let rawValue = standardFormData.get(key);
 
-                    if (rawValue === null || (rawValue === '' && field.type !== 'boolean')) continue;
+                    if (field.type === 'link_row' && tableName === 'devis' && field.name === 'Fournisseur') {
+                        // On récupère toutes les valeurs sélectionnées pour le champ fournisseur
+                        payload[key] = Array.from(form.querySelector(`select[name="${key}"]`).selectedOptions).map(opt => parseInt(opt.value));
+                        continue; // On passe au champ suivant
+                    }
+                    if (field.type === "rating") {
+                        const intValue = parseInt(rawValue, 10);
+                        if (!isNaN(intValue)) { // On vérifie que c'est bien un nombre
+                            payload[key] = intValue;
+                        }
+                    }
+                    if (!standardFormData.has(key)) continue;
+                    
 
                     if (field.type === "boolean") payload[key] = rawValue === "true";
                     else if (["number", "decimal"].includes(field.type)) payload[key] = parseFloat(String(rawValue).replace(',', '.'));
@@ -448,6 +549,8 @@ function gceRefreshCurrentTable() {
         location.reload(); // Solution de secours
     }
 }
+
+
 
 async function uploadFile(file) {
     const formData = new FormData();

@@ -70,3 +70,31 @@
 .tox-tinymce-aux {
     z-index: 100003 !important; /* Doit être le plus élevé de tous */
 }
+/* ===== STYLES POUR LE CHAMP RATING DANS LES POPUPS ===== */
+
+.gce-rating-input {
+    display: flex;
+    flex-direction: row-reverse; /* Astuce pour le hover facile */
+    justify-content: flex-end;
+}
+
+.gce-rating-input .star {
+    font-size: 1.8em; /* Étoiles plus grandes */
+    color: #ccc;
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+/* Quand on survole, on colore l'étoile survolée et toutes celles "avant" elle (grâce à row-reverse) */
+.gce-rating-input:hover .star {
+    color: #f5b041;
+}
+
+.gce-rating-input .star:hover ~ .star {
+    color: #ccc;
+}
+
+/* Style pour les étoiles déjà sélectionnées (sans survol) */
+.gce-rating-input .star.selected {
+    color: #f5b041;
+}

@@ -11,6 +11,7 @@ function getTabulatorColumnsFromSchema(schema, tableName = "") {
         const isStatus = field.name === "Status";
         const isStatut = field.name === "statut";
         const isSec1 = field.name === 'sec1'; 
+        const isRating = field.type === "rating"; 
 
 
         const column = {
@@ -28,8 +29,26 @@ function getTabulatorColumnsFromSchema(schema, tableName = "") {
             column.formatterParams = { allowHTML: true };
             column.editor = false; // Jamais éditable en ligne
             column.editable = false;
-        }
-        else if (isAttachment) {
+        } else 
+            if (isRating) {
+            column.formatter = function(cell) {
+                const value = cell.getValue() || 0;
+                const max_value = field.max_value || 5;
+                const color = field.color || 'orange'; // Couleur par défaut
+                let stars = '';
+                for (let i = 1; i <= max_value; i++) {
+                    if (i <= value) {
+                        stars += `<span style="color: ${color};">★</span>`; // Étoile pleine
+                    } else {
+                        stars += `<span style="color: #ccc;">☆</span>`; // Étoile vide
+                    }
+                }
+                return stars;
+            };
+            column.formatterParams = { allowHTML: true };
+            column.editor = false; // L'édition en ligne pour les étoiles est complexe, on la désactive
+        } else 
+            if (isAttachment) {
             column.formatter = function (cell) {
                 const files = cell.getValue();
                 if (!Array.isArray(files)) return '';

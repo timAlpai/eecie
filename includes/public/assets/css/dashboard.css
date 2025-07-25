@@ -377,3 +377,48 @@ div[class^="gce-"] .tabulator {
     cursor: pointer;
     z-index: 99998 !important; /* Au-dessus du contenu du modal */
 }
+/* ===== STYLES POUR TABULATOR RESPONSIVE DANS LES MODALS ===== */
+
+/* Augmenter la lisibilité des cellules */
+.gce-detail-modal .tabulator-cell {
+    padding: 10px 8px; /* Plus d'espace vertical */
+}
+
+/* Style de l'icône pour déplier/replier la ligne */
+.gce-detail-modal .tabulator-responsive-collapse-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #e0e0e0;
+    color: #333;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.gce-detail-modal .tabulator-responsive-collapse-toggle:hover {
+    background: #c0c0c0;
+}
+
+/* Style de l'icône quand la ligne est dépliée */
+.gce-detail-modal .tabulator-responsive-collapse-toggle.open {
+    background: #a0a0a0;
+}
+
+/* Conteneur pour les informations cachées */
+.gce-detail-modal .tabulator-responsive-collapse {
+    background-color: #f5f5f5;
+    padding: 10px;
+    border-top: 1px solid #ddd;
+}
+.gce-detail-modal .tabulator-responsive-collapse table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.gce-detail-modal .tabulator-responsive-collapse tr td:first-child {
+    font-weight: bold;
+    padding-right: 10px;
+}
