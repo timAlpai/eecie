@@ -422,3 +422,42 @@ div[class^="gce-"] .tabulator {
     font-weight: bold;
     padding-right: 10px;
 }
+
+
+/* Fichier : includes/public/assets/css/dashboard.css */
+
+/* ... (Ajouter à la fin du fichier) ... */
+
+/* ===== STYLES POUR LA VUE "DEVIS" (CARTES) ===== */
+
+.gce-devis-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 20px;
+}
+
+.gce-devis-summary-card {
+  background-color: #fff;
+  border: 1px solid #e0e0e0;
+  border-left: 5px solid #3B82F6; /* Couleur bleue par défaut */
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  padding: 15px;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.gce-devis-summary-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.gce-devis-summary-card h4 {
+  margin: 0 0 10px 0;
+}
+
+.gce-devis-summary-card p {
+  margin: 5px 0;
+  font-size: 0.9em;
+  color: #555;
+}

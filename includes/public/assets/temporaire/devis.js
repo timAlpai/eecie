@@ -1,19 +1,25 @@
-// Fichier : includes/public/assets/js/devis.js (VERSION FINALE, ALIGNÉE SUR APPELS.JS)
+// Fichier : includes/public/assets/js/devis.js (VERSION FINALE AVEC CORRECTION DÉFINITIVE)
 
 async function refreshDevisData(devisId) {
     try {
         showStatusUpdate('Synchronisation...', true);
+
         const [devisRes, articlesRes] = await Promise.all([
             fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/row/devis/${devisId}`, { cache: 'no-cache', headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }),
             fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/articles_devis`, { cache: 'no-cache', headers: { 'X-WP-Nonce': EECIE_CRM.nonce } })
         ]);
+
         if (!devisRes.ok || !articlesRes.ok) throw new Error("Impossible de recharger les données.");
+        
         const updatedDevisFromServer = await devisRes.json();
         const articlesData = await articlesRes.json();
+        
         const articles = articlesData.results || [];
         const linkedArticles = articles.filter(art => art.Devis && art.Devis.some(d => d.id === devisId));
         updatedDevisFromServer._children = linkedArticles;
+        
         gce.viewManager.updateItem(devisId, updatedDevisFromServer);
+
         const modal = document.querySelector('.gce-detail-modal');
         if (modal) {
             const subTableInstance = Tabulator.findTable(modal.querySelector('.tabulator'))[0];
@@ -30,6 +36,7 @@ async function refreshDevisData(devisId) {
 document.addEventListener('DOMContentLoaded', () => {
     const mainContainer = document.getElementById('gce-devis-table');
     if (!mainContainer) return;
+
     mainContainer.innerHTML = 'Chargement des devis...';
 
     const devisViewConfig = {
@@ -88,9 +95,23 @@ document.addEventListener('DOMContentLoaded', () => {
             container.appendChild(header); container.appendChild(details); container.appendChild(articlesContainer);
 
             const articlesSchema = window.gceSchemas.articles_devis;
+            if (!articlesSchema) {
+                container.innerHTML = "<p>Erreur: le schéma des articles n'a pas pu être chargé.</p>";
+                return container;
+            }
+
             const articlesColumns = getTabulatorColumnsFromSchema(articlesSchema, 'articles_devis');
+            
+            // Forçons l'éditeur pour les champs critiques pour être sûrs
+            articlesColumns.forEach(col => {
+                if (col.field === 'Quantités' || col.field === 'Prix_unitaire') {
+                    console.log(`Forçage de l'éditeur pour la colonne: ${col.field}`);
+                    col.editor = "input"; // Utilise l'éditeur texte de base de Tabulator
+                }
+            });
             articlesColumns.push({
-                title: "Actions", headerSort: false, width: 100, hozAlign: "center",
+                title: "Actions",
+                headerSort: false, width: 100, hozAlign: "center",
                 formatter: (cell) => {
                     const rowData = cell.getRow().getData();
                     const editIcon = `<a href="#" class="gce-popup-link" data-id="${rowData.id}" data-table="articles_devis" data-mode="ecriture" title="Modifier">✏️</a>`;
@@ -103,21 +124,29 @@ document.addEventListener('DOMContentLoaded', () => {
                         const rowData = cell.getRow().getData();
                         if (confirm(`Supprimer "${rowData.Nom || 'cet article'}" ?`)) {
                             fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/articles_devis/${rowData.id}`, { method: 'DELETE', headers: { 'X-WP-Nonce': EECIE_CRM.nonce } })
-                            .then(res => { if (!res.ok) throw new Error('Échec de la suppression.'); refreshDevisData(devis.id); })
-                            .catch(err => alert(err.message));
+                            .then(res => {
+                                if (!res.ok) throw new Error('Échec de la suppression.');
+                                refreshDevisData(devis.id);
+                            }).catch(err => alert(err.message));
                         }
                     }
                 }
             });
 
-            const subTable = new Tabulator(tableDiv, {
+            // ===================================================================
+            // ==                 LA CORRECTION EST CI-DESSOUS                  ==
+            // ===================================================================
+             const subTable = new Tabulator(tableDiv, {
                 data: devis._children || [],
                 layout: "fitColumns",
                 columns: articlesColumns,
                 placeholder: "Aucun article dans ce devis.",
+                // On retire cellEdited d'ici !
             });
-            
+
+            // Étape 2 : Attacher l'événement en utilisant la méthode .on()
             subTable.on("cellEdited", function(cell) {
+                console.log("✅ cellEdited DÉCLENCHÉ CORRECTEMENT !", cell.getField(), cell.getValue());
                 const rowData = cell.getRow().getData();
                 const cleaned = sanitizeRowBeforeSave(rowData, articlesSchema);
                 showStatusUpdate('Sauvegarde de l\'article...', true);
@@ -136,6 +165,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     cell.restoreOldValue();
                 });
             });
+            // ===================================================================
+            // ==                   FIN DE LA CORRECTION                      ==
+            // ===================================================================
             
             return container;
         }

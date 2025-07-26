@@ -108,6 +108,17 @@ function gce_enqueue_front_scripts()
             );
             wp_localize_script('gce-fournisseurs-js', 'GCE_CURRENT_USER', ['email' => $current_user->user_email]);
             break;
+        case 'devis': // AJOUTER/MODIFIER CE BLOC
+            wp_enqueue_script(
+                'gce-devis-js',
+                plugin_dir_url(__FILE__) . 'assets/js/devis.js',
+                // On ajoute gce-card-view-handler comme dépendance clé
+                ['eecie-crm-rest', 'tabulator-js', 'gce-tabulator-columns', 'gce-popup-handler', 'gce-card-view-handler'],
+                GCE_VERSION,
+                true
+            );
+            wp_localize_script('gce-devis-js', 'GCE_CURRENT_USER', ['email' => $current_user->user_email]);
+            break;
         
        
         // Ajoutez ici d'autres cas pour les futures pages si nécessaire (contacts, devis, appels)

@@ -521,8 +521,29 @@ if (field.type === "date") {
                 console.log("✅ Réponse du serveur reçue, sauvegarde confirmée:", responseData);
 
                 close();
-                location.reload(); // La solution la plus simple pour voir tous les changements
-
+                  // ===================================================================
+                // ==                 LA CORRECTION EST ICI                         ==
+                // ===================================================================
+                
+                // Si on vient de modifier un article de devis...
+                 if (tableName === 'articles_devis' && typeof refreshDevisData === 'function') {
+                    const devisParent = responseData.Devis?.[0] || data.Devis?.[0];
+                    if (devisParent && devisParent.id) {
+                        console.log(`[Popup] Article modifié. Rafraîchissement du devis parent #${devisParent.id}`);
+                        refreshDevisData(devisParent.id); // Appel AJAX
+                    } else {
+                        location.reload(); // Fallback si on ne trouve pas le parent
+                    }
+                } else if (tableName === 'interactions' && typeof refreshAppelData === 'function') {
+                    // Logique similaire pour les appels si nécessaire un jour
+                    location.reload();
+                }
+                else {
+                    location.reload(); // Comportement par défaut pour les autres tables
+                }
+                // ===================================================================
+                // ==                   FIN DE LA CORRECTION                      ==
+                // ===================================================================
             } catch (err) {
                 console.error("❌ Erreur de sauvegarde:", err);
                 alert("Une erreur est survenue lors de la sauvegarde : " + err.message);
