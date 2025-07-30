@@ -25,6 +25,7 @@
 .gce-color-darker-gray  { background-color: #374151; }
 
 .gce-color-darker-purple {background-color: #c800fa;}
+.gce-color-brown        {background-color: #753a16;}
 .gce-color-dark-brown   {background-color: #682902;}
 
 /* dashboard.css */
@@ -610,4 +611,68 @@ div[class^="gce-"] .tabulator {
 .gce-card-accept-btn:disabled {
     background-color: #9e9e9e;
     cursor: not-allowed;
+}
+
+/* ===== STYLES AMÉLIORÉS POUR LES FILTRES (BOUTONS) ===== */
+.gce-filters-container {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px; /* Réduit l'espace entre les éléments */
+  padding: 10px;
+  background-color: #f9f9f9;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  margin-bottom: 20px;
+}
+
+.gce-filters-container strong {
+  margin-right: 8px;
+}
+
+/* L'astuce ici est de masquer la case à cocher réelle */
+.gce-filter-label input[type="checkbox"] {
+  display: none;
+}
+
+/* On stylise le badge à l'intérieur du label pour qu'il ressemble à un bouton */
+.gce-filter-label .gce-badge {
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  opacity: 0.6; /* Les filtres inactifs sont légèrement estompés */
+  font-weight: normal;
+}
+
+/* Au survol, on le rend plus visible */
+.gce-filter-label:hover .gce-badge {
+  opacity: 1;
+  transform: translateY(-1px);
+}
+
+/* LORSQUE LA CASE EST COCHÉE, on change radicalement le style du badge ! */
+.gce-filter-label input[type="checkbox"]:checked + .gce-badge {
+  opacity: 1;
+  font-weight: bold;
+  border-color: rgba(0, 0, 0, 0.4); /* Ajoute une bordure pour le relief */
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1); /* Petite ombre pour le relief */
+}
+
+/* Styles pour les boutons d'action */
+.gce-filter-actions {
+  margin-left: auto; /* Pousse ces actions tout à droite */
+  display: flex;
+  gap: 15px;
+  font-size: 0.9em;
+}
+
+.gce-filter-actions a {
+  color: #0073aa;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.gce-filter-actions a:hover {
+  text-decoration: underline;
 }

@@ -1,4 +1,4 @@
-// FICHIER : includes/public/assets/js/opportunites.js (VERSION REFACTORISÉE)
+// FICHIER : includes/public/assets/js/opportunites.js (VERSION FINALE AVEC FILTRES INTÉGRÉS)
 
 document.addEventListener('DOMContentLoaded', () => {
     const mainContainer = document.getElementById('gce-opportunites-table');
@@ -11,12 +11,12 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-
-
-   const opportunitesViewConfig = {
+    const opportunitesViewConfig = {
         summaryRenderer: (opportunite) => {
             const card = document.createElement('div');
-            card.className = 'gce-opportunite-card'; 
+            // On ajoute une classe pour le ciblage et une classe spécifique au statut pour le filtrage
+            card.className = 'gce-opportunite-card';
+            card.dataset.status = opportunite.Status?.value || 'N/A'; // On stocke le statut ici !
 
             const statut = opportunite.Status?.value || 'N/A';
             const statutColor = opportunite.Status?.color || 'gray';
@@ -27,7 +27,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (progression > 66) progressLevel = 'high';
             else if (progression > 33) progressLevel = 'medium';
 
-            // --- Logique d'affichage conditionnel pour le footer ---
             let footerContent = '';
             if (statut.toLowerCase() === 'assigner') {
                 footerContent = `
@@ -67,9 +66,8 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
             return card;
         },
-
         detailRenderer: (opportunite) => {
-            // ... (cette fonction reste identique à la version précédente avec les deux boutons)
+            // ... (cette fonction reste identique à votre version)
             const container = document.createElement('div');
             container.className = 'gce-appel-card'; 
             const progression = parseInt(opportunite.Progression, 10) || 0;
@@ -119,17 +117,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 gceShowModal(popupData, "taches", "ecriture");
             });
 
-            // --- Sous-table Tabulator pour les tâches ---
             const tableDiv = container.querySelector('.sub-table-container');
             const tachesSchema = window.gceSchemas.taches;
             
-            // On garde les colonnes de base
             const colonnesVisibles = ['titre', 'statut', 'priorite', 'date_echeance'];
             const tachesColumns = getTabulatorColumnsFromSchema(tachesSchema, 'taches')
                 .filter(col => colonnesVisibles.includes(col.field));
 
-            // --- NOUVELLE COLONNE D'ACTIONS ---
-            tachesColumns.unshift({ // unshift() pour l'ajouter au début
+            tachesColumns.unshift({
                 title: "Actions",
                 headerSort: false,
                 width: 100,
@@ -137,14 +132,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 formatter: (cell) => {
                     const rowData = cell.getRow().getData();
                     const statut = (rowData.statut?.value || '').toLowerCase();
-
-                    if (statut === 'creation') {
-                        return `<button class="button button-small gce-task-action-btn" data-action="accept">✅ Accepter</button>`;
-                    }
-                    if (statut === 'en_cours') {
-                        return `<button class="button button-small gce-task-action-btn" data-action="complete">🏁 Terminer</button>`;
-                    }
-                    return ""; // Pas de bouton pour les autres statuts (ex: Terminer)
+                    if (statut === 'creation') return `<button class="button button-small gce-task-action-btn" data-action="accept">✅ Accepter</button>`;
+                    if (statut === 'en_cours') return `<button class="button button-small gce-task-action-btn" data-action="complete">🏁 Terminer</button>`;
+                    return "";
                 },
                 cellClick: async (e, cell) => {
                     const actionBtn = e.target.closest('.gce-task-action-btn');
@@ -201,7 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             });
-            new Tabulator(tableDiv, { data: opportunite._children || [], layout: "fitColumns", columns: tachesColumns, placeholder: "Aucune tâche associée." });
+             new Tabulator(tableDiv, { data: opportunite._children || [], layout: "fitColumns", columns: tachesColumns, placeholder: "Aucune tâche associée." });
             
             return container;
         }
@@ -239,10 +229,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         window.gceSchemas = { ...window.gceSchemas, "opportunites": oppSchema, "taches": tachesSchema };
         
-        // La liste est déjà filtrée par l'API ! Plus besoin de filtrer ici.
         const myOpps = oppData.results || [];
 
-        // Le reste du code pour grouper les tâches reste identique
         const tachesByOppId = {};
         (tachesData || []).forEach(tache => {
             const oppLink = tache.opportunite?.[0];
@@ -254,12 +242,61 @@ document.addEventListener('DOMContentLoaded', () => {
         const myOppsWithChildren = myOpps.map(opp => ({ ...opp, _children: tachesByOppId[opp.id] || [] }));
 
         gce.viewManager.initialize(mainContainer, myOppsWithChildren, opportunitesViewConfig);
-         handleAutoOpenFromUrl();
+        handleAutoOpenFromUrl();
+
+// --- MODIFIEZ CETTE SECTION ---
+const filterContainer = document.getElementById('gce-status-filters');
+if (filterContainer) {
+    const allCheckboxes = filterContainer.querySelectorAll('input[type="checkbox"]');
+    
+    // La logique de filtrage quand une case change
+    const applyFilters = () => {
+        const selectedStatuses = Array.from(filterContainer.querySelectorAll('input:checked'))
+            .map(checkbox => checkbox.value);
+
+        const allCards = mainContainer.querySelectorAll('.gce-opportunite-card');
+
+        allCards.forEach(card => {
+            const cardStatus = card.dataset.status;
+            if (selectedStatuses.length === 0 || selectedStatuses.includes(cardStatus)) {
+                card.style.display = '';
+            } else {
+                card.style.display = 'none';
+            }
+        });
+    };
+    
+    filterContainer.addEventListener('change', applyFilters);
+
+    // --- DÉBUT DE L'AJOUT POUR LES BOUTONS D'ACTION ---
+    const selectAllBtn = document.getElementById('gce-filter-select-all');
+    const clearAllBtn = document.getElementById('gce-filter-clear-all');
+
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            allCheckboxes.forEach(cb => cb.checked = true);
+            // On déclenche manuellement l'événement pour que le filtre s'applique
+            filterContainer.dispatchEvent(new Event('change'));
+        });
+    }
+
+    if (clearAllBtn) {
+        clearAllBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            allCheckboxes.forEach(cb => cb.checked = false);
+            // On déclenche manuellement l'événement pour que le filtre s'applique
+            filterContainer.dispatchEvent(new Event('change'));
+        });
+    }
+    // --- FIN DE L'AJOUT POUR LES BOUTONS D'ACTION ---
+}
+        // --- FIN DE LA LOGIQUE DE FILTRAGE AJOUTÉE ---
+
     }).catch(err => {
         mainContainer.innerHTML = `<p style="color:red;">Erreur de chargement : ${err.message}</p>`;
         console.error(err);
     });
-
     // --- NOUVEAU GESTIONNAIRE D'ÉVÉNEMENTS POUR LE BOUTON "ACCEPTER" ---
 mainContainer.addEventListener('click', async (e) => {
         const acceptBtn = e.target.closest('[data-action="accept"]');
