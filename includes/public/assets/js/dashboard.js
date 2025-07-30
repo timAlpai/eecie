@@ -10,28 +10,44 @@ function gceToggleSidebar() {
 }
 
 /**
- * Affiche une notification de statut en haut à droite de l'écran.
+ * Affiche une notification empilable en haut à droite de l'écran qui disparaît automatiquement.
  * @param {string} message Le texte à afficher.
  * @param {boolean} isSuccess Si true, la notification sera verte (succès), sinon rouge (erreur).
+ * @param {number} duration Durée d'affichage en millisecondes (par défaut 3000ms).
  */
-function showStatusUpdate(message, isSuccess = true) {
-  // Supprime toute notification existante pour éviter les doublons
-  const existing = document.getElementById('gce-status-update');
-  if (existing) {
-    existing.remove();
-  }
+function showStatusUpdate(message, isSuccess = true, duration = 3000) {
+    // 1. S'assurer que le conteneur principal existe
+    let container = document.getElementById('gce-notification-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'gce-notification-container';
+        document.body.appendChild(container);
+    }
 
-  // Crée le nouvel élément de notification
-  const statusDiv = document.createElement('div');
-  statusDiv.id = 'gce-status-update';
-  statusDiv.className = 'gce-status-update';
-  if (!isSuccess) {
-    statusDiv.classList.add('error');
-  }
-  statusDiv.textContent = message;
+    // 2. Créer le nouvel élément de notification
+    const notification = document.createElement('div');
+    notification.className = 'gce-notification';
+    if (!isSuccess) {
+        notification.classList.add('error');
+    }
+    notification.textContent = message;
 
-  // Ajoute la notification au corps de la page
-  document.body.appendChild(statusDiv);
+    // 3. Ajouter la nouvelle notification au conteneur
+    container.appendChild(notification);
+
+    // 4. Définir le timer de suppression pour CETTE notification spécifique
+    setTimeout(() => {
+        notification.classList.add('gce-status-fade-out');
+        
+        // Supprimer l'élément du DOM après la fin de l'animation
+        notification.addEventListener('transitionend', () => {
+            notification.remove();
+            // Optionnel : si le conteneur est vide, on peut le supprimer
+            if (container.children.length === 0) {
+                container.remove();
+            }
+        });
+    }, duration);
 }
 
 

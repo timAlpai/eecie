@@ -519,7 +519,7 @@
                     'size'             => 200, // On utilise la taille de lot maximale de Baserow
                     'filter_type'      => 'AND',
                 ];
-                $params['filter__field_' . $assigne_field['id'] . '__link_row_has'] = $t1_user_object['Name'];
+                $params['filter__field_' . $assigne_field['id'] . '__link_row_has'] =  $t1_user_object['id'];  // '__link_row_contains'] = $t1_user_object['id'];
                 $params['filter__field_' . $statut_field['id'] . '__single_select_not_equal'] = $terminer_option_id;
 
                 $path = "rows/table/$taches_table_id/";
@@ -647,7 +647,7 @@
         ]);
         register_rest_route('eecie-crm/v1', '/appels', [
             'methods'  => 'GET',
-            'callback' => 'eecie_crm_get_appels_view_data', 
+            'callback' => 'eecie_crm_get_appels_view_data',
             'permission_callback' => function () {
                 $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) && wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
                 return is_user_logged_in() && $nonce_valid;
@@ -863,10 +863,63 @@
         // GET /devis
         register_rest_route('eecie-crm/v1', '/devis', [
             'methods'  => 'GET',
-            'callback' => function () {
-                $table_id = get_option('gce_baserow_table_devis') ?: eecie_crm_guess_table_id('Devis');
-                if (!$table_id) return new WP_Error('no_table', 'Table Devis introuvable', ['status' => 500]);
-                return eecie_crm_baserow_get("rows/table/$table_id/", ['user_field_names' => 'true']);
+            'callback' => function (WP_REST_Request $request) {
+                // 1. Identifier l'utilisateur Baserow connecté
+                $current_wp_user = wp_get_current_user();
+                if (!$current_wp_user || !$current_wp_user->exists()) {
+                    return new WP_Error('not_logged_in', 'Utilisateur non connecté.', ['status' => 401]);
+                }
+                $t1_user_object = gce_get_baserow_t1_user_by_email($current_wp_user->user_email);
+                if (!$t1_user_object) {
+                    return rest_ensure_response(['results' => []]); // Pas d'utilisateur Baserow, donc pas de devis
+                }
+                $current_user_baserow_id = $t1_user_object['id'];
+
+                // 2. Récupérer toutes les opportunités pour trouver celles de l'utilisateur
+                $opportunites_table_id = get_option('gce_baserow_table_opportunites') ?: eecie_crm_guess_table_id('Task_input');
+                if (!$opportunites_table_id) return new WP_Error('no_opp_table', 'Table Opportunités introuvable.', ['status' => 500]);
+
+                $all_opportunites = eecie_crm_baserow_get_all_paginated_results("rows/table/$opportunites_table_id/", ['user_field_names' => 'true']);
+                if (is_wp_error($all_opportunites)) return $all_opportunites;
+
+                // 3. Filtrer pour ne garder que les IDs des opportunités de l'utilisateur
+                $my_opportunity_ids = [];
+                foreach ($all_opportunites as $opp) {
+                    if (isset($opp['T1_user']) && is_array($opp['T1_user'])) {
+                        foreach ($opp['T1_user'] as $assigned_user) {
+                            if ($assigned_user['id'] === $current_user_baserow_id) {
+                                $my_opportunity_ids[] = $opp['id'];
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (empty($my_opportunity_ids)) {
+                    return rest_ensure_response(['results' => []]); // Pas d'opportunités, donc pas de devis
+                }
+
+                // 4. Récupérer tous les devis
+                $devis_table_id = get_option('gce_baserow_table_devis') ?: eecie_crm_guess_table_id('Devis');
+                if (!$devis_table_id) return new WP_Error('no_devis_table', 'Table Devis introuvable.', ['status' => 500]);
+
+                $all_devis = eecie_crm_baserow_get_all_paginated_results("rows/table/$devis_table_id/", ['user_field_names' => 'true']);
+                if (is_wp_error($all_devis)) return $all_devis;
+
+                // 5. Filtrer les devis pour ne garder que ceux liés aux opportunités de l'utilisateur
+                $my_devis = [];
+                foreach ($all_devis as $devis) {
+                    if (isset($devis['Task_input']) && is_array($devis['Task_input'])) {
+                        foreach ($devis['Task_input'] as $linked_opp) {
+                            if (in_array($linked_opp['id'], $my_opportunity_ids)) {
+                                $my_devis[] = $devis;
+                                break; // Le devis est pertinent, on passe au suivant
+                            }
+                        }
+                    }
+                }
+
+                // 6. Retourner la liste filtrée dans la structure attendue par le frontend
+                return rest_ensure_response(['results' => $my_devis]);
             },
             'permission_callback' => function () {
                 $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) && wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
@@ -1528,7 +1581,7 @@
                 return is_user_logged_in() && $nonce_valid;
             },
         ]);
-       
+
         register_rest_route('eecie-crm/v1', '/appels/schema', [
             'methods'  => 'GET',
             'callback' => function () {
@@ -2126,18 +2179,55 @@
 
     function eecie_crm_get_opportunites(WP_REST_Request $request)
     {
-        $table_id = get_option('gce_baserow_table_opportunites')
-            ?: eecie_crm_guess_table_id('Task_input');
+        // 1. Identifier l'utilisateur Baserow connecté
+        $current_wp_user = wp_get_current_user();
+        if (!$current_wp_user || !$current_wp_user->exists()) {
+            return new WP_Error('not_logged_in', 'Utilisateur non connecté.', ['status' => 401]);
+        }
+        $t1_user_object = gce_get_baserow_t1_user_by_email($current_wp_user->user_email);
+        if (!$t1_user_object) {
+            return rest_ensure_response(['results' => []]); // Pas d'utilisateur Baserow, donc pas d'opportunités
+        }
+
+        // 2. Récupérer les IDs de la table et du champ de liaison
+        $table_id = get_option('gce_baserow_table_opportunites') ?: eecie_crm_guess_table_id('Task_input');
         if (!$table_id) {
             return new WP_Error('no_table', 'Table Opportunités introuvable', ['status' => 500]);
         }
-        // On récupère tout pour filtrer côté client
+
+        $fields = eecie_crm_baserow_get_fields($table_id);
+        if (is_wp_error($fields)) return $fields;
+
+        $assigne_field = array_values(array_filter($fields, fn($f) => $f['name'] === 'T1_user'))[0] ?? null;
+        if (!$assigne_field) {
+            return new WP_Error('no_link_field', 'Champ de liaison T1_user introuvable.', ['status' => 500]);
+        }
+        // On garde cette partie pour avoir l'ID du champ Status
+        $status_field = array_values(array_filter($fields, fn($f) => $f['name'] === 'Status'))[0] ?? null;
+
+        // 3. Construire la requête avec les filtres Baserow
         $params = [
             'user_field_names' => 'true',
-            'size'             => 200, // Augmenter la limite pour récupérer plus de 100 lignes
+            'size'             => 200,
+            'filter_type'      => 'AND',
+            // Votre filtre qui fonctionne déjà
+            'filter__field_' . $assigne_field['id'] . '__link_row_has' => $t1_user_object['Name'],
         ];
-        $rows = eecie_crm_baserow_get("rows/table/$table_id/", $params);
-        return is_wp_error($rows) ? $rows : rest_ensure_response($rows);
+
+        // --- LA NOUVELLE LOGIQUE DE FILTRE EST ICI ---
+        // On s'assure que le champ Status a bien été trouvé
+        if ($status_field) {
+            // On utilise un filtre qui vérifie si la valeur TEXTUELLE du champ "Status"
+            // ne contient PAS la chaîne "Refus". C'est plus robuste.
+            $params['filter__field_' . $status_field['id'] . '__contains_not'] = 'Refus';
+        }
+        // --- FIN DE LA NOUVELLE LOGIQUE ---
+        // 4. Appeler la fonction qui gère la pagination et retourner les résultats
+        $path = "rows/table/$table_id/";
+        $my_opportunites = eecie_crm_baserow_get_all_paginated_results($path, $params);
+
+        // Le frontend s'attend à un objet avec une clé "results"
+        return rest_ensure_response(['results' => $my_opportunites]);
     }
 
 
@@ -2454,77 +2544,78 @@
 
         return rest_ensure_response($response_body);
     }
-/**
- * Prépare les données pour la vue "Appels" (Flux de travail).
- * Retourne une liste de "dossiers d'appel" uniques par opportunité assignée à l'utilisateur,
- * avec leurs interactions directement imbriquées.
- *
- * @return WP_REST_Response|WP_Error
- */
-function eecie_crm_get_appels_view_data(WP_REST_Request $request) {
-    // 1. Identifier l'utilisateur connecté
-    $current_wp_user = wp_get_current_user();
-    if (!$current_wp_user || !$current_wp_user->exists()) {
-        return new WP_Error('not_logged_in', 'Utilisateur non connecté.', ['status' => 401]);
-    }
-    $t1_user_object = gce_get_baserow_t1_user_by_email($current_wp_user->user_email);
-    if (!$t1_user_object) {
-        return rest_ensure_response([]); // Pas d'utilisateur Baserow, donc pas de données
-    }
+    /**
+     * Prépare les données pour la vue "Appels" (Flux de travail).
+     * Retourne une liste de "dossiers d'appel" uniques par opportunité assignée à l'utilisateur,
+     * avec leurs interactions directement imbriquées.
+     *
+     * @return WP_REST_Response|WP_Error
+     */
+    function eecie_crm_get_appels_view_data(WP_REST_Request $request)
+    {
+        // 1. Identifier l'utilisateur connecté
+        $current_wp_user = wp_get_current_user();
+        if (!$current_wp_user || !$current_wp_user->exists()) {
+            return new WP_Error('not_logged_in', 'Utilisateur non connecté.', ['status' => 401]);
+        }
+        $t1_user_object = gce_get_baserow_t1_user_by_email($current_wp_user->user_email);
+        if (!$t1_user_object) {
+            return rest_ensure_response([]); // Pas d'utilisateur Baserow, donc pas de données
+        }
 
-    // 2. Récupérer toutes les données nécessaires en une fois
-    $opportunites = eecie_crm_baserow_get_all_paginated_results('rows/table/' . (get_option('gce_baserow_table_opportunites') ?: eecie_crm_guess_table_id('Task_input')) . '/', ['user_field_names' => 'true']);
-    $appels = eecie_crm_baserow_get_all_paginated_results('rows/table/' . (get_option('gce_baserow_table_appels') ?: eecie_crm_guess_table_id('Appels')) . '/', ['user_field_names' => 'true']);
-    $interactions = eecie_crm_baserow_get_all_paginated_results('rows/table/' . (get_option('gce_baserow_table_interactions') ?: eecie_crm_guess_table_id('Interactions')) . '/', ['user_field_names' => 'true']);
+        // 2. Récupérer toutes les données nécessaires en une fois
+        $opportunites = eecie_crm_baserow_get_all_paginated_results('rows/table/' . (get_option('gce_baserow_table_opportunites') ?: eecie_crm_guess_table_id('Task_input')) . '/', ['user_field_names' => 'true']);
+        $appels = eecie_crm_baserow_get_all_paginated_results('rows/table/' . (get_option('gce_baserow_table_appels') ?: eecie_crm_guess_table_id('Appels')) . '/', ['user_field_names' => 'true']);
+        $interactions = eecie_crm_baserow_get_all_paginated_results('rows/table/' . (get_option('gce_baserow_table_interactions') ?: eecie_crm_guess_table_id('Interactions')) . '/', ['user_field_names' => 'true']);
 
-    // 3. Filtrer les opportunités assignées à l'utilisateur
-    $my_opportunity_ids = [];
-    foreach ($opportunites as $opp) {
-        if (isset($opp['T1_user']) && is_array($opp['T1_user'])) {
-            foreach ($opp['T1_user'] as $assigned_user) {
-                if ($assigned_user['id'] === $t1_user_object['id']) {
-                    $my_opportunity_ids[] = $opp['id'];
-                    break;
+        // 3. Filtrer les opportunités assignées à l'utilisateur
+        $my_opportunity_ids = [];
+        foreach ($opportunites as $opp) {
+            if (isset($opp['T1_user']) && is_array($opp['T1_user'])) {
+                foreach ($opp['T1_user'] as $assigned_user) {
+                    if ($assigned_user['id'] === $t1_user_object['id']) {
+                        $my_opportunity_ids[] = $opp['id'];
+                        break;
+                    }
                 }
             }
         }
-    }
 
-    if (empty($my_opportunity_ids)) {
-        return rest_ensure_response([]); // Aucune opportunité assignée
-    }
+        if (empty($my_opportunity_ids)) {
+            return rest_ensure_response([]); // Aucune opportunité assignée
+        }
 
-    // 4. Grouper les interactions par ID d'appel parent
-    $interactions_by_appel_id = [];
-    foreach ($interactions as $interaction) {
-        if (isset($interaction['Appels']) && is_array($interaction['Appels'])) {
-            foreach ($interaction['Appels'] as $appel_link) {
-                if (!isset($interactions_by_appel_id[$appel_link['id']])) {
-                    $interactions_by_appel_id[$appel_link['id']] = [];
+        // 4. Grouper les interactions par ID d'appel parent
+        $interactions_by_appel_id = [];
+        foreach ($interactions as $interaction) {
+            if (isset($interaction['Appels']) && is_array($interaction['Appels'])) {
+                foreach ($interaction['Appels'] as $appel_link) {
+                    if (!isset($interactions_by_appel_id[$appel_link['id']])) {
+                        $interactions_by_appel_id[$appel_link['id']] = [];
+                    }
+                    $interactions_by_appel_id[$appel_link['id']][] = $interaction;
                 }
-                $interactions_by_appel_id[$appel_link['id']][] = $interaction;
             }
         }
-    }
-    
-    // 5. Construire la liste finale de "dossiers d'appel"
-    $result_appels = [];
-    $processed_opportunites = []; // Pour garantir la règle "1 opportunité = 1 appel"
 
-    foreach ($appels as $appel) {
-        if (isset($appel['Opportunité']) && is_array($appel['Opportunité']) && !empty($appel['Opportunité'])) {
-            $linked_opp_id = $appel['Opportunité'][0]['id'];
-            
-            // Si l'opportunité est une des nôtres ET qu'on ne l'a pas déjà traitée
-            if (in_array($linked_opp_id, $my_opportunity_ids) && !in_array($linked_opp_id, $processed_opportunites)) {
-                // On ajoute les interactions imbriquées
-                $appel['_children'] = $interactions_by_appel_id[$appel['id']] ?? [];
-                
-                $result_appels[] = $appel;
-                $processed_opportunites[] = $linked_opp_id; // On "verrouille" cette opportunité
+        // 5. Construire la liste finale de "dossiers d'appel"
+        $result_appels = [];
+        $processed_opportunites = []; // Pour garantir la règle "1 opportunité = 1 appel"
+
+        foreach ($appels as $appel) {
+            if (isset($appel['Opportunité']) && is_array($appel['Opportunité']) && !empty($appel['Opportunité'])) {
+                $linked_opp_id = $appel['Opportunité'][0]['id'];
+
+                // Si l'opportunité est une des nôtres ET qu'on ne l'a pas déjà traitée
+                if (in_array($linked_opp_id, $my_opportunity_ids) && !in_array($linked_opp_id, $processed_opportunites)) {
+                    // On ajoute les interactions imbriquées
+                    $appel['_children'] = $interactions_by_appel_id[$appel['id']] ?? [];
+
+                    $result_appels[] = $appel;
+                    $processed_opportunites[] = $linked_opp_id; // On "verrouille" cette opportunité
+                }
             }
         }
+
+        return rest_ensure_response($result_appels);
     }
-    
-    return rest_ensure_response($result_appels);
-}

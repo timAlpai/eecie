@@ -43,14 +43,19 @@ document.addEventListener('DOMContentLoaded', () => {
             card.innerHTML = `<h4>Devis #${devis.DevisId}</h4><p><strong>Opportunité:</strong> ${oppName}</p><p><strong>Total HT:</strong> ${total}</p><p><strong>Statut:</strong> <span class="gce-badge gce-color-${statutColor}">${statut}</span></p>`;
             return card;
         },
-        detailRenderer: (devis) => {
+         detailRenderer: (devis) => {
             const container = document.createElement('div');
             container.className = 'gce-devis-card';
             const oppLink = `<a href="#" class="gce-popup-link" data-table="opportunites" data-id="${devis.Task_input?.[0]?.id}">${devis.Task_input?.[0]?.value || ''}</a>`;
             const header = document.createElement('div');
-            header.className = 'gce-devis-header'; 
+            header.className = 'gce-devis-header';
             header.innerHTML = `<h3>Détails du Devis #${devis.DevisId}</h3>`;
+            
+            // --- NOUVELLE SECTION POUR LES BOUTONS D'ACTION ---
             const actions = document.createElement('div');
+            actions.style.display = 'flex';
+            actions.style.gap = '10px';
+
             const addArticleBtn = document.createElement('button');
             addArticleBtn.className = 'button';
             addArticleBtn.textContent = '➕ Article';
@@ -60,6 +65,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 const popupData = champDevis ? { "Devis": [{ id: devis.id, value: `Devis #${devis.DevisId}` }] } : {};
                 gceShowModal(popupData, "articles_devis", "ecriture", ["Nom", "Quantités", "Prix_unitaire", "Devis"]);
             };
+
+            // LE NOUVEAU BOUTON "MODIFIER DEVIS"
+            const editDevisBtn = document.createElement('button');
+            editDevisBtn.className = 'button button-secondary gce-popup-link';
+            editDevisBtn.textContent = '✏️ Modifier Devis';
+            // On utilise les data-attributs pour que popup-handler.js s'en occupe
+            editDevisBtn.dataset.table = 'devis';
+            editDevisBtn.dataset.id = devis.id;
+            editDevisBtn.dataset.mode = 'ecriture';
+
+
             const calculateBtn = document.createElement('button');
             calculateBtn.className = 'button button-primary';
             calculateBtn.textContent = '⚡ Calculer et Envoyer';
@@ -75,11 +91,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 .then(() => { alert("Calcul terminé !"); location.reload(); })
                 .catch(err => { alert(`Erreur: ${err.message}`); button.disabled = false; button.textContent = '⚡ Calculer et Envoyer'; });
             };
-            actions.appendChild(addArticleBtn); actions.appendChild(calculateBtn); header.appendChild(actions);
+
+            // On ajoute tous les boutons au conteneur d'actions
+            actions.appendChild(addArticleBtn);
+            actions.appendChild(editDevisBtn); // On l'insère ici
+            actions.appendChild(calculateBtn);
+            header.appendChild(actions);
+            // --- FIN DE LA SECTION ACTIONS ---
+
             const statutBadge = `<span class="gce-badge gce-color-${devis.Status?.color || 'gray'}">${devis.Status?.value || 'N/A'}</span>`;
             const details = document.createElement('div');
             details.className = 'gce-devis-details';
             details.innerHTML = `<p><strong>Opportunité:</strong> ${oppLink}</p><p><strong>Statut:</strong> ${statutBadge}</p>`;
+            
+            // --- NOUVELLE SECTION POUR AFFICHER LES FOURNISSEURS LIÉS ---
+            const fournisseursHtml = Array.isArray(devis.Fournisseur) && devis.Fournisseur.length > 0
+                ? devis.Fournisseur.map(f => `<a href="#" class="gce-popup-link" data-table="fournisseurs" data-id="${f.id}">${f.value}</a>`).join(', ')
+                : '<i>Aucun fournisseur assigné</i>';
+            details.innerHTML += `<p><strong>Fournisseur(s) :</strong> ${fournisseursHtml}</p>`;
+            // --- FIN DE LA SECTION FOURNISSEURS ---
+            
             const articlesContainer = document.createElement('div');
             articlesContainer.className = 'gce-devis-articles-container';
             articlesContainer.innerHTML = '<h4>Articles</h4>';
@@ -144,10 +175,18 @@ document.addEventListener('DOMContentLoaded', () => {
     Promise.all([
         fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/devis', { cache: 'no-cache', headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
         fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/articles_devis', { cache: 'no-cache', headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
+        // === LA LIGNE CLÉ AJOUTÉE CI-DESSOUS ===
+        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/fournisseurs', { cache: 'no-cache', headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
+        // =======================================
         fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/devis/schema', { cache: 'no-cache', headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
-        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/articles_devis/schema', { cache: 'no-cache', headers: { 'X-WP-Nonce': EECIE_CRM.nonce } })
-    ]).then(async ([devisData, articlesData, devisSchema, articlesSchemaResponse]) => {
-        const articlesSchema = await articlesSchemaResponse.json();
+        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/articles_devis/schema', { cache: 'no-cache', headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json())
+    ]).then(async ([devisData, articlesData, fournisseursData, devisSchema, articlesSchemaResponse]) => {
+        // === ON POPULE LE CACHE GLOBAL ICI ===
+        window.gceDataCache = { ...window.gceDataCache, fournisseurs: fournisseursData.results || [] };
+        // =====================================
+
+        // On ne change rien au reste du code, il va maintenant fonctionner
+        const articlesSchema = await articlesSchemaResponse; // pas besoin de .json() ici si déjà fait dans le Promise.all
         window.gceSchemas = { ...window.gceSchemas, "devis": devisSchema, "articles_devis": articlesSchema };
         const devis = devisData.results || [];
         const articles = articlesData.results || [];
@@ -165,4 +204,5 @@ document.addEventListener('DOMContentLoaded', () => {
     }).catch(err => {
         mainContainer.innerHTML = `<p style="color:red;">Erreur: ${err.message}</p>`;
     });
+
 });

@@ -301,6 +301,20 @@ if (field.type === "date") {
                 return `<div class="gce-field-row">${label}<input type="text" value="${value || ''}" readonly disabled></div>`;
             }
 
+ // AJOUTER CE BLOC AU DÉBUT DE LA SECTION 'ecriture'
+            if (field.name === 'Progression') {
+                const currentValue = value || 0;
+                return `
+                    <div class="gce-field-row" style="align-items: center;">
+                        ${label}
+                        <div style="display: flex; align-items: center; gap: 10px; flex-grow: 1;">
+                            <input type="range" min="0" max="100" value="${currentValue}" 
+                                   id="${fieldKey}" name="${fieldKey}" style="flex-grow: 1;"
+                                   oninput="this.nextElementSibling.textContent = this.value + '%'"/>
+                            <span style="font-weight: bold; min-width: 40px; text-align: right;">${currentValue}%</span>
+                        </div>
+                    </div>`;
+            }
 
             if (field.type === "boolean") {
                 return `
@@ -492,6 +506,7 @@ if (field.type === "date") {
                             payload[key] = intValue;
                         }
                     }
+                    
                     if (!standardFormData.has(key)) continue;
                     
 

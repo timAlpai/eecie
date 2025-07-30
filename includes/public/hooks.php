@@ -34,20 +34,24 @@ function gce_enqueue_front_scripts()
         return;
     }
 
-    // --- DÉBUT DE LA SECTION CORRIGÉE ---
-
-    // Scripts et styles COMMUNS à toutes les pages du dashboard
+    // --- SCRIPTS ET STYLES COMMUNS ---
     wp_enqueue_style('gce-dashboard-css', plugin_dir_url(__FILE__) . 'assets/css/dashboard.css', [], GCE_VERSION);
     wp_enqueue_style('gce-popup-css', plugin_dir_url(__FILE__) . '../shared/css/popup.css', [], GCE_VERSION);
     
-    wp_enqueue_script('gce-popup-handler', plugin_dir_url(__FILE__) . '../shared/js/popup-handler.js', ['eecie-crm-rest'], GCE_VERSION, true);
+    // On charge ici le script du dashboard qui contient les fonctions utilitaires comme showStatusUpdate()
+    wp_enqueue_script(
+        'gce-dashboard-js',
+        plugin_dir_url(__FILE__) . 'assets/js/dashboard.js',
+        [], // Ce script n'a pas de dépendance
+        GCE_VERSION,
+        true
+    );
     
-    // NOUVEAU : On enregistre notre moteur de vue ici, avec son propre handle
+    wp_enqueue_script('gce-popup-handler', plugin_dir_url(__FILE__) . '../shared/js/popup-handler.js', ['eecie-crm-rest', 'gce-dashboard-js'], GCE_VERSION, true);
     wp_enqueue_script('gce-card-view-handler', plugin_dir_url(__FILE__) . '../shared/js/card-view-handler.js', ['eecie-crm-rest'], GCE_VERSION, true);
+    wp_enqueue_editor();
 
-    wp_enqueue_editor(); // Pour les popups d'édition
-
-    // Logique de chargement par page
+    // --- LOGIQUE DE CHARGEMENT PAR PAGE ---
     $page_slug = isset($_GET['gce-page']) ? sanitize_text_field($_GET['gce-page']) : '';
     $current_user = wp_get_current_user();
 
@@ -66,8 +70,8 @@ function gce_enqueue_front_scripts()
             wp_enqueue_script(
                 'gce-opportunites-js',
                 plugin_dir_url(__FILE__) . 'assets/js/opportunites.js',
-                // On s'assure que le card-handler est chargé AVANT
-                ['eecie-crm-rest', 'tabulator-js', 'gce-card-view-handler'],
+                // On ajoute 'gce-dashboard-js' comme dépendance
+                ['eecie-crm-rest', 'tabulator-js', 'gce-tabulator-columns', 'gce-popup-handler', 'gce-card-view-handler', 'gce-dashboard-js'],
                 GCE_VERSION,
                 true
             );
@@ -78,8 +82,8 @@ function gce_enqueue_front_scripts()
             wp_enqueue_script(
                 'gce-appels-js',
                 plugin_dir_url(__FILE__) . 'assets/js/appels.js',
-                // On s'assure que le card-handler est chargé AVANT
-                ['eecie-crm-rest', 'tabulator-js', 'gce-tabulator-columns', 'gce-popup-handler', 'gce-card-view-handler'],
+                // On ajoute 'gce-dashboard-js' comme dépendance
+                ['eecie-crm-rest', 'tabulator-js', 'gce-tabulator-columns', 'gce-popup-handler', 'gce-card-view-handler', 'gce-dashboard-js'],
                 GCE_VERSION,
                 true
             );
@@ -88,9 +92,10 @@ function gce_enqueue_front_scripts()
 
         case 'taches':
             wp_enqueue_script(
-                'gce-taches-js', // Le bon handle
-                plugin_dir_url(__FILE__) . 'assets/js/taches.js', // Le bon fichier
-                ['eecie-crm-rest', 'tabulator-js', 'gce-tabulator-columns'],
+                'gce-taches-js',
+                plugin_dir_url(__FILE__) . 'assets/js/taches.js',
+                // On ajoute 'gce-dashboard-js' comme dépendance
+                ['eecie-crm-rest', 'tabulator-js', 'gce-tabulator-columns', 'gce-dashboard-js', 'gce-popup-handler'],
                 GCE_VERSION,
                 true
             );
@@ -98,7 +103,7 @@ function gce_enqueue_front_scripts()
             break;
         
         case 'fournisseurs':
-            wp_enqueue_script('gce-popup-handler-fournisseur', plugin_dir_url(__FILE__) . 'assets/js/popup-handler-fournisseur.js', ['eecie-crm-rest'], GCE_VERSION, true);
+            wp_enqueue_script('gce-popup-handler-fournisseur', plugin_dir_url(__FILE__) . 'assets/js/popup-handler-fournisseur.js', ['eecie-crm-rest', 'gce-dashboard-js'], GCE_VERSION, true);
             wp_enqueue_script(
                 'gce-fournisseurs-js',
                 plugin_dir_url(__FILE__) . 'assets/js/fournisseurs.js',
@@ -108,23 +113,19 @@ function gce_enqueue_front_scripts()
             );
             wp_localize_script('gce-fournisseurs-js', 'GCE_CURRENT_USER', ['email' => $current_user->user_email]);
             break;
-        case 'devis': // AJOUTER/MODIFIER CE BLOC
+        case 'devis':
             wp_enqueue_script(
                 'gce-devis-js',
                 plugin_dir_url(__FILE__) . 'assets/js/devis.js',
-                // On ajoute gce-card-view-handler comme dépendance clé
-                ['eecie-crm-rest', 'tabulator-js', 'gce-tabulator-columns', 'gce-popup-handler', 'gce-card-view-handler'],
+                 // On ajoute 'gce-dashboard-js' comme dépendance
+                ['eecie-crm-rest', 'tabulator-js', 'gce-tabulator-columns', 'gce-popup-handler', 'gce-card-view-handler', 'gce-dashboard-js'],
                 GCE_VERSION,
                 true
             );
             wp_localize_script('gce-devis-js', 'GCE_CURRENT_USER', ['email' => $current_user->user_email]);
             break;
-        
-       
-        // Ajoutez ici d'autres cas pour les futures pages si nécessaire (contacts, devis, appels)
     }
 }
-
 
 // Shortcode (si jamais tu l’utilises ailleurs)
 add_shortcode('gce_user_dashboard', 'gce_render_user_dashboard');

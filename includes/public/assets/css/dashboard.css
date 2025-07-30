@@ -12,6 +12,8 @@
 .gce-color-dark-red   { background-color: #DC2626; }
 .gce-color-red        { background-color: #EF4444; }
 .gce-color-pink        { background-color: #f555ad; }
+.gce-color-dark-pink { background-color: #fa409a; }
+.gce-color-darker-pink { background-color: #fc007a; }
 .gce-color-light-purple {background-color: #c86dde;}
 .gce-color-orange  { background-color: #F97316; }
 .gce-color-deep-dark-orange { background-color: #e76609; }
@@ -262,26 +264,46 @@ div[class^="gce-"] .tabulator {
     background-color: rgba(255, 255, 255, 0.05); /* Léger fond pour se démarquer */
 }
 
-/* Style pour la notification de statut */
-.gce-status-update {
-  position: fixed; /* Reste visible même si on scroll */
-  top: 20px;
-  right: 20px;
-  padding: 15px 25px;
-  border-radius: 5px;
-  z-index: 10001; /* S'assure qu'il est au-dessus de tout */
-  font-weight: bold;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-  background-color: #d4edda; /* Vert pour succès */
-  color: #155724;
-  border: 1px solid #c3e6cb;
+//* ===== SYSTÈME DE NOTIFICATIONS AMÉLIORÉ (EMPILABLE) ===== */
+
+/* Conteneur principal qui fixe la position en haut à droite */
+#gce-notification-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10001;
+    display: flex;
+    flex-direction: column; /* Les notifications s'empilent verticalement */
+    gap: 10px; /* Espace entre les notifications */
+    align-items: flex-end; /* Aligne les notifications sur la droite */
+}
+
+/* Style de chaque notification individuelle */
+.gce-notification {
+    padding: 15px 25px;
+    border-radius: 5px;
+    font-weight: bold;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    background-color: #d4edda; /* Vert succès par défaut */
+    color: #155724;
+    border: 1px solid #c3e6cb;
+    opacity: 1;
+    transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+    transform: translateX(0); /* Position initiale */
+    max-width: 350px;
 }
 
 /* Variante pour les messages d'erreur */
-.gce-status-update.error {
-  background-color: #f8d7da; /* Rouge pour erreur */
-  color: #721c24;
-  border-color: #f5c6cb;
+.gce-notification.error {
+    background-color: #f8d7da; /* Rouge pour erreur */
+    color: #721c24;
+    border-color: #f5c6cb;
+}
+
+/* Animation de disparition */
+.gce-notification.gce-status-fade-out {
+    opacity: 0;
+    transform: translateX(20px); /* Léger décalage vers la droite en disparaissant */
 }
     
 /* ===== STYLES POUR LA VUE "FLUX DE TRAVAIL" (CARTES D'APPELS) ===== */
@@ -424,9 +446,6 @@ div[class^="gce-"] .tabulator {
 }
 
 
-/* Fichier : includes/public/assets/css/dashboard.css */
-
-/* ... (Ajouter à la fin du fichier) ... */
 
 /* ===== STYLES POUR LA VUE "DEVIS" (CARTES) ===== */
 
@@ -460,4 +479,135 @@ div[class^="gce-"] .tabulator {
   margin: 5px 0;
   font-size: 0.9em;
   color: #555;
+}
+
+/* ===== STYLES AMÉLIORÉS POUR LA VUE "OPPORTUNITÉS" ===== */
+
+/* On s'assure que le conteneur principal peut prendre toute la largeur disponible */
+.gce-main-content {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.gce-opportunites-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); /* Cartes un peu plus larges */
+    gap: 20px;
+}
+
+.gce-opportunite-card {
+    background-color: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    padding: 15px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between; /* Espace le contenu verticalement */
+}
+
+.gce-opportunite-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+.gce-opportunite-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 1px solid #f0f0f0;
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+}
+
+.gce-opportunite-card-header h4 {
+    margin: 0;
+    font-size: 1.2em;
+    line-height: 1.3;
+    flex-grow: 1; /* Permet au titre de prendre l'espace */
+}
+
+.gce-opportunite-card-body {
+    font-size: 0.9em;
+    color: #555;
+    flex-grow: 1; /* Permet au corps de prendre l'espace disponible */
+}
+
+.gce-opportunite-card-body p {
+    margin: 8px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px; /* Espace entre l'icône et le texte */
+}
+
+.gce-opportunite-card-footer {
+    margin-top: 15px;
+    padding-top: 10px;
+    border-top: 1px solid #f0f0f0;
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85em;
+    color: #777;
+}
+
+/* ===== STYLES POUR LA BARRE DE PROGRESSION ===== */
+.gce-progress-bar-container {
+    width: 100%;
+    background-color: #e0e0e0;
+    border-radius: 4px;
+    height: 18px;
+    overflow: hidden;
+    margin-top: 5px;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.gce-progress-bar-fill {
+    height: 100%;
+    background-color: #4caf50; /* Vert par défaut */
+    border-radius: 4px;
+    transition: width 0.4s ease-in-out;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 0.75em;
+    font-weight: bold;
+}
+
+/* Couleurs alternatives basées sur le pourcentage */
+.gce-progress-bar-fill[data-progress-level="low"] {
+    background-color: #f44336; /* Rouge */
+}
+.gce-progress-bar-fill[data-progress-level="medium"] {
+    background-color: #ff9800; /* Orange */
+}
+.gce-progress-bar-fill[data-progress-level="high"] {
+    background-color: #4caf50; /* Vert */
+}
+/* Style pour le bouton d'acceptation sur les cartes */
+.gce-opportunite-card-footer {
+    align-items: center; /* Aligne verticalement le texte et le bouton */
+}
+
+.gce-card-accept-btn {
+    background-color: #28a745; /* Vert succès */
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    font-size: 0.9em;
+}
+
+.gce-card-accept-btn:hover {
+    background-color: #218838; /* Vert plus foncé au survol */
+}
+
+.gce-card-accept-btn:disabled {
+    background-color: #9e9e9e;
+    cursor: not-allowed;
 }

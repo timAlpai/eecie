@@ -3,7 +3,7 @@
  * Plugin Name: Gestion CRM EECIE
  * Plugin URI: https://alpai.eu/plugins/gestion-crm-eecie
  * Description: Plugin CRM personnalisé pour eecie.ca avec intégration directe à Baserow.
- * Version: 0.1.0
+ * Version: 0.2.0
  * Author: Timothée de Almeida
  * Author URI: https://alpai.eu
  * License: GPL2+
@@ -21,7 +21,7 @@ if (file_exists($secrets_file)) {
 }
 
 // Constants
-define('GCE_VERSION', '0.1.0');
+define('GCE_VERSION', '0.2.0');
 define('GCE_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('GCE_PLUGIN_URL', plugin_dir_url(__FILE__));
 

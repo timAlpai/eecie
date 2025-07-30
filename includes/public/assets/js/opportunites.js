@@ -1,144 +1,333 @@
-// FICHIER : includes/public/assets/js/opportunites.js
-
-// Ce script charge les opportunités Baserow assignées à l'utilisateur WordPress connecté
+// FICHIER : includes/public/assets/js/opportunites.js (VERSION REFACTORISÉE)
 
 document.addEventListener('DOMContentLoaded', () => {
-    const container = document.getElementById('gce-opportunites-table');
-    if (!container) return;
+    const mainContainer = document.getElementById('gce-opportunites-table');
+    if (!mainContainer) return;
 
-    container.innerHTML = 'Chargement des opportunités...';
-
+    mainContainer.innerHTML = 'Chargement des opportunités...';
     const userEmail = window.GCE_CURRENT_USER?.email;
     if (!userEmail) {
-        container.innerHTML = '<p>Utilisateur non identifié côté client.</p>';
+        mainContainer.innerHTML = '<p>Utilisateur non identifié.</p>';
         return;
     }
 
-    Promise.all([
-        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/opportunites', {
-            headers: { 'X-WP-Nonce': EECIE_CRM.nonce }
-        }).then(r => r.json()),
-        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/opportunites/schema', {
-            headers: { 'X-WP-Nonce': EECIE_CRM.nonce }
-        }).then(r => r.json()),
-        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/utilisateurs', {
-            headers: { 'X-WP-Nonce': EECIE_CRM.nonce }
-        }).then(r => r.json())
-    ])
-        .then(([oppData, oppSchema, usersData]) => {
-            // Debug global temporaire
-            window._debugOpps = {
-                usersData,
-                oppData,
-                oppSchema,
-                currentEmail: userEmail
-            };
 
-            if (!oppData.results || !oppSchema || !usersData.results) {
-                container.innerHTML = '<p>Erreur dans la réception des données.</p>';
-                return;
+
+   const opportunitesViewConfig = {
+        summaryRenderer: (opportunite) => {
+            const card = document.createElement('div');
+            card.className = 'gce-opportunite-card'; 
+
+            const statut = opportunite.Status?.value || 'N/A';
+            const statutColor = opportunite.Status?.color || 'gray';
+            const contactName = opportunite.Contacts?.[0]?.value || 'Non spécifié';
+            const ville = opportunite.Ville || 'N/A';
+            const progression = parseInt(opportunite.Progression, 10) || 0;
+            let progressLevel = 'low';
+            if (progression > 66) progressLevel = 'high';
+            else if (progression > 33) progressLevel = 'medium';
+
+            // --- Logique d'affichage conditionnel pour le footer ---
+            let footerContent = '';
+            if (statut.toLowerCase() === 'assigner') {
+                footerContent = `
+                    <button class="gce-card-accept-btn" data-id="${opportunite.id}" data-action="accept">
+                        ✅ Accepter le dossier
+                    </button>
+                `;
+            } else {
+                const nbTaches = opportunite._children?.length || 0;
+                let derniereInteraction = 'Aucune';
+                if (opportunite['Dernière Interaction']) {
+                    derniereInteraction = luxon.DateTime.fromISO(opportunite['Dernière Interaction']).toRelative({ locale: 'fr' });
+                }
+                footerContent = `
+                    <span>📋 ${nbTaches} tâche(s)</span>
+                    <span>🕒 Dern. interaction : ${derniereInteraction}</span>
+                `;
             }
 
-            // Match email (insensible à la casse)
-            const userRow = usersData.results.find(u =>
-                u.Email?.toLowerCase() === userEmail.toLowerCase()
-            );
-            const userId = userRow ? userRow.id : null;
+            card.innerHTML = `
+                <div class="gce-opportunite-card-header">
+                    <h4>${opportunite.NomClient || 'Opportunité sans nom'}</h4>
+                    <span class="gce-badge gce-color-${statutColor}">${statut}</span>
+                </div>
+                <div class="gce-opportunite-card-body">
+                    <p>👤 <strong>Contact :</strong> ${contactName}</p>
+                    <p>📍 <strong>Ville :</strong> ${ville}</p>
+                    <div class="gce-progress-bar-container" style="margin-top: 10px;">
+                        <div class="gce-progress-bar-fill" style="width: ${progression}%;" data-progress-level="${progressLevel}">
+                             ${progression}%
+                        </div>
+                    </div>
+                </div>
+                <div class="gce-opportunite-card-footer">
+                    ${footerContent}
+                </div>
+            `;
+            return card;
+        },
 
-            // Identifier dynamiquement le champ de liaison avec les utilisateurs
-            const assignedField = (() => {
-                const fromSchema = oppSchema.find(f =>
-                    f.type === 'link_row' && f.name === 'T1_user'
-                );
-                return fromSchema?.name || 'T1_user';
-            })();
+        detailRenderer: (opportunite) => {
+            // ... (cette fonction reste identique à la version précédente avec les deux boutons)
+            const container = document.createElement('div');
+            container.className = 'gce-appel-card'; 
+            const progression = parseInt(opportunite.Progression, 10) || 0;
+            let progressLevel = 'low';
+            if (progression > 66) progressLevel = 'high';
+            else if (progression > 33) progressLevel = 'medium';
+            const contactLink = opportunite.Contacts?.[0] ? `<a href="#" class="gce-popup-link" data-table="contacts" data-id="${opportunite.Contacts[0].id}">${opportunite.Contacts[0].value}</a>` : 'Non spécifié';
+            const employeLink = opportunite.T1_user?.[0] ? `<a href="#" class="gce-popup-link" data-table="utilisateurs" data-id="${opportunite.T1_user[0].id}">${opportunite.T1_user[0].value}</a>` : 'Non assigné';
+            const statutBadge = `<span class="gce-badge gce-color-${opportunite.Status?.color || 'gray'}">${opportunite.Status?.value || 'N/A'}</span>`;
+            const travauxHtml = opportunite.Travaux ? `<div style="margin-top:10px; padding:10px; background-color:#f9f9f9; border-radius:4px;">${opportunite.Travaux}</div>` : '<p><i>Aucune description des travaux.</i></p>';
 
-            const myOpps = userId
-                ? oppData.results.filter(o => {
-                    const link = o[assignedField];
-                    return Array.isArray(link) && link.some(x => x.id === userId);
-                })
-                : [];
+            container.innerHTML = `
+                <div class="gce-appel-header">
+                    <h3>Dossier: ${opportunite.NomClient}</h3>
+                    <div class="header-actions" style="display: flex; gap: 10px;">
+                        <button class="button button-secondary gce-popup-link" data-table="opportunites" data-id="${opportunite.id}" data-mode="ecriture">✏️ Modifier</button>
+                        <button class="button button-primary gce-add-task-btn">➕ Tâche</button>
+                    </div>
+                </div>
+                <div class="gce-appel-details">
+                    <p><strong>Contact:</strong> ${contactLink}</p>
+                    <p><strong>Chargé de projet:</strong> ${employeLink}</p>
+                    <p><strong>Ville:</strong> ${opportunite.Ville || 'N/A'}</p>
+                    <p><strong>Statut:</strong> ${statutBadge}</p>
+                    <p style="margin-top: 15px;"><strong>Progression :</strong></p>
+                    <div class="gce-progress-bar-container">
+                        <div class="gce-progress-bar-fill" style="width: ${progression}%;" data-progress-level="${progressLevel}">
+                            ${progression}%
+                        </div>
+                    </div>
+                    <h4 style="margin-top: 20px;">Description des travaux</h4>
+                    ${travauxHtml}
+                </div>
+                <div class="gce-appel-interactions-container">
+                    <h4>Tâches associées</h4>
+                    <div class="sub-table-container"></div>
+                </div>
+            `;
+            
+            container.querySelector('.gce-add-task-btn').addEventListener('click', () => {
+                const popupData = {
+                    opportunite: [{ id: opportunite.id, value: opportunite.NomClient }],
+                    contact: opportunite.Contacts || [],
+                    assigne: opportunite.T1_user || [],
+                    statut: { id: 3039, value: 'Creation' }
+                };
+                gceShowModal(popupData, "taches", "ecriture");
+            });
 
-            container.innerHTML = '';
+            // --- Sous-table Tabulator pour les tâches ---
+            const tableDiv = container.querySelector('.sub-table-container');
+            const tachesSchema = window.gceSchemas.taches;
+            
+            // On garde les colonnes de base
+            const colonnesVisibles = ['titre', 'statut', 'priorite', 'date_echeance'];
+            const tachesColumns = getTabulatorColumnsFromSchema(tachesSchema, 'taches')
+                .filter(col => colonnesVisibles.includes(col.field));
 
-            if (myOpps.length === 0) {
-                container.innerHTML = '<p>Aucune opportunité assignée pour l’instant.</p>';
-                return;
-            }
-
-            const tableEl = document.createElement('div');
-            tableEl.className = 'gce-tabulator';
-            container.appendChild(tableEl);
-
-            const cols = getTabulatorColumnsFromSchema(oppSchema, 'opportunites');
-            cols.unshift({
-                title: "✅ Accepter",
-                formatter: "buttonTick",
+            // --- NOUVELLE COLONNE D'ACTIONS ---
+            tachesColumns.unshift({ // unshift() pour l'ajouter au début
+                title: "Actions",
+                headerSort: false,
                 width: 100,
                 hozAlign: "center",
-                headerSort: false,
-                cellClick: function (e, cell) {
+                formatter: (cell) => {
                     const rowData = cell.getRow().getData();
-                    const current = (rowData.Status?.value || rowData.Status?.name || '').toLowerCase();
+                    const statut = (rowData.statut?.value || '').toLowerCase();
 
-                    if (current !== "assigner") {
-                        alert(`Ce dossier est actuellement en "${rowData.Status?.value}" et ne peut pas être accepté.`);
-                        return;
+                    if (statut === 'creation') {
+                        return `<button class="button button-small gce-task-action-btn" data-action="accept">✅ Accepter</button>`;
                     }
-
-
-                    // Trouver le field ID correspondant à "Status"
-                    const statusField = oppSchema.find(f => f.name === "Status");
-                    if (!statusField || statusField.type !== 'single_select') {
-                        alert("Champ 'Status' introuvable ou mal configuré.");
-                        return;
+                    if (statut === 'en_cours') {
+                        return `<button class="button button-small gce-task-action-btn" data-action="complete">🏁 Terminer</button>`;
                     }
+                    return ""; // Pas de bouton pour les autres statuts (ex: Terminer)
+                },
+                cellClick: async (e, cell) => {
+                    const actionBtn = e.target.closest('.gce-task-action-btn');
+                    if (!actionBtn) return;
 
-                    // Trouver l'option "En traitement"
-                    const option = statusField.select_options.find(opt =>
-                        (opt.value || opt.name || '').toLowerCase() === "traitement"
-                    );
+                    const action = actionBtn.dataset.action;
+                    const rowData = cell.getRow().getData();
+                    actionBtn.disabled = true;
+                    actionBtn.textContent = '...';
 
-                    if (!option) {
-                        alert("Option 'Traitement' non trouvée dans les statuts.");
-                        return;
+                    if (action === 'accept') {
+                        try {
+                            const res = await fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/proxy/start-task', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce },
+                                body: JSON.stringify(rowData)
+                            });
+                            if (!res.ok) throw new Error('Échec de la requête.');
+                            
+                            // Mettre à jour l'UI localement
+                            const statutEnCours = tachesSchema.find(f=>f.name==='statut').select_options.find(o=>o.value==='En_cours');
+                            cell.getRow().update({ statut: statutEnCours });
+                            showStatusUpdate('Tâche acceptée !', true);
+
+                        } catch (err) {
+                            showStatusUpdate('Erreur lors de l’acceptation.', false);
+                            actionBtn.disabled = false;
+                            actionBtn.textContent = '✅ Accepter';
+                        }
+                    } else if (action === 'complete') {
+                        try {
+                            const statutTerminer = tachesSchema.find(f=>f.name==='statut').select_options.find(o=>o.value==='Terminer');
+                            const payload = {
+                                [`field_${tachesSchema.find(f=>f.name==='statut').id}`]: statutTerminer.id,
+                                [`field_${tachesSchema.find(f=>f.name==='terminer').id}`]: true
+                            };
+
+                            const res = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/taches/${rowData.id}`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce },
+                                body: JSON.stringify(payload)
+                            });
+                            if (!res.ok) throw new Error('Échec de la requête.');
+                            
+                            // Mettre à jour l'UI localement
+                            cell.getRow().update({ statut: statutTerminer, terminer: true });
+                            showStatusUpdate('Tâche terminée !', true);
+
+                        } catch (err) {
+                            showStatusUpdate('Erreur lors de la finalisation.', false);
+                            actionBtn.disabled = false;
+                            actionBtn.textContent = '🏁 Terminer';
+                        }
                     }
-
-                    const payload = {};
-                    payload["field_" + statusField.id] = option.id;
-
-                    fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/opportunites/${rowData.id}`, {
-                        method: 'PATCH',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-WP-Nonce': EECIE_CRM.nonce
-                        },
-                        body: JSON.stringify(payload)
-                    })
-                        .then(res => res.json())
-                        .then(updated => {
-                            cell.getRow().update({ Status: option }); // mise à jour UI locale
-                            alert("✅ Opportunité passée en traitement.");
-                        })
-                        .catch(err => {
-                            console.error("Erreur mise à jour :", err);
-                            alert("Erreur lors de la mise à jour.");
-                        });
                 }
             });
+            new Tabulator(tableDiv, { data: opportunite._children || [], layout: "fitColumns", columns: tachesColumns, placeholder: "Aucune tâche associée." });
+            
+            return container;
+        }
+    };
+    /**
+     * Vérifie si l'URL contient un paramètre pour ouvrir un modal au chargement.
+     * CETTE FONCTION EST MAINTENANT APPELÉE AU BON MOMENT.
+     */
+    function handleAutoOpenFromUrl() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const oppIdToOpen = urlParams.get('open-opp-id');
 
-            new Tabulator(tableEl, {
-                data: myOpps,
-                layout: "fitColumns",
-                responsiveLayout: "collapse", // <- active le mode responsive natif
-                responsiveLayoutCollapseStartOpen: false,
-                columns: cols,
-                reactiveData: false,
-                height: "auto",
-            });
-        })
-        .catch(err => {
-            container.innerHTML = '<p>Erreur de chargement : ' + err.message + '</p>';
+        if (oppIdToOpen) {
+            const oppIdInt = parseInt(oppIdToOpen, 10);
+            console.log(`[AutoOpen] Tentative d'ouverture du modal pour l'opportunité #${oppIdInt}`);
+
+            const opportuniteData = gce.viewManager.dataStore.find(opp => opp.id === oppIdInt);
+            
+            if (opportuniteData) {
+                console.log(`[AutoOpen] Opportunité trouvée. Ouverture du modal.`);
+                gce.showDetailModal(opportuniteData, opportunitesViewConfig.detailRenderer);
+            } else {
+                console.warn(`[AutoOpen] Opportunité #${oppIdInt} non trouvée dans les données de l'utilisateur.`);
+                alert(`L'opportunité #${oppIdInt} n'a pas pu être trouvée ou ne vous est pas assignée.`);
+            }
+        }
+    }
+    // 2. Chargement de toutes les données nécessaires
+    Promise.all([
+        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/opportunites', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
+        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/taches', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
+        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/opportunites/schema', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
+        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/taches/schema', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json())
+    ]).then(([oppData, tachesData, oppSchema, tachesSchema]) => {
+        
+        window.gceSchemas = { ...window.gceSchemas, "opportunites": oppSchema, "taches": tachesSchema };
+        
+        // La liste est déjà filtrée par l'API ! Plus besoin de filtrer ici.
+        const myOpps = oppData.results || [];
+
+        // Le reste du code pour grouper les tâches reste identique
+        const tachesByOppId = {};
+        (tachesData || []).forEach(tache => {
+            const oppLink = tache.opportunite?.[0];
+            if (oppLink) {
+                if (!tachesByOppId[oppLink.id]) tachesByOppId[oppLink.id] = [];
+                tachesByOppId[oppLink.id].push(tache);
+            }
         });
+        const myOppsWithChildren = myOpps.map(opp => ({ ...opp, _children: tachesByOppId[opp.id] || [] }));
+
+        gce.viewManager.initialize(mainContainer, myOppsWithChildren, opportunitesViewConfig);
+         handleAutoOpenFromUrl();
+    }).catch(err => {
+        mainContainer.innerHTML = `<p style="color:red;">Erreur de chargement : ${err.message}</p>`;
+        console.error(err);
+    });
+
+    // --- NOUVEAU GESTIONNAIRE D'ÉVÉNEMENTS POUR LE BOUTON "ACCEPTER" ---
+mainContainer.addEventListener('click', async (e) => {
+        const acceptBtn = e.target.closest('[data-action="accept"]');
+        if (!acceptBtn) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const oppId = acceptBtn.dataset.id;
+        acceptBtn.disabled = true;
+        acceptBtn.textContent = '...';
+
+        const oppSchema = window.gceSchemas.opportunites;
+        const statusField = oppSchema.find(f => f.name === "Status");
+        const traitementOption = statusField?.select_options.find(opt => opt.value === "Traitement");
+
+        if (!traitementOption) {
+            alert("Erreur: L'option de statut 'Traitement' est introuvable.");
+            acceptBtn.disabled = false;
+            acceptBtn.textContent = '✅ Accepter le dossier';
+            return;
+        }
+
+        const payload = { [`field_${statusField.id}`]: traitementOption.id };
+
+        try {
+            // 1. Déclencher le workflow en mettant à jour le statut
+            const initialRes = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/opportunites/${oppId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce },
+                body: JSON.stringify(payload)
+            });
+
+            if (!initialRes.ok) throw new Error('Le déclenchement du workflow a échoué.');
+
+            showStatusUpdate('Dossier accepté, synchronisation des données...', true);
+
+            // 2. Attendre 2 secondes pour laisser le temps à N8N de s'exécuter
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            // 3. Récupérer les données fraîches en parallèle pour plus d'efficacité
+            const [updatedOppRes, tachesRes] = await Promise.all([
+                fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/row/opportunites/${oppId}`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }),
+                fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/taches', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } })
+            ]);
+
+            if (!updatedOppRes.ok || !tachesRes.ok) throw new Error("Échec de la récupération des données mises à jour.");
+
+            const updatedOppData = await updatedOppRes.json();
+            const allTachesData = await tachesRes.json();
+            const oppIdInt = parseInt(oppId, 10);
+            
+            // 4. Reconstruire l'objet complet avec les nouvelles tâches
+            // Note: l'endpoint /taches renvoie directement un tableau, pas un objet {results:[]}
+            updatedOppData._children = (allTachesData || []).filter(tache =>
+                tache.opportunite?.[0]?.id === oppIdInt
+            );
+
+            // 5. Mettre à jour la carte avec les données 100% à jour
+            gce.viewManager.updateItem(oppIdInt, updatedOppData);
+            showStatusUpdate('Synchronisation terminée !', true);
+
+        } catch (err) {
+            console.error("Erreur lors du processus d'acceptation :", err);
+            showStatusUpdate("Une erreur est survenue. L'interface peut être désynchronisée.", false);
+            // On ne réactive pas le bouton pour éviter les doubles clics sur une erreur
+            acceptBtn.textContent = 'Erreur';
+        }
+    });
 });
+
