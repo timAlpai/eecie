@@ -2126,6 +2126,48 @@
                     wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
             },
         ]);
+
+        // NOUVELLE ROUTE : GET /devis/{id}/articles -> Récupère les articles pour un devis spécifique
+        register_rest_route('eecie-crm/v1', '/devis/(?P<id>\d+)/articles', [
+            'methods'  => 'GET',
+            'callback' => function (WP_REST_Request $request) {
+                $devis_id = (int) $request['id'];
+
+                $articles_table_id = get_option('gce_baserow_table_articles_devis') ?: eecie_crm_guess_table_id('Articles_devis');
+                if (!$articles_table_id) {
+                    return new WP_Error('no_articles_table', 'Table Articles_devis introuvable.', ['status' => 500]);
+                }
+
+                // Pour filtrer, nous devons trouver l'ID du champ "Devis" dans la table "Articles_devis"
+                $articles_fields = eecie_crm_baserow_get_fields($articles_table_id);
+                if (is_wp_error($articles_fields)) {
+                    return $articles_fields;
+                }
+
+                $devis_link_field = array_values(array_filter($articles_fields, function ($field) {
+                    return $field['name'] === 'Devis';
+                }))[0] ?? null;
+
+                if (!$devis_link_field) {
+                    return new WP_Error('no_link_field', 'Champ de liaison "Devis" introuvable dans la table des articles.', ['status' => 500]);
+                }
+                
+                $devis_link_field_id = $devis_link_field['id'];
+
+                // On construit la requête avec un filtre qui dit : "où le champ_Devis contient l'ID du devis"
+                $params = [
+                    'user_field_names' => 'true',
+                    // C'est le filtre magique : filter__field_{ID_DU_CHAMP}__link_row_has={ID_DE_LA_LIGNE_RECHERCHÉE}
+                    'filter__field_' . $devis_link_field_id . '__link_row_has' => $devis_id,
+                ];
+
+                // On utilise la fonction de pagination au cas où un devis aurait plus de 100 articles
+                $related_articles = eecie_crm_baserow_get_all_paginated_results("rows/table/$articles_table_id/", $params);
+
+                return rest_ensure_response($related_articles);
+            },
+            'permission_callback' => 'eecie_crm_check_capabilities',
+        ]);
     }); //fin api init
 
 
@@ -2214,14 +2256,7 @@
             'filter__field_' . $assigne_field['id'] . '__link_row_has' => $t1_user_object['Name'],
         ];
 
-        // --- LA NOUVELLE LOGIQUE DE FILTRE EST ICI ---
-        // On s'assure que le champ Status a bien été trouvé
-        if ($status_field) {
-            // On utilise un filtre qui vérifie si la valeur TEXTUELLE du champ "Status"
-            // ne contient PAS la chaîne "Refus". C'est plus robuste.
-            $params['filter__field_' . $status_field['id'] . '__contains_not'] = 'Refus';
-        }
-        // --- FIN DE LA NOUVELLE LOGIQUE ---
+       
         // 4. Appeler la fonction qui gère la pagination et retourner les résultats
         $path = "rows/table/$table_id/";
         $my_opportunites = eecie_crm_baserow_get_all_paginated_results($path, $params);
@@ -2619,44 +2654,3 @@
 
         return rest_ensure_response($result_appels);
     }
-// NOUVELLE ROUTE : GET /devis/{id}/articles -> Récupère les articles pour un devis spécifique
-        register_rest_route('eecie-crm/v1', '/devis/(?P<id>\d+)/articles', [
-            'methods'  => 'GET',
-            'callback' => function (WP_REST_Request $request) {
-                $devis_id = (int) $request['id'];
-
-                $articles_table_id = get_option('gce_baserow_table_articles_devis') ?: eecie_crm_guess_table_id('Articles_devis');
-                if (!$articles_table_id) {
-                    return new WP_Error('no_articles_table', 'Table Articles_devis introuvable.', ['status' => 500]);
-                }
-
-                // Pour filtrer, nous devons trouver l'ID du champ "Devis" dans la table "Articles_devis"
-                $articles_fields = eecie_crm_baserow_get_fields($articles_table_id);
-                if (is_wp_error($articles_fields)) {
-                    return $articles_fields;
-                }
-
-                $devis_link_field = array_values(array_filter($articles_fields, function ($field) {
-                    return $field['name'] === 'Devis';
-                }))[0] ?? null;
-
-                if (!$devis_link_field) {
-                    return new WP_Error('no_link_field', 'Champ de liaison "Devis" introuvable dans la table des articles.', ['status' => 500]);
-                }
-                
-                $devis_link_field_id = $devis_link_field['id'];
-
-                // On construit la requête avec un filtre qui dit : "où le champ_Devis contient l'ID du devis"
-                $params = [
-                    'user_field_names' => 'true',
-                    // C'est le filtre magique : filter__field_{ID_DU_CHAMP}__link_row_has={ID_DE_LA_LIGNE_RECHERCHÉE}
-                    'filter__field_' . $devis_link_field_id . '__link_row_has' => $devis_id,
-                ];
-
-                // On utilise la fonction de pagination au cas où un devis aurait plus de 100 articles
-                $related_articles = eecie_crm_baserow_get_all_paginated_results("rows/table/$articles_table_id/", $params);
-
-                return rest_ensure_response($related_articles);
-            },
-            'permission_callback' => 'eecie_crm_check_capabilities',
-        ]);

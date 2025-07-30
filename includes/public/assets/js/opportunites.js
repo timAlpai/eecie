@@ -258,7 +258,7 @@ if (filterContainer) {
 
         allCards.forEach(card => {
             const cardStatus = card.dataset.status;
-            if (selectedStatuses.length === 0 || selectedStatuses.includes(cardStatus)) {
+             if (selectedStatuses.includes(cardStatus)) {
                 card.style.display = '';
             } else {
                 card.style.display = 'none';
@@ -267,7 +267,7 @@ if (filterContainer) {
     };
     
     filterContainer.addEventListener('change', applyFilters);
-
+     applyFilters();
     // --- DÉBUT DE L'AJOUT POUR LES BOUTONS D'ACTION ---
     const selectAllBtn = document.getElementById('gce-filter-select-all');
     const clearAllBtn = document.getElementById('gce-filter-clear-all');
@@ -289,9 +289,9 @@ if (filterContainer) {
             filterContainer.dispatchEvent(new Event('change'));
         });
     }
-    // --- FIN DE L'AJOUT POUR LES BOUTONS D'ACTION ---
+  
 }
-        // --- FIN DE LA LOGIQUE DE FILTRAGE AJOUTÉE ---
+        
 
     }).catch(err => {
         mainContainer.innerHTML = `<p style="color:red;">Erreur de chargement : ${err.message}</p>`;
