@@ -15,7 +15,8 @@ $known_usages = [
     'T1_user'       => 'utilisateurs',
     'Articles_devis' => 'articles_devis',
     'Rappels'       => 'rappels',
-    'Input_mail_history' => 'input_mail_history'
+    'Input_mail_history' => 'input_mail_history',
+    'Log_reset_opportunite' => 'log_reset_opportunite',
 ];
 
 $api_key = get_option('gce_baserow_api_key', '');

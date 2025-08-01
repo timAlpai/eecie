@@ -2168,6 +2168,137 @@
             },
             'permission_callback' => 'eecie_crm_check_capabilities',
         ]);
+
+        register_rest_route('eecie-crm/v1', '/opportunites/(?P<id>\d+)/reset', [
+    'methods'  => 'POST',
+    'callback' => function (WP_REST_Request $request) {
+        $opp_id = (int)$request['id'];
+
+         // 1. Identifier l'utilisateur qui effectue l'action
+        $current_wp_user = wp_get_current_user();
+        $baserow_user = gce_get_baserow_t1_user_by_email($current_wp_user->user_email);
+        $current_baserow_user_id = $baserow_user ? $baserow_user['id'] : null;
+
+        // 2. Préparer la fonction de journalisation (comme avant, mais enrichie)
+        $log_table_id = get_option('gce_baserow_table_log_reset_opportunite') ?: eecie_crm_guess_table_id('Log_reset_opportunite');
+        if (!$log_table_id) {
+            return new WP_Error('no_log_table', 'La table de logs pour le reset n\'est pas configurée.', ['status' => 500]);
+        }
+        
+        $log_schema = eecie_crm_baserow_get_fields($log_table_id);
+        if (is_wp_error($log_schema)) {
+             return new WP_Error('log_schema_error', 'Impossible de lire la structure de la table de logs.', ['status' => 500]);
+        }
+
+        $log_field_map = [];
+        foreach ($log_schema as $field) {
+            $log_field_map[$field['name']] = 'field_' . $field['id'];
+        }
+
+        // Vérification plus complète des champs de log
+        $required_log_fields = ['Date', 'Opportunite_liee', 'Element_efface', 'Details', 'Nom_element_efface', 'ID_element_efface', 'Utilisateur_action'];
+        foreach ($required_log_fields as $field_name) {
+            if (!isset($log_field_map[$field_name])) {
+                 return new WP_Error('log_schema_incomplete', "Le champ '{$field_name}' est manquant dans la table de log.", ['status' => 500]);
+            }
+        }
+
+        $log_action = function ($item_type, $item_data) use ($log_table_id, $opp_id, $log_field_map, $current_baserow_user_id) {
+            // Extraire un nom/titre lisible de l'objet supprimé
+            $item_name = $item_data['Nom'] ?? $item_data['Name'] ?? $item_data['titre'] ?? 'Élément sans nom';
+            
+            $log_payload = [
+                $log_field_map['Date'] => gmdate('Y-m-d\TH:i:s\Z'),
+                $log_field_map['Opportunite_liee'] => [$opp_id],
+                $log_field_map['Element_efface'] => $item_type,
+                $log_field_map['Details'] => json_encode($item_data, JSON_PRETTY_PRINT),
+                // On remplit les nouvelles colonnes !
+                $log_field_map['Nom_element_efface'] => (string)$item_name,
+                $log_field_map['ID_element_efface'] => (int)$item_data['id'],
+                $log_field_map['Utilisateur_action'] => $current_baserow_user_id ? [$current_baserow_user_id] : [],
+            ];
+            eecie_crm_baserow_post("rows/table/{$log_table_id}/", $log_payload);
+        };
+        // 1. Récupérer l'opportunité complète pour trouver les éléments liés
+        $opportunite = eecie_crm_get_row_by_slug_and_id('opportunites', $opp_id);
+        if (is_wp_error($opportunite)) {
+            return $opportunite;
+        }
+
+        // 2. Supprimer les éléments liés et les journaliser (cette partie reste inchangée)
+        
+        // Supprimer les Devis (et leurs articles)
+        if (!empty($opportunite['Devis']) && is_array($opportunite['Devis'])) {
+            foreach ($opportunite['Devis'] as $devis_link) {
+                $devis_details = eecie_crm_get_row_by_slug_and_id('devis', $devis_link['id']);
+                if (!is_wp_error($devis_details)) {
+                    if (!empty($devis_details['Articles_devis']) && is_array($devis_details['Articles_devis'])) {
+                        foreach ($devis_details['Articles_devis'] as $article_link) {
+                            $article_details = eecie_crm_get_row_by_slug_and_id('articles_devis', $article_link['id']);
+                            eecie_crm_baserow_delete("rows/table/" . (get_option('gce_baserow_table_articles_devis') ?: eecie_crm_guess_table_id('Articles_devis')) . "/" . $article_link['id'] . "/");
+                            $log_action('Article Devis', $article_details);
+                        }
+                    }
+                    eecie_crm_baserow_delete("rows/table/" . (get_option('gce_baserow_table_devis') ?: eecie_crm_guess_table_id('Devis')) . "/" . $devis_link['id'] . "/");
+                    $log_action('Devis', $devis_details);
+                }
+            }
+        }
+
+        // Supprimer Taches, Appels, Interactions
+        $relations_to_delete = ['Taches' => 'taches', 'Appels' => 'appels', 'Interactions' => 'interactions'];
+        foreach ($relations_to_delete as $baserow_field_name => $slug) {
+            if (!empty($opportunite[$baserow_field_name]) && is_array($opportunite[$baserow_field_name])) {
+                $table_id_to_delete_from = get_option('gce_baserow_table_' . $slug) ?: eecie_crm_guess_table_id(ucfirst($slug));
+                if($table_id_to_delete_from) {
+                    foreach ($opportunite[$baserow_field_name] as $item_link) {
+                        $item_details = eecie_crm_get_row_by_slug_and_id($slug, $item_link['id']);
+                        eecie_crm_baserow_delete("rows/table/{$table_id_to_delete_from}/{$item_link['id']}/");
+                        $log_action($baserow_field_name, $item_details);
+                    }
+                }
+            }
+        }
+
+        // 3. Mettre à jour l'opportunité elle-même (cette partie reste inchangée)
+        $opp_table_id = get_option('gce_baserow_table_opportunites') ?: eecie_crm_guess_table_id('Task_input');
+        $opp_schema = eecie_crm_baserow_get_fields($opp_table_id);
+
+        $status_field = array_values(array_filter($opp_schema, fn($f) => $f['name'] === 'Status'))[0] ?? null;
+        $assigner_option = $status_field ? array_values(array_filter($status_field['select_options'], fn($o) => $o['value'] === 'Assigner'))[0] ?? null : null;
+        $reset_count_field = array_values(array_filter($opp_schema, fn($f) => $f['name'] === 'Reset_count'))[0] ?? null;
+
+        if (!$status_field || !$assigner_option || !$reset_count_field) {
+            return new WP_Error('schema_error', 'Impossible de trouver les champs Status ou Reset_count.', ['status' => 500]);
+        }
+
+        $current_reset_count = (int)($opportunite['Reset_count'] ?? 0);
+
+        // On utilise la même méthode (field_ID) pour être cohérent
+        $update_payload = [
+            'field_' . $status_field['id'] => $assigner_option['id'],
+            'field_' . $reset_count_field['id'] => $current_reset_count + 1,
+        ];
+        
+        $baseUrl = rtrim(get_option('gce_baserow_url'), '/');
+        $token = get_option('gce_baserow_api_key');
+        $url = "$baseUrl/api/database/rows/table/$opp_table_id/$opp_id/";
+        
+        $response = wp_remote_request($url, [
+            'method' => 'PATCH',
+            'headers' => ['Authorization' => 'Token ' . $token, 'Content-Type'  => 'application/json'],
+            'body' => json_encode($update_payload)
+        ]);
+        
+        if(is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
+            return new WP_Error('update_failed', 'La mise à jour finale de l\'opportunité a échoué.', ['status' => 500]);
+        }
+
+        return rest_ensure_response(['success' => true, 'message' => 'Opportunité réinitialisée avec succès.']);
+    },
+    'permission_callback' => 'eecie_crm_check_capabilities',
+]);
+
     }); //fin api init
 
 

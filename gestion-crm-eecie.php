@@ -44,6 +44,7 @@ function gce_get_table_id_to_slug_map() {
         'Zone_geo'      => 'zone_geo',
         'Rappels'       => 'rappels',
         'Input_mail_history' => "input_mail_history",
+        'Log_reset_opportunite' => 'log_reset_opportunite',
         
     ];
 

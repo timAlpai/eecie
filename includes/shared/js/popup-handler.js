@@ -476,6 +476,22 @@ if (field.type === "date") {
                 if (window.tinymce) tinymce.triggerSave();
                 const standardFormData = new FormData(form);
                 const payload = {};
+                 if (!data.id) { // On est en mode création
+                    for (const key in data) {
+                        const fieldInSchema = schema.find(f => f.name === key);
+                        // Si le champ existe dans le schéma et n'était pas visible dans le formulaire...
+                        if (fieldInSchema && (!visibleFields || !visibleFields.includes(key))) {
+                            const fieldApiId = `field_${fieldInSchema.id}`;
+                            
+                            // On gère spécifiquement les champs de liaison
+                            if(fieldInSchema.type === 'link_row' && Array.isArray(data[key])) {
+                                payload[fieldApiId] = data[key].map(item => item.id);
+                            } else {
+                                payload[fieldApiId] = data[key];
+                            }
+                        }
+                    }
+                }
 
                 for (let field of filteredSchema) {
                     if (field.read_only) continue;

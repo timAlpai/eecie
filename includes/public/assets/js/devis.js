@@ -55,7 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const schema = window.gceSchemas.articles_devis;
                 const champDevis = schema.find(f => f.name === "Devis");
                 const popupData = champDevis ? { "Devis": [{ id: devis.id, value: `Devis #${devis.DevisId}` }] } : {};
-                gceShowModal(popupData, "articles_devis", "ecriture", ["Nom", "Quantités", "Prix_unitaire", "Devis"]);
+                gceShowModal(popupData, "articles_devis", "ecriture", ["Nom", "Quantités", "Prix_unitaire"]);
             };
             const editDevisBtn = document.createElement('button');
             editDevisBtn.className = 'button button-secondary gce-popup-link';
