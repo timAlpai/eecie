@@ -557,21 +557,36 @@ if (field.type === "date") {
                 // ===================================================================
                 
                 // Si on vient de modifier un article de devis...
-                 if (tableName === 'articles_devis' && typeof refreshDevisData === 'function') {
-                    const devisParent = responseData.Devis?.[0] || data.Devis?.[0];
-                    if (devisParent && devisParent.id) {
-                        console.log(`[Popup] Article modifié. Rafraîchissement du devis parent #${devisParent.id}`);
-                        refreshDevisData(devisParent.id); // Appel AJAX
-                    } else {
-                        location.reload(); // Fallback si on ne trouve pas le parent
+               // On vérifie si un modal d'opportunité est actuellement ouvert en arrière-plan
+                const opportuniteModal = document.querySelector('.gce-detail-modal[data-item-id]');
+
+                // Si le modal d'opportunité est ouvert ET que le viewManager existe...
+                if (opportuniteModal && gce.viewManager) {
+                    // On récupère l'ID de l'opportunité depuis le modal
+                    const oppId = parseInt(opportuniteModal.dataset.itemId, 10);
+                    console.log(`[Popup] Modification détectée. Rafraîchissement du modal d'opportunité #${oppId}`);
+
+                    try {
+                        // On recharge les données complètes de l'opportunité pour avoir une vue 100% à jour
+                        const oppRes = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/row/opportunites/${oppId}`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } });
+                        if(oppRes.ok) {
+                            const updatedOppData = await oppRes.json();
+                            // On utilise la fonction du viewManager pour fermer et rouvrir le modal avec les nouvelles données
+                            gce.viewManager.updateDetailModalIfOpen(oppId, updatedOppData);
+                            showStatusUpdate('Vue mise à jour !', true);
+                        } else {
+                            // En cas d'échec du rechargement des données, on se rabat sur un rechargement de page complet
+                            throw new Error("Failed to refresh opportunity data.");
+                        }
+                    } catch (refreshError) {
+                         console.error("Erreur lors du rafraîchissement du modal:", refreshError);
+                         location.reload(); // Fallback
                     }
-                } else if (tableName === 'interactions' && typeof refreshAppelData === 'function') {
-                    // Logique similaire pour les appels si nécessaire un jour
+                } else {
+                    // Comportement par défaut : si on n'est pas dans un modal d'opportunité (ex: page Tâches), on recharge la page.
                     location.reload();
                 }
-                else {
-                    location.reload(); // Comportement par défaut pour les autres tables
-                }
+                // --- FIN DE LA NOUVELLE LOGIQUE ---
                 // ===================================================================
                 // ==                   FIN DE LA CORRECTION                      ==
                 // ===================================================================
