@@ -45,6 +45,7 @@ function gce_get_table_id_to_slug_map() {
         'Rappels'       => 'rappels',
         'Input_mail_history' => "input_mail_history",
         'Log_reset_opportunite' => 'log_reset_opportunite',
+        'Devis_Signatures' => 'devis_signatures',
         
     ];
 

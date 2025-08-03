@@ -1,4 +1,5 @@
  <?php
+
     defined('ABSPATH') || exit;
 
     require_once __DIR__ . '/baserow-proxy.php';
@@ -2300,6 +2301,12 @@
             },
             'permission_callback' => 'eecie_crm_check_capabilities',
         ]);
+        register_rest_route('eecie-crm/v1', '/devis/accept', [
+            'methods'  => 'GET',
+            'callback' => 'gce_handle_devis_acceptance',
+            'permission_callback' => '__return_true', // Important: doit être accessible publiquement
+        ]);
+
 
         register_rest_route('eecie-crm/v1', '/opportunites/(?P<id>\d+)/reset', [
             'methods'  => 'POST',
@@ -2409,11 +2416,59 @@
 
                 if (!$status_field || !$assigner_option || !$reset_count_field) return new WP_Error('schema_error', 'Impossible de trouver les champs Status ou Reset_count.', ['status' => 500]);
 
+
+                // --- PARTIE 3 : MISE À JOUR DE L'OPPORTUNITÉ (CORRIGÉE) ---
+                $opp_table_id = get_option('gce_baserow_table_opportunites') ?: eecie_crm_guess_table_id('Task_input');
+                $opp_schema = eecie_crm_baserow_get_fields($opp_table_id);
+
+                // Helper pour trouver un champ par son nom
+                $find_field_id = function ($name) use ($opp_schema) {
+                    foreach ($opp_schema as $field) {
+                        if ($field['name'] === $name) {
+                            return $field['id'];
+                        }
+                    }
+                    return null;
+                };
+
+                $status_field_id = $find_field_id('Status');
+                $reset_count_field_id = $find_field_id('Reset_count');
+                $progression_field_id = $find_field_id('Progression');
+                $devis_sent_field_id = $find_field_id('Devis_sent_client');
+                $devis_sent_id_field_id = $find_field_id('DevisSentInteractionId');
+                $dernier_status_field_id = $find_field_id('Dernier_status_ok');
+
+                $assigner_option_id = null;
+                $status_field_data = array_values(array_filter($opp_schema, fn($f) => $f['name'] === 'Status'))[0] ?? null;
+                if ($status_field_data) {
+                    $assigner_option = array_values(array_filter($status_field_data['select_options'], fn($o) => $o['value'] === 'Assigner'))[0] ?? null;
+                    if ($assigner_option) {
+                        $assigner_option_id = $assigner_option['id'];
+                    }
+                }
+
+                if (!$status_field_id || !$assigner_option_id || !$reset_count_field_id) {
+                    return new WP_Error('schema_error', 'Impossible de trouver les champs requis (Status, Reset_count) pour la mise à jour finale.', ['status' => 500]);
+                }
+
                 $current_reset_count = (int)($opportunite['Reset_count'] ?? 0);
                 $update_payload = [
-                    'field_' . $status_field['id'] => $assigner_option['id'],
-                    'field_' . $reset_count_field['id'] => $current_reset_count + 1,
+                    'field_' . $status_field_id => $assigner_option_id,
+                    'field_' . $reset_count_field_id => $current_reset_count + 1,
+
+                    // --- CHAMPS AJOUTÉS POUR LA RÉINITIALISATION COMPLÈTE ---
+                    'field_' . $progression_field_id => 0,
+                    'field_' . $devis_sent_field_id => false,
+                    'field_' . $devis_sent_id_field_id => null,
+                    'field_' . $dernier_status_field_id => null,
                 ];
+
+                // On s'assure de ne pas envoyer de clés pour des champs qui n'ont pas été trouvés
+                $update_payload = array_filter($update_payload, function ($key) {
+                    // La clé est 'field_XXXX'. On extrait XXXX.
+                    $field_id = substr($key, 6);
+                    return !empty($field_id);
+                }, ARRAY_FILTER_USE_KEY);
                 $baseUrl = rtrim(get_option('gce_baserow_url'), '/');
                 $token = get_option('gce_baserow_api_key');
                 $url = "$baseUrl/api/database/rows/table/$opp_table_id/$opp_id/";
@@ -2914,4 +2969,150 @@
         }
 
         return rest_ensure_response($result_appels);
+    }
+    // Fichier : includes/api/rest-routes.php
+
+    function gce_handle_devis_acceptance(WP_REST_Request $request)
+    {
+        // --- DÉBUT DES LOGS ---
+        error_log("====== NOUVELLE TENTATIVE D'ACCEPTATION DE DEVIS ======");
+
+        // 1. Logger les paramètres bruts reçus de l'URL
+        $devis_id_raw = $request->get_param('devis_id');
+        $token_raw = $request->get_param('token');
+        error_log("[LOG 1] Paramètres reçus : devis_id = '{$devis_id_raw}', token = '{$token_raw}'");
+
+        // 2. Nettoyer et valider les paramètres
+        $devis_id = (int) $devis_id_raw;
+        $token = sanitize_text_field($token_raw);
+
+        $confirmation_page_url = home_url('/devis-confirmation');
+
+        // 3. Première validation (la plus probable source de l'erreur)
+        if (empty($devis_id) || empty($token) || strlen($token) !== 64) {
+            error_log("[ERREUR A] Validation initiale échouée. devis_id: {$devis_id}, token_length: " . strlen($token));
+            wp_redirect(add_query_arg(['status' => 'error', 'message' => 'invalid_link'], $confirmation_page_url));
+            exit;
+        }
+        error_log("[LOG 2] Validation initiale réussie. devis_id = {$devis_id}");
+
+        // 4. Récupérer les détails du devis depuis Baserow
+        $devis_table_id = get_option('gce_baserow_table_devis');
+        if (empty($devis_table_id)) {
+            error_log("[ERREUR B] L'ID de la table Devis n'est pas configuré dans WordPress.");
+            wp_redirect(add_query_arg(['status' => 'error', 'message' => 'config_error'], $confirmation_page_url));
+            exit;
+        }
+        error_log("[LOG 3] Tentative de récupération du devis #{$devis_id} depuis la table #{$devis_table_id}");
+
+        $devis_data = eecie_crm_baserow_get("rows/table/{$devis_table_id}/{$devis_id}/?user_field_names=true");
+
+        if (is_wp_error($devis_data)) {
+            error_log("[ERREUR C] WP_Error lors de la récupération du devis : " . $devis_data->get_error_message());
+            wp_redirect(add_query_arg(['status' => 'error', 'message' => 'devis_not_found'], $confirmation_page_url));
+            exit;
+        }
+        if (!isset($devis_data['Acceptation_Token'])) {
+            error_log("[ERREUR D] Devis trouvé, mais le champ 'Acceptation_Token' est manquant dans les données Baserow.");
+            wp_redirect(add_query_arg(['status' => 'error', 'message' => 'devis_not_found'], $confirmation_page_url));
+            exit;
+        }
+        error_log("[LOG 4] Devis récupéré avec succès. Token attendu : '" . $devis_data['Acceptation_Token'] . "'");
+
+        // 5. Validation cruciale du token
+        if ($devis_data['Acceptation_Token'] !== $token) {
+            error_log("[ERREUR E] Incompatibilité des tokens. Reçu: '{$token}', Attendu: '" . $devis_data['Acceptation_Token'] . "'");
+            wp_redirect(add_query_arg(['status' => 'error', 'message' => 'token_mismatch'], $confirmation_page_url));
+            exit;
+        }
+        error_log("[LOG 5] Validation du token réussie !");
+
+        // 6. Vérifier si le devis n'est pas déjà accepté
+        if ($devis_data['Status']['value'] === 'accepter') {
+            error_log("[LOG 6] Le devis est déjà marqué comme accepté. Redirection.");
+            wp_redirect(add_query_arg('status', 'already_accepted', $confirmation_page_url));
+            exit;
+        }
+
+        // Si nous arrivons ici, toutes les validations sont OK.
+        error_log("[LOG 7] Toutes les validations sont passées. Procédure d'acceptation...");
+
+        // =========================================================================
+        // ==                 DÉBUT DU CODE D'ÉCRITURE COMPLET                  ==
+        // =========================================================================
+
+        // A) Récupérer les IDs de table depuis les options
+        $signatures_table_id = get_option('gce_baserow_table_devis_signatures');
+        $task_input_table_id = get_option('gce_baserow_table_opportunites');
+
+        error_log("[LOG 7.1] IDs de table récupérés : Signatures={$signatures_table_id}, Opportunités={$task_input_table_id}");
+
+        if (empty($signatures_table_id) || empty($task_input_table_id)) {
+            error_log("[ERREUR F] IDs de table manquants dans la config WP. Signatures='{$signatures_table_id}', Opportunités='{$task_input_table_id}'.");
+            wp_redirect(add_query_arg(['status' => 'error', 'message' => 'config_error'], $confirmation_page_url));
+            exit;
+        }
+
+        // B) Préparer le payload pour la création de la signature
+        $signature_payload = [
+            'Devis' => [$devis_id],
+            'Date_Signature' => current_time('Y-m-d\TH:i:s.u\Z', true),
+            'Adresse_IP' => $_SERVER['REMOTE_ADDR'],
+            'User_Agent' => $_SERVER['HTTP_USER_AGENT'],
+            'Acceptation_Token' => $token
+        ];
+        error_log("[LOG 7.2] Payload de la signature préparé : " . json_encode($signature_payload));
+
+        // C) Appeler l'API pour créer la signature
+        $new_signature = eecie_crm_baserow_post("rows/table/{$signatures_table_id}/?user_field_names=true", $signature_payload);
+
+        if (is_wp_error($new_signature)) {
+            error_log("[ERREUR G] Échec de la création de la signature. Erreur : " . $new_signature->get_error_message() . " | Données : " . json_encode($new_signature->get_error_data()));
+            wp_redirect(add_query_arg(['status' => 'error', 'message' => 'signature_failed'], $confirmation_page_url));
+            exit;
+        }
+        error_log("[LOG 7.3] Signature créée avec succès. ID : " . $new_signature['id']);
+
+        // D) Mettre à jour le statut du devis et le lier à la signature
+        $status_accepter_id = 3013;
+        $devis_update_payload = [
+            'Status' => $status_accepter_id,
+            'Signature_Numerique' => [$new_signature['id']]
+        ];
+        error_log("[LOG 7.4] Payload de mise à jour du devis préparé : " . json_encode($devis_update_payload));
+
+        $devis_update_result = eecie_crm_baserow_patch("rows/table/{$devis_table_id}/{$devis_id}/?user_field_names=true", $devis_update_payload);
+
+        if (is_wp_error($devis_update_result)) {
+            error_log("[ERREUR H] Échec de la mise à jour du devis. Erreur : " . $devis_update_result->get_error_message());
+        } else {
+            error_log("[LOG 7.5] Devis mis à jour avec succès.");
+        }
+
+        // E) Mettre à jour le statut de l'opportunité
+        if (isset($devis_data['Task_input'][0]['id'])) {
+            $opportunite_id = $devis_data['Task_input'][0]['id'];
+            $status_confirmation_id = 3076;
+            $opportunite_update_payload = ['Status' => $status_confirmation_id];
+            error_log("[LOG 7.6] Payload de mise à jour de l'opportunité #{$opportunite_id} préparé : " . json_encode($opportunite_update_payload));
+
+            $opp_update_result = eecie_crm_baserow_patch("rows/table/{$task_input_table_id}/{$opportunite_id}/?user_field_names=true", $opportunite_update_payload);
+
+            if (is_wp_error($opp_update_result)) {
+                error_log("[ERREUR I] Échec de la mise à jour de l'opportunité. Erreur : " . $opp_update_result->get_error_message());
+            } else {
+                error_log("[LOG 7.7] Opportunité mise à jour avec succès.");
+            }
+        } else {
+            error_log("[AVERTISSEMENT J] Aucune opportunité liée au devis trouvée. Impossible de mettre à jour le statut de l'opportunité.");
+        }
+
+        // F) Redirection finale
+        error_log("[LOG 8] Processus terminé. Redirection vers la page de succès.");
+        wp_redirect(add_query_arg('status', 'success', $confirmation_page_url));
+        exit;
+
+        // =========================================================================
+        // ==                  FIN DU CODE D'ÉCRITURE COMPLET                   ==
+        // =========================================================================
     }

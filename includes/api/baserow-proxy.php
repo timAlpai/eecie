@@ -292,3 +292,75 @@ function eecie_crm_baserow_get_all_paginated_results($path, $params = []) {
 
     return $all_results;
 }
+
+// =========================================================================
+// ==                 DÉBUT DU CODE MANQUANT À AJOUTER                    ==
+// =========================================================================
+
+/**
+ * Fonction générique pour les requêtes qui modifient des données (POST, PATCH, DELETE)
+ *
+ * @param string $method La méthode HTTP (POST, PATCH, DELETE).
+ * @param string $path Le chemin de l'API après /api/database/.
+ * @param array $payload Les données à envoyer dans le corps de la requête.
+ * @return array|WP_Error La réponse de l'API ou un objet d'erreur.
+ */
+function eecie_crm_baserow_request($method, $path, $payload = []) {
+    $baseUrl = rtrim(get_option('gce_baserow_url'), '/');
+    $token = get_option('gce_baserow_api_key');
+
+    if (empty($baseUrl) || empty($token)) {
+        return new WP_Error('missing_credentials', 'Les identifiants Baserow ne sont pas configurés.', ['status' => 500]);
+    }
+
+    $url = "$baseUrl/api/database/$path";
+    
+    $args = [
+        'method'  => strtoupper($method),
+        'headers' => [
+            'Authorization' => 'Token ' . sanitize_text_field($token),
+            'Content-Type'  => 'application/json',
+        ],
+        'timeout' => 15,
+    ];
+
+    // On n'ajoute le corps que si le payload n'est pas vide
+    if (!empty($payload)) {
+        $args['body'] = json_encode($payload);
+    }
+
+    $response = wp_remote_request($url, $args);
+
+    if (is_wp_error($response)) {
+        return new WP_Error('baserow_request_error', $response->get_error_message(), ['status' => 502]);
+    }
+
+    $status_code = wp_remote_retrieve_response_code($response);
+    $body = wp_remote_retrieve_body($response);
+    $decoded_body = json_decode($body, true);
+
+    // Baserow retourne 200 ou 201 pour POST/PATCH réussi, et 204 pour DELETE.
+    if ($status_code < 200 || $status_code >= 300) {
+        return new WP_Error(
+            'baserow_api_write_error', 
+            "Erreur d'écriture Baserow (Statut: {$status_code})", 
+            ['status' => $status_code, 'body' => $decoded_body]
+        );
+    }
+
+    return $decoded_body;
+}
+
+
+/**
+ * Raccourci pour effectuer une requête PATCH à Baserow.
+ */
+function eecie_crm_baserow_patch($path, $payload) {
+    return eecie_crm_baserow_request('PATCH', $path, $payload);
+}
+
+
+
+// =========================================================================
+// ==                  FIN DU CODE MANQUANT À AJOUTER                     ==
+// =========================================================================
