@@ -1,4 +1,4 @@
-// FICHIER : includes/public/assets/js/opportunites.js (VERSION FINALE AVEC FILTRES INTÉGRÉS)
+// FICHIER : includes/public/assets/js/opportunites.js (VERSION FINALE, COMPLÈTE ET VÉRIFIÉE)
 
 document.addEventListener('DOMContentLoaded', () => {
     const mainContainer = document.getElementById('gce-opportunites-table');
@@ -14,81 +14,39 @@ document.addEventListener('DOMContentLoaded', () => {
     const opportunitesViewConfig = {
         summaryRenderer: (opportunite) => {
             const card = document.createElement('div');
-            // On ajoute une classe pour le ciblage et une classe spécifique au statut pour le filtrage
             card.className = 'gce-opportunite-card';
-            card.dataset.status = opportunite.Status?.value || 'N/A'; // On stocke le statut ici !
-
+            card.dataset.status = opportunite.Status?.value || 'N/A';
             const statut = opportunite.Status?.value || 'N/A';
-            const statutColor = opportunite.Status?.color || 'gray';
-            const contactName = opportunite.Contacts?.[0]?.value || 'Non spécifié';
-            const ville = opportunite.Ville || 'N/A';
             const progression = parseInt(opportunite.Progression, 10) || 0;
-            let progressLevel = 'low';
-            if (progression > 66) progressLevel = 'high';
-            else if (progression > 33) progressLevel = 'medium';
             const resetCount = opportunite.Reset_count || 0;
-            let resetVisual = '';
-            if (resetCount > 0) {
-                resetVisual = `<span title="${resetCount} réinitialisation(s)" style="font-size: 0.8em; color: #e67e22; margin-left: auto;">🔄 ${resetCount}</span>`;
-            }
-
-            const resetButton = `
-            <button class="gce-card-reset-btn" data-id="${opportunite.id}" title="Réinitialiser le dossier" 
-                    style="background: #e74c3c; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 0.8em;">
-                Reset
-            </button>
-        `   ;
-            let footerContent = '';
-            if (statut.toLowerCase() === 'assigner') {
-                footerContent = `
-                    <button class="gce-card-accept-btn" data-id="${opportunite.id}" data-action="accept">
-                        ✅ Accepter le dossier
-                    </button>
-                `;
-            } else {
-                const nbTaches = opportunite._children?.length || 0;
-                let derniereInteraction = 'Aucune';
-                if (opportunite['Dernière Interaction']) {
-                    derniereInteraction = luxon.DateTime.fromISO(opportunite['Dernière Interaction']).toRelative({ locale: 'fr' });
-                }
-                footerContent = `
-                    <span>📋 ${nbTaches} tâche(s)</span>
-                    <span>🕒 Dern. interaction : ${derniereInteraction}</span>
-                `;
-            }
-
+            let resetVisual = resetCount > 0 ? `<span title="${resetCount} réinitialisation(s)" style="font-size: 0.8em; color: #e67e22; margin-left: auto;">🔄 ${resetCount}</span>` : '';
+            const resetButton = `<button class="gce-card-reset-btn" data-id="${opportunite.id}" title="Réinitialiser le dossier" style="background: #e74c3c; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 0.8em;">Reset</button>`;
+            const taskCount = opportunite['Compte Tache'] || 0;
             card.innerHTML = `
             <div class="gce-opportunite-card-header">
                 <h4>${opportunite.NomClient || 'Opportunité sans nom'}</h4>
                 <div style="display: flex; align-items: center; gap: 10px;">
                     ${resetVisual}
-                    <span class="gce-badge gce-color-${opportunite.Status?.color || 'gray'}">${opportunite.Status?.value || 'N/A'}</span>
+                    <span class="gce-badge gce-color-${opportunite.Status?.color || 'gray'}">${statut}</span>
                 </div>
             </div>
             <div class="gce-opportunite-card-body">
                 <p>👤 <strong>Contact :</strong> ${opportunite.Contacts?.[0]?.value || 'Non spécifié'}</p>
                 <p>📍 <strong>Ville :</strong> ${opportunite.Ville || 'N/A'}</p>
                 <div class="gce-progress-bar-container" style="margin-top: 10px;">
-                    <div class="gce-progress-bar-fill" style="width: ${parseInt(opportunite.Progression, 10) || 0}%;" data-progress-level="high">
-                         ${parseInt(opportunite.Progression, 10) || 0}%
-                    </div>
+                    <div class="gce-progress-bar-fill" style="width: ${progression}%;" data-progress-level="high">${progression}%</div>
                 </div>
             </div>
             <div class="gce-opportunite-card-footer">
-                ${(opportunite.Status?.value || '').toLowerCase() === 'assigner' ? `<button class="gce-card-accept-btn" data-id="${opportunite.id}" data-action="accept">✅ Accepter</button>` : `<span>📋 ${opportunite._children?.length || 0} tâche(s)</span>`}
+                ${statut.toLowerCase() === 'assigner' ? `<button class="gce-card-accept-btn" data-id="${opportunite.id}" data-action="accept">✅ Accepter</button>` : `<span>📋 ${taskCount} tâche(s)</span>`}
                 ${resetButton}
-            </div>
-        `;
+            </div>`;
             return card;
         },
         detailRenderer: (opportunite) => {
-            // ... (cette fonction reste identique à votre version)
             const container = document.createElement('div');
             container.className = 'gce-appel-card';
             const progression = parseInt(opportunite.Progression, 10) || 0;
-            let progressLevel = 'low';
-            if (progression > 66) progressLevel = 'high';
-            else if (progression > 33) progressLevel = 'medium';
             const contactLink = opportunite.Contacts?.[0] ? `<a href="#" class="gce-popup-link" data-table="contacts" data-id="${opportunite.Contacts[0].id}">${opportunite.Contacts[0].value}</a>` : 'Non spécifié';
             const employeLink = opportunite.T1_user?.[0] ? `<a href="#" class="gce-popup-link" data-table="utilisateurs" data-id="${opportunite.T1_user[0].id}">${opportunite.T1_user[0].value}</a>` : 'Non assigné';
             const statutBadge = `<span class="gce-badge gce-color-${opportunite.Status?.color || 'gray'}">${opportunite.Status?.value || 'N/A'}</span>`;
@@ -100,6 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="header-actions" style="display: flex; gap: 10px;">
                         <button class="button button-secondary gce-popup-link" data-table="opportunites" data-id="${opportunite.id}" data-mode="ecriture">✏️ Modifier</button>
                         <button class="button button-primary gce-add-task-btn">➕ Tâche</button>
+                        <button class="button gce-add-interaction-btn" disabled title="Un appel doit exister pour ajouter une interaction.">➕ Interaction</button>
                     </div>
                 </div>
                 <div class="gce-appel-details">
@@ -109,326 +68,358 @@ document.addEventListener('DOMContentLoaded', () => {
                     <p><strong>Statut:</strong> ${statutBadge}</p>
                     <p style="margin-top: 15px;"><strong>Progression :</strong></p>
                     <div class="gce-progress-bar-container">
-                        <div class="gce-progress-bar-fill" style="width: ${progression}%;" data-progress-level="${progressLevel}">
-                            ${progression}%
-                        </div>
+                        <div class="gce-progress-bar-fill" style="width: ${progression}%;">${progression}%</div>
                     </div>
                     <h4 style="margin-top: 20px;">Description des travaux</h4>
                     ${travauxHtml}
                 </div>
                 <div class="gce-appel-interactions-container">
                     <h4>Tâches associées</h4>
-                    <div class="sub-table-container"></div>
+                    <div class="sub-table-container-taches"><p>Chargement...</p></div>
+                </div>
+                <div class="gce-appel-interactions-container">
+                    <h4>Interactions associées</h4>
+                    <div class="sub-table-container-interactions"><p>Chargement...</p></div>
+                </div>
+                <!-- AJOUTER CETTE NOUVELLE DIV -->
+                 <div class="gce-appel-interactions-container">
+                    <h4>Devis associé</h4>
+                    <div class="sub-table-container-devis"><p>Chargement...</p></div>
                 </div>
             `;
 
             container.querySelector('.gce-add-task-btn').addEventListener('click', () => {
-                const popupData = {
-                    opportunite: [{ id: opportunite.id, value: opportunite.NomClient }],
-                    contact: opportunite.Contacts || [],
-                    assigne: opportunite.T1_user || [],
-                    statut: { id: 3039, value: 'Creation' }
-                };
-                gceShowModal(popupData, "taches", "ecriture");
+                gceShowModal({ opportunite: [{ id: opportunite.id, value: opportunite.NomClient }], contact: opportunite.Contacts || [], assigne: opportunite.T1_user || [], statut: { id: 3039, value: 'Creation' } }, "taches", "ecriture");
             });
 
-            const tableDiv = container.querySelector('.sub-table-container');
-            const tachesSchema = window.gceSchemas.taches;
+            (async () => {
+                try {
+                    const res = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/opportunites/${opportunite.id}/related-data`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } });
+                    if (!res.ok) throw new Error('Échec du chargement des données.');
+                    const relatedData = await res.json();
 
-            const colonnesVisibles = ['titre', 'statut', 'priorite', 'date_echeance'];
-            const tachesColumns = getTabulatorColumnsFromSchema(tachesSchema, 'taches')
-                .filter(col => colonnesVisibles.includes(col.field));
-
-            tachesColumns.unshift({
-                title: "Actions",
-                headerSort: false,
-                width: 100,
-                hozAlign: "center",
-                formatter: (cell) => {
-                    const rowData = cell.getRow().getData();
-                    const statut = (rowData.statut?.value || '').toLowerCase();
-                    if (statut === 'creation') return `<button class="button button-small gce-task-action-btn" data-action="accept">✅ Accepter</button>`;
-                    if (statut === 'en_cours') return `<button class="button button-small gce-task-action-btn" data-action="complete">🏁 Terminer</button>`;
-                    return "";
-                },
-                cellClick: async (e, cell) => {
-                    const actionBtn = e.target.closest('.gce-task-action-btn');
-                    if (!actionBtn) return;
-
-                    const action = actionBtn.dataset.action;
-                    const rowData = cell.getRow().getData();
-                    actionBtn.disabled = true;
-                    actionBtn.textContent = '...';
-
-                    if (action === 'accept') {
-                        try {
-                            const res = await fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/proxy/start-task', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce },
-                                body: JSON.stringify(rowData)
-                            });
-                            if (!res.ok) throw new Error('Échec de la requête.');
-
-                            // Mettre à jour l'UI localement
-                            const statutEnCours = tachesSchema.find(f => f.name === 'statut').select_options.find(o => o.value === 'En_cours');
-                            cell.getRow().update({ statut: statutEnCours });
-                            showStatusUpdate('Tâche acceptée !', true);
-
-                        } catch (err) {
-                            showStatusUpdate('Erreur lors de l’acceptation.', false);
-                            actionBtn.disabled = false;
-                            actionBtn.textContent = '✅ Accepter';
-                        }
-                    } else if (action === 'complete') {
-                        try {
-                            const statutTerminer = tachesSchema.find(f => f.name === 'statut').select_options.find(o => o.value === 'Terminer');
-                            const payload = {
-                                [`field_${tachesSchema.find(f => f.name === 'statut').id}`]: statutTerminer.id,
-                                [`field_${tachesSchema.find(f => f.name === 'terminer').id}`]: true
-                            };
-
-                            const res = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/taches/${rowData.id}`, {
-                                method: 'PATCH',
-                                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce },
-                                body: JSON.stringify(payload)
-                            });
-                            if (!res.ok) throw new Error('Échec de la requête.');
-
-                            // Mettre à jour l'UI localement
-                            cell.getRow().update({ statut: statutTerminer, terminer: true });
-                            showStatusUpdate('Tâche terminée !', true);
-
-                        } catch (err) {
-                            showStatusUpdate('Erreur lors de la finalisation.', false);
-                            actionBtn.disabled = false;
-                            actionBtn.textContent = '🏁 Terminer';
-                        }
+                    const addInteractionBtn = container.querySelector('.gce-add-interaction-btn');
+                    const existingCall = relatedData.appels && relatedData.appels.length > 0 ? relatedData.appels[0] : null;
+                    if (existingCall) {
+                        addInteractionBtn.disabled = false;
+                        addInteractionBtn.title = "Ajouter une nouvelle interaction à l'appel existant";
+                        addInteractionBtn.addEventListener('click', () => {
+                            gceShowModal({ opportunité: [{ id: opportunite.id, value: opportunite.NomClient }], contact: opportunite.Contacts || [], effectue_par: opportunite.T1_user || [], Appels: [{ id: existingCall.id, value: `Appel #${existingCall.id}` }] }, "interactions", "ecriture");
+                        });
                     }
-                }
-            });
-            new Tabulator(tableDiv, { data: opportunite._children || [], layout: "fitColumns", columns: tachesColumns, placeholder: "Aucune tâche associée." });
 
+                    const tableTachesDiv = container.querySelector('.sub-table-container-taches');
+                    tableTachesDiv.innerHTML = '';
+                    const tachesSchema = window.gceSchemas.taches;
+                    let tachesColumns = getTabulatorColumnsFromSchema(tachesSchema, 'taches');
+
+                    tachesColumns.unshift({
+                        title: "Actions", headerSort: false, width: 100, hozAlign: "center",
+                        formatter: (cell) => {
+                            const statut = (cell.getRow().getData().statut?.value || '').toLowerCase();
+                            if (statut === 'creation') return `<button class="button button-small gce-task-action-btn" data-action="accept">✅ Accepter</button>`;
+                            if (statut === 'en_cours') return `<button class="button button-small gce-task-action-btn" data-action="complete">🏁 Terminer</button>`;
+                            return "";
+                        },
+                        cellClick: async (e, cell) => {
+                            const actionBtn = e.target.closest('.gce-task-action-btn');
+                            if (!actionBtn) return;
+                            const action = actionBtn.dataset.action;
+                            const rowData = cell.getRow().getData();
+                            actionBtn.disabled = true; actionBtn.textContent = '...';
+                            if (action === 'accept') {
+                                try {
+                                    const res = await fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/proxy/start-task', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce }, body: JSON.stringify(rowData) });
+                                    if (!res.ok) throw new Error('Échec.');
+                                    cell.getRow().update({ statut: tachesSchema.find(f => f.name === 'statut').select_options.find(o => o.value === 'En_cours') });
+                                    showStatusUpdate('Tâche acceptée !', true);
+                                } catch (err) { showStatusUpdate('Erreur.', false); actionBtn.disabled = false; actionBtn.textContent = '✅ Accepter'; }
+                            } else if (action === 'complete') {
+                                try {
+                                    const statutTerminer = tachesSchema.find(f => f.name === 'statut').select_options.find(o => o.value === 'Terminer');
+                                    const payload = { [`field_${tachesSchema.find(f => f.name === 'statut').id}`]: statutTerminer.id, [`field_${tachesSchema.find(f => f.name === 'terminer').id}`]: true };
+                                    const res = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/taches/${rowData.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce }, body: JSON.stringify(payload) });
+                                    if (!res.ok) throw new Error('Échec.');
+                                    cell.getRow().update({ statut: statutTerminer, terminer: true });
+                                    showStatusUpdate('Tâche terminée !', true);
+                                } catch (err) { showStatusUpdate('Erreur.', false); actionBtn.disabled = false; actionBtn.textContent = '🏁 Terminer'; }
+                            }
+                        }
+                    });
+
+                    const visibleTaskColumns = ['Actions', 'titre', 'description', 'statut', 'priorite', 'date_echeance'];
+                    tachesColumns.forEach(col => { if (!visibleTaskColumns.includes(col.field) && col.title !== 'Actions') { col.visible = false; } });
+
+                    const tachesTable = new Tabulator(tableTachesDiv, { data: relatedData.taches || [], layout: "fitColumns", columns: tachesColumns, placeholder: "Aucune tâche." });
+                    tachesTable.on("cellEdited", function (cell) {
+                        const rowData = cell.getRow().getData();
+                        const cleanedData = sanitizeRowBeforeSave(rowData, tachesSchema);
+                        showStatusUpdate('Sauvegarde...');
+                        fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/taches/${rowData.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce }, body: JSON.stringify(cleanedData) })
+                            .then(res => { if (!res.ok) { cell.restoreOldValue(); throw new Error("Sauvegarde échouée."); } return res.json(); })
+                            .then(updatedTask => { showStatusUpdate('Tâche mise à jour !', true); cell.getRow().update(updatedTask); })
+                            .catch(err => { showStatusUpdate(`Erreur: ${err.message}`, false); });
+                    });
+const tableInteractionsDiv = container.querySelector('.sub-table-container-interactions');
+                    tableInteractionsDiv.innerHTML = '';
+                    const interactionsSchema = window.gceSchemas.interactions;
+
+                    // On définit les colonnes que l'on veut voir.
+                    const visibleInteractionFields = ['types_interactions', 'date_heure', 'resultat', 'compte_rendu'];
+                    let interactionsColumns = getTabulatorColumnsFromSchema(interactionsSchema, 'interactions')
+                        .filter(c => visibleInteractionFields.includes(c.field));
+
+                    // On ajoute notre colonne d'actions personnalisée.
+                    interactionsColumns.push({
+                        title: "Actions",
+                        headerSort: false,
+                        width: 100,
+                        hozAlign: "center",
+                        formatter: (cell) => {
+                            const rowData = cell.getRow().getData();
+                            if (rowData.Lock === true) return "🔒";
+                            const editIcon = `<a href="#" class="gce-popup-link" data-id="${rowData.id}" data-table="interactions" data-mode="ecriture" title="Modifier">✏️</a>`;
+                            const deleteIcon = `<a href="#" class="gce-delete-interaction-btn" data-id="${rowData.id}" title="Supprimer">❌</a>`;
+                            return `${editIcon}   ${deleteIcon}`;
+                        },
+                        cellClick: (e, cell) => {
+                            const deleteBtn = e.target.closest('.gce-delete-interaction-btn');
+                            if (deleteBtn) {
+                                e.preventDefault();
+                                const rowData = cell.getRow().getData();
+                                if (confirm(`Êtes-vous sûr de vouloir supprimer cette interaction ?`)) {
+                                    showStatusUpdate('Suppression en cours...');
+                                    fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/interactions/${rowData.id}`, { method: 'DELETE', headers: { 'X-WP-Nonce': EECIE_CRM.nonce } })
+                                    .then(async res => {
+                                        if (!res.ok) throw new Error('Échec de la suppression.');
+                                        showStatusUpdate('Interaction supprimée ! Mise à jour...', true);
+                                        const oppId = parseInt(container.closest('.gce-detail-modal').dataset.itemId, 10);
+                                        const oppRes = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/row/opportunites/${oppId}`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } });
+                                        if(oppRes.ok) {
+                                            const updatedOppData = await oppRes.json();
+                                            gce.viewManager.updateDetailModalIfOpen(oppId, updatedOppData);
+                                        } else {
+                                            location.reload();
+                                        }
+                                    })
+                                    .catch(err => alert(`Erreur: ${err.message}`));
+                                }
+                            }
+                        }
+                    });
+
+                    new Tabulator(tableInteractionsDiv, {
+                        data: relatedData.interactions || [],
+                        layout: "fitColumns",
+                        columns: interactionsColumns,
+                        placeholder: "Aucune interaction."
+                    });
+                const tableDevisDiv = container.querySelector('.sub-table-container-devis');
+                tableDevisDiv.innerHTML = ''; // Vider le message de chargement
+                const devisSchema = window.gceSchemas.devis;
+                const articlesSchema = window.gceSchemas.articles_devis;
+                
+                if (relatedData.devis && relatedData.devis.length > 0) {
+                    const devis = relatedData.devis[0]; // On prend le premier devis trouvé
+                    const articles = relatedData.articles || [];
+
+                    // Afficher les détails du devis et les boutons d'action
+                    tableDevisDiv.innerHTML = `
+                        <div class="devis-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid #eee;">
+                            <div>
+                                <strong>Statut :</strong> <span class="gce-badge gce-color-${devis.Status?.color || 'gray'}">${devis.Status?.value || 'N/A'}</span>
+                                <strong style="margin-left: 15px;">Total HT :</strong> ${parseFloat(devis.Montant_total_ht || 0).toFixed(2)} $
+                            </div>
+                            <div class="devis-actions" style="display: flex; gap: 10px;">
+                                <button class="button gce-add-article-btn">➕ Article</button>
+                                <button class="button button-primary gce-calculate-devis-btn">⚡ Calculer</button>
+                            </div>
+                        </div>
+                        <div class="articles-sub-table"></div>
+                    `;
+
+                    // Logique du bouton "Ajouter Article"
+                    container.querySelector('.gce-add-article-btn').addEventListener('click', () => {
+                         gceShowModal({ "Devis": [{ id: devis.id, value: `Devis #${devis.DevisId}` }] }, "articles_devis", "ecriture", ["Nom", "Quantités", "Prix_unitaire"]);
+                    });
+
+                    // Logique du bouton "Calculer"
+                    container.querySelector('.gce-calculate-devis-btn').addEventListener('click', (e) => {
+                        const btn = e.target;
+                        btn.disabled = true; btn.textContent = 'Calcul...';
+                        fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/proxy/calculate-devis`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce },
+                            body: JSON.stringify({ devis_id: devis.id })
+                        })
+                        .then(res => { if (!res.ok) throw new Error('Échec du calcul.'); return res.json(); })
+                        .then(() => { showStatusUpdate('Calcul terminé ! Le devis sera mis à jour.', true); })
+                        .catch(err => { alert(`Erreur: ${err.message}`); })
+                        .finally(() => { btn.disabled = false; btn.textContent = '⚡ Calculer'; });
+                    });
+
+                    // Création de la sous-table des articles
+                    const articlesTableDiv = container.querySelector('.articles-sub-table');
+                    // On construit manuellement les colonnes pour avoir un contrôle total
+                        let articlesColumns = getTabulatorColumnsFromSchema(articlesSchema, 'articles_devis')
+                            .filter(col => col.field !== 'Devis'); // On exclut la colonne "Devis"
+
+                        // On ajoute la colonne d'actions à la fin
+                        articlesColumns.push({
+                            title: "Actions",
+                            headerSort: false,
+                            width: 100,
+                            hozAlign: "center",
+                            formatter: (cell) => {
+                                const rowData = cell.getRow().getData();
+                                const editIcon = `<a href="#" class="gce-popup-link" data-id="${rowData.id}" data-table="articles_devis" data-mode="ecriture" title="Modifier">✏️</a>`;
+                                const deleteIcon = `<a href="#" class="gce-delete-article-btn" data-id="${rowData.id}" title="Supprimer">❌</a>`;
+                                return `${editIcon}   ${deleteIcon}`;
+                            },
+                            cellClick: (e, cell) => {
+                                // On gère le clic sur le bouton de suppression
+                                const deleteBtn = e.target.closest('.gce-delete-article-btn');
+                                if (deleteBtn) {
+                                    e.preventDefault();
+                                    const rowData = cell.getRow().getData();
+                                    
+                                    // Fenêtre de confirmation
+                                    if (confirm(`Êtes-vous sûr de vouloir supprimer l'article "${rowData.Nom || 'cet article'}" ?`)) {
+                                        showStatusUpdate('Suppression en cours...');
+                                        fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/articles_devis/${rowData.id}`, {
+                                            method: 'DELETE',
+                                            headers: { 'X-WP-Nonce': EECIE_CRM.nonce }
+                                        })
+                                        .then(async res => {
+                                            if (!res.ok) throw new Error('Échec de la suppression.');
+                                            showStatusUpdate('Article supprimé !', true);
+
+                                            const oppId = parseInt(container.closest('.gce-detail-modal').dataset.itemId, 10);
+                                            const oppRes = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/row/opportunites/${oppId}`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } });
+                                            if(oppRes.ok) {
+                                                const updatedOppData = await oppRes.json();
+                                                gce.viewManager.updateDetailModalIfOpen(oppId, updatedOppData);
+                                            } else {
+                                                location.reload(); // Fallback
+                                            }
+                                        })
+                                        .catch(err => {
+                                            alert(`Erreur: ${err.message}`);
+                                        });
+                                    }
+                                }
+                            }
+                        });
+                    const articlesTable = new Tabulator(articlesTableDiv, {
+                        data: articles,
+                        layout: "fitColumns",
+                        columns: articlesColumns,
+                        placeholder: "Aucun article dans ce devis."
+                    });
+
+                    // Activer l'édition en ligne pour les articles
+                    articlesTable.on("cellEdited", function(cell){
+                        const rowData = cell.getRow().getData();
+                        const cleanedData = sanitizeRowBeforeSave(rowData, articlesSchema);
+                        showStatusUpdate('Sauvegarde article...');
+                        fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/articles_devis/${rowData.id}`, {
+                            method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce }, body: JSON.stringify(cleanedData)
+                        })
+                        .then(res => { if (!res.ok) { cell.restoreOldValue(); throw new Error("Sauvegarde échouée."); } return res.json(); })
+                        .then(updatedArticle => { showStatusUpdate('Article mis à jour !', true); cell.getRow().update(updatedArticle); })
+                        .catch(err => { showStatusUpdate(`Erreur: ${err.message}`, false); });
+                    });
+
+                } else {
+                    tableDevisDiv.innerHTML = '<p>Aucun devis n\'a encore été créé pour cette opportunité.</p>';
+                }
+                } catch (err) { container.querySelector('.sub-table-container-taches').innerHTML = `<p style="color:red;">${err.message}</p>`; }
+            })();
             return container;
         }
     };
-    /**
-     * Vérifie si l'URL contient un paramètre pour ouvrir un modal au chargement.
-     * CETTE FONCTION EST MAINTENANT APPELÉE AU BON MOMENT.
-     */
+
     function handleAutoOpenFromUrl() {
         const urlParams = new URLSearchParams(window.location.search);
         const oppIdToOpen = urlParams.get('open-opp-id');
-
         if (oppIdToOpen) {
             const oppIdInt = parseInt(oppIdToOpen, 10);
-            console.log(`[AutoOpen] Tentative d'ouverture du modal pour l'opportunité #${oppIdInt}`);
-
             const opportuniteData = gce.viewManager.dataStore.find(opp => opp.id === oppIdInt);
-
-            if (opportuniteData) {
-                console.log(`[AutoOpen] Opportunité trouvée. Ouverture du modal.`);
-                gce.showDetailModal(opportuniteData, opportunitesViewConfig.detailRenderer);
-            } else {
-                console.warn(`[AutoOpen] Opportunité #${oppIdInt} non trouvée dans les données de l'utilisateur.`);
-                alert(`L'opportunité #${oppIdInt} n'a pas pu être trouvée ou ne vous est pas assignée.`);
-            }
+            if (opportuniteData) { gce.showDetailModal(opportuniteData, opportunitesViewConfig.detailRenderer); }
+            else { alert(`L'opportunité #${oppIdToOpen} n'a pas pu être trouvée.`); }
         }
     }
-    // 2. Chargement de toutes les données nécessaires
+
     Promise.all([
-        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/opportunites', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
-        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/taches', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
-        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/opportunites/schema', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
-        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/taches/schema', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json())
-    ]).then(([oppData, tachesData, oppSchema, tachesSchema]) => {
-
-        window.gceSchemas = { ...window.gceSchemas, "opportunites": oppSchema, "taches": tachesSchema };
-
-        const myOpps = oppData.results || [];
-
-        const tachesByOppId = {};
-        (tachesData || []).forEach(tache => {
-            const oppLink = tache.opportunite?.[0];
-            if (oppLink) {
-                if (!tachesByOppId[oppLink.id]) tachesByOppId[oppLink.id] = [];
-                tachesByOppId[oppLink.id].push(tache);
-            }
-        });
-        const myOppsWithChildren = myOpps.map(opp => ({ ...opp, _children: tachesByOppId[opp.id] || [] }));
-
-        gce.viewManager.initialize(mainContainer, myOppsWithChildren, opportunitesViewConfig);
+    fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/opportunites', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
+    fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/opportunites/schema', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
+    fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/taches/schema', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
+    fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/appels/schema', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
+    fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/interactions/schema', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
+    // AJOUTER CES DEUX LIGNES
+    fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/devis/schema', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
+    fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/articles_devis/schema', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json())
+]).then(([oppData, oppSchema, tachesSchema, appelsSchema, interactionsSchema, devisSchema, articlesDevisSchema]) => { // Ajouter les nouvelles variables ici
+    window.gceSchemas = { ...window.gceSchemas, 
+        "opportunites": oppSchema, 
+        "taches": tachesSchema, 
+        "appels": appelsSchema, 
+        "interactions": interactionsSchema,
+        "devis": devisSchema, // Ajouter ici
+        "articles_devis": articlesDevisSchema // Ajouter ici
+    }; const myOpps = oppData.results || [];
+        gce.viewManager.initialize(mainContainer, myOpps, opportunitesViewConfig);
         handleAutoOpenFromUrl();
-
-        // --- MODIFIEZ CETTE SECTION ---
         const filterContainer = document.getElementById('gce-status-filters');
         if (filterContainer) {
             const allCheckboxes = filterContainer.querySelectorAll('input[type="checkbox"]');
-
-            // La logique de filtrage quand une case change
             const applyFilters = () => {
-                const selectedStatuses = Array.from(filterContainer.querySelectorAll('input:checked'))
-                    .map(checkbox => checkbox.value);
-
-                const allCards = mainContainer.querySelectorAll('.gce-opportunite-card');
-
-                allCards.forEach(card => {
-                    const cardStatus = card.dataset.status;
-                    if (selectedStatuses.includes(cardStatus)) {
-                        card.style.display = '';
-                    } else {
-                        card.style.display = 'none';
-                    }
-                });
+                const selectedStatuses = Array.from(filterContainer.querySelectorAll('input:checked')).map(checkbox => checkbox.value);
+                mainContainer.querySelectorAll('.gce-opportunite-card').forEach(card => { card.style.display = selectedStatuses.includes(card.dataset.status) ? '' : 'none'; });
             };
-
             filterContainer.addEventListener('change', applyFilters);
             applyFilters();
-            // --- DÉBUT DE L'AJOUT POUR LES BOUTONS D'ACTION ---
-            const selectAllBtn = document.getElementById('gce-filter-select-all');
-            const clearAllBtn = document.getElementById('gce-filter-clear-all');
-
-            if (selectAllBtn) {
-                selectAllBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    allCheckboxes.forEach(cb => cb.checked = true);
-                    // On déclenche manuellement l'événement pour que le filtre s'applique
-                    filterContainer.dispatchEvent(new Event('change'));
-                });
-            }
-
-            if (clearAllBtn) {
-                clearAllBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    allCheckboxes.forEach(cb => cb.checked = false);
-                    // On déclenche manuellement l'événement pour que le filtre s'applique
-                    filterContainer.dispatchEvent(new Event('change'));
-                });
-            }
-
+            document.getElementById('gce-filter-select-all')?.addEventListener('click', e => { e.preventDefault(); allCheckboxes.forEach(cb => cb.checked = true); filterContainer.dispatchEvent(new Event('change')); });
+            document.getElementById('gce-filter-clear-all')?.addEventListener('click', e => { e.preventDefault(); allCheckboxes.forEach(cb => cb.checked = false); filterContainer.dispatchEvent(new Event('change')); });
         }
+    }).catch(err => { mainContainer.innerHTML = `<p style="color:red;">Erreur : ${err.message}</p>`; console.error(err); });
 
-
-    }).catch(err => {
-        mainContainer.innerHTML = `<p style="color:red;">Erreur de chargement : ${err.message}</p>`;
-        console.error(err);
-    });
-    // --- NOUVEAU GESTIONNAIRE D'ÉVÉNEMENTS POUR LE BOUTON "ACCEPTER" ---
     mainContainer.addEventListener('click', async (e) => {
         const acceptBtn = e.target.closest('[data-action="accept"]');
         if (!acceptBtn) return;
-
-        e.preventDefault();
-        e.stopPropagation();
-
+        e.preventDefault(); e.stopPropagation();
         const oppId = acceptBtn.dataset.id;
-        acceptBtn.disabled = true;
-        acceptBtn.textContent = '...';
-
-        const oppSchema = window.gceSchemas.opportunites;
-        const statusField = oppSchema.find(f => f.name === "Status");
+        acceptBtn.disabled = true; acceptBtn.textContent = '...';
+        const statusField = window.gceSchemas.opportunites.find(f => f.name === "Status");
         const traitementOption = statusField?.select_options.find(opt => opt.value === "Traitement");
-
-        if (!traitementOption) {
-            alert("Erreur: L'option de statut 'Traitement' est introuvable.");
-            acceptBtn.disabled = false;
-            acceptBtn.textContent = '✅ Accepter le dossier';
-            return;
-        }
-
+        if (!traitementOption) { alert("Erreur: Statut 'Traitement' introuvable."); acceptBtn.disabled = false; acceptBtn.textContent = '✅ Accepter'; return; }
         const payload = { [`field_${statusField.id}`]: traitementOption.id };
-
         try {
-            // 1. Déclencher le workflow en mettant à jour le statut
-            const initialRes = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/opportunites/${oppId}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce },
-                body: JSON.stringify(payload)
-            });
-
-            if (!initialRes.ok) throw new Error('Le déclenchement du workflow a échoué.');
-
-            showStatusUpdate('Dossier accepté, synchronisation des données...', true);
-
-            // 2. Attendre 2 secondes pour laisser le temps à N8N de s'exécuter
+            const res = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/opportunites/${oppId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce }, body: JSON.stringify(payload) });
+            if (!res.ok) throw new Error('Échec du workflow.');
+            showStatusUpdate('Dossier accepté, synchronisation...', true);
             await new Promise(resolve => setTimeout(resolve, 2000));
-
-            // 3. Récupérer les données fraîches en parallèle pour plus d'efficacité
-            const [updatedOppRes, tachesRes] = await Promise.all([
-                fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/row/opportunites/${oppId}`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }),
-                fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/taches', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } })
-            ]);
-
-            if (!updatedOppRes.ok || !tachesRes.ok) throw new Error("Échec de la récupération des données mises à jour.");
-
+            const updatedOppRes = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/row/opportunites/${oppId}`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } });
+            if (!updatedOppRes.ok) throw new Error("Échec de la récupération.");
             const updatedOppData = await updatedOppRes.json();
-            const allTachesData = await tachesRes.json();
-            const oppIdInt = parseInt(oppId, 10);
-
-            // 4. Reconstruire l'objet complet avec les nouvelles tâches
-            // Note: l'endpoint /taches renvoie directement un tableau, pas un objet {results:[]}
-            updatedOppData._children = (allTachesData || []).filter(tache =>
-                tache.opportunite?.[0]?.id === oppIdInt
-            );
-
-            // 5. Mettre à jour la carte avec les données 100% à jour
-            gce.viewManager.updateItem(oppIdInt, updatedOppData);
+            gce.viewManager.updateItem(parseInt(oppId, 10), updatedOppData);
             showStatusUpdate('Synchronisation terminée !', true);
-
-        } catch (err) {
-            console.error("Erreur lors du processus d'acceptation :", err);
-            showStatusUpdate("Une erreur est survenue. L'interface peut être désynchronisée.", false);
-            // On ne réactive pas le bouton pour éviter les doubles clics sur une erreur
-            acceptBtn.textContent = 'Erreur';
-        }
+        } catch (err) { showStatusUpdate("Une erreur est survenue.", false); acceptBtn.textContent = 'Erreur'; }
     });
+
     mainContainer.addEventListener('click', async (e) => {
-    const resetBtn = e.target.closest('.gce-card-reset-btn');
-    if (!resetBtn) return;
-
-    e.preventDefault();
-    e.stopPropagation(); // Très important pour ne pas ouvrir le modal de détail
-
-    const oppId = resetBtn.dataset.id;
-    const confirmation = confirm(
-        `ATTENTION !\n\nVous êtes sur le point de réinitialiser complètement l'opportunité #${oppId}.\n\n` +
-        `Cela va :\n` +
-        `- Supprimer TOUS les devis, appels, tâches et interactions liés.\n` +
-        `- Remettre le statut à "Assigner".\n\n` +
-        `Cette action est IRRÉVERSIBLE. Êtes-vous certain de vouloir continuer ?`
-    );
-
-    if (!confirmation) {
-        return;
-    }
-
-    resetBtn.disabled = true;
-    resetBtn.textContent = '...';
-    showStatusUpdate('Réinitialisation en cours...', true);
-
-    try {
-        const res = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/opportunites/${oppId}/reset`, {
-            method: 'POST',
-            headers: { 'X-WP-Nonce': EECIE_CRM.nonce }
-        });
-
-        if (!res.ok) {
-            const errData = await res.json();
-            throw new Error(errData.message || `Erreur HTTP ${res.status}`);
-        }
-
-        await res.json();
-        showStatusUpdate('Réinitialisation réussie ! Rechargement...', true);
-        
-        // La solution la plus simple et la plus fiable est de recharger la page
-        // pour que toutes les données soient à jour.
-        setTimeout(() => location.reload(), 1500);
-
-    } catch (err) {
-        console.error("Erreur lors du reset :", err);
-        showStatusUpdate(`Erreur: ${err.message}`, false);
-        resetBtn.disabled = false;
-        resetBtn.textContent = 'Reset';
-    }
+        const resetBtn = e.target.closest('.gce-card-reset-btn');
+        if (!resetBtn) return;
+        e.preventDefault(); e.stopPropagation();
+        const oppId = resetBtn.dataset.id;
+        if (!confirm(`ATTENTION !\n\nRéinitialiser l'opportunité #${oppId} supprimera TOUS les devis, appels, tâches et interactions liés de manière IRRÉVERSIBLE. Continuer ?`)) return;
+        resetBtn.disabled = true; resetBtn.textContent = '...';
+        showStatusUpdate('Réinitialisation en cours...', true);
+        try {
+            const res = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/opportunites/${oppId}/reset`, { method: 'POST', headers: { 'X-WP-Nonce': EECIE_CRM.nonce } });
+            if (!res.ok) { const errData = await res.json(); throw new Error(errData.message || `Erreur HTTP ${res.status}`); }
+            showStatusUpdate('Réinitialisation réussie ! Rechargement...', true);
+            setTimeout(() => location.reload(), 1500);
+        } catch (err) { showStatusUpdate(`Erreur: ${err.message}`, false); resetBtn.disabled = false; resetBtn.textContent = 'Reset'; }
     });
 });
-
