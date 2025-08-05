@@ -127,22 +127,34 @@ document.addEventListener('DOMContentLoaded', () => {
                             const action = actionBtn.dataset.action;
                             const rowData = cell.getRow().getData();
                             actionBtn.disabled = true; actionBtn.textContent = '...';
-                            if (action === 'accept') {
-                                try {
+                            const oppId = rowData.opportunite[0].id;
+
+                            try {
+                                if (action === 'accept') {
                                     const res = await fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/proxy/start-task', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce }, body: JSON.stringify(rowData) });
-                                    if (!res.ok) throw new Error('Échec.');
-                                    cell.getRow().update({ statut: tachesSchema.find(f => f.name === 'statut').select_options.find(o => o.value === 'En_cours') });
-                                    showStatusUpdate('Tâche acceptée !', true);
-                                } catch (err) { showStatusUpdate('Erreur.', false); actionBtn.disabled = false; actionBtn.textContent = '✅ Accepter'; }
-                            } else if (action === 'complete') {
-                                try {
+                                    if (!res.ok) throw new Error('Le workflow "Accepter" a échoué.');
+                                    showStatusUpdate('Tâche acceptée, synchronisation...', true);
+                                } else if (action === 'complete') {
                                     const statutTerminer = tachesSchema.find(f => f.name === 'statut').select_options.find(o => o.value === 'Terminer');
                                     const payload = { [`field_${tachesSchema.find(f => f.name === 'statut').id}`]: statutTerminer.id, [`field_${tachesSchema.find(f => f.name === 'terminer').id}`]: true };
                                     const res = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/taches/${rowData.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce }, body: JSON.stringify(payload) });
-                                    if (!res.ok) throw new Error('Échec.');
-                                    cell.getRow().update({ statut: statutTerminer, terminer: true });
-                                    showStatusUpdate('Tâche terminée !', true);
-                                } catch (err) { showStatusUpdate('Erreur.', false); actionBtn.disabled = false; actionBtn.textContent = '🏁 Terminer'; }
+                                    if (!res.ok) throw new Error('La mise à jour de la tâche a échoué.');
+                                    showStatusUpdate('Tâche terminée, synchronisation...', true);
+                                }
+                                
+                                await new Promise(resolve => setTimeout(resolve, 2500));
+                                const updatedOppRes = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/row/opportunites/${oppId}`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } });
+                                if (!updatedOppRes.ok) throw new Error("Échec de la récupération de l'opportunité.");
+                                const updatedOppData = await updatedOppRes.json();
+                                
+                                gce.viewManager.updateItem(oppId, updatedOppData);
+                                gce.viewManager.updateDetailModalIfOpen(oppId, updatedOppData);
+
+                                showStatusUpdate('Vue mise à jour !', true);
+                            } catch (err) {
+                                showStatusUpdate(`Erreur: ${err.message}`, false);
+                                actionBtn.disabled = false;
+                                actionBtn.textContent = action === 'accept' ? '✅ Accepter' : '🏁 Terminer';
                             }
                         }
                     });
@@ -150,8 +162,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     const visibleTaskColumns = ['Actions', 'titre', 'description', 'statut', 'priorite', 'date_echeance'];
                     tachesColumns.forEach(col => { if (!visibleTaskColumns.includes(col.field) && col.title !== 'Actions') { col.visible = false; } });
 
-                    const tachesTable = new Tabulator(tableTachesDiv, { data: relatedData.taches || [], layout: "fitColumns", columns: tachesColumns, placeholder: "Aucune tâche." });
-                    tachesTable.on("cellEdited", function (cell) {
+                    setTimeout(() => {
+                        const tachesTable = new Tabulator(tableTachesDiv, {
+                            data: relatedData.taches || [],
+                            layout: "fitColumns", columns: tachesColumns, placeholder: "Aucune tâche.",
+                        });
+                        tachesTable.on("cellEdited", function (cell) {
                         const rowData = cell.getRow().getData();
                         const cleanedData = sanitizeRowBeforeSave(rowData, tachesSchema);
                         showStatusUpdate('Sauvegarde...');
@@ -159,7 +175,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             .then(res => { if (!res.ok) { cell.restoreOldValue(); throw new Error("Sauvegarde échouée."); } return res.json(); })
                             .then(updatedTask => { showStatusUpdate('Tâche mise à jour !', true); cell.getRow().update(updatedTask); })
                             .catch(err => { showStatusUpdate(`Erreur: ${err.message}`, false); });
-                    });
+                        });
+                    }, 50);
 const tableInteractionsDiv = container.querySelector('.sub-table-container-interactions');
                     tableInteractionsDiv.innerHTML = '';
                     const interactionsSchema = window.gceSchemas.interactions;
@@ -207,13 +224,14 @@ const tableInteractionsDiv = container.querySelector('.sub-table-container-inter
                             }
                         }
                     });
-
-                    new Tabulator(tableInteractionsDiv, {
-                        data: relatedData.interactions || [],
-                        layout: "fitColumns",
-                        columns: interactionsColumns,
-                        placeholder: "Aucune interaction."
-                    });
+                    setTimeout(() => {
+                        new Tabulator(tableInteractionsDiv, {
+                            data: relatedData.interactions || [],
+                            layout: "fitColumns",
+                            columns: interactionsColumns,
+                            placeholder: "Aucune interaction."
+                        });
+                    }, 50);
                 const tableDevisDiv = container.querySelector('.sub-table-container-devis');
                 tableDevisDiv.innerHTML = ''; // Vider le message de chargement
                 const devisSchema = window.gceSchemas.devis;
@@ -244,21 +262,36 @@ const tableInteractionsDiv = container.querySelector('.sub-table-container-inter
                     });
 
                     // Logique du bouton "Calculer"
-                    container.querySelector('.gce-calculate-devis-btn').addEventListener('click', (e) => {
+                    container.querySelector('.gce-calculate-devis-btn').addEventListener('click', async (e) => {
                         const btn = e.target;
+                        const oppId = opportunite.id;
                         btn.disabled = true; btn.textContent = 'Calcul...';
-                        fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/proxy/calculate-devis`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce },
-                            body: JSON.stringify({ devis_id: devis.id })
-                        })
-                        .then(res => { if (!res.ok) throw new Error('Échec du calcul.'); return res.json(); })
-                        .then(() => { showStatusUpdate('Calcul terminé ! Le devis sera mis à jour.', true); })
-                        .catch(err => { alert(`Erreur: ${err.message}`); })
-                        .finally(() => { btn.disabled = false; btn.textContent = '⚡ Calculer'; });
+                        showStatusUpdate('Calcul du devis en cours...', true);
+                        try {
+                            const res = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/proxy/calculate-devis`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce },
+                                body: JSON.stringify({ devis_id: devis.id })
+                            });
+                            if (!res.ok) throw new Error('Échec du calcul.');
+                            await res.json();
+                            showStatusUpdate('Calcul terminé ! Synchronisation...', true);
+
+                            await new Promise(resolve => setTimeout(resolve, 4000)); // Délai plus long
+
+                            const updatedOppRes = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/row/opportunites/${oppId}`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } });
+                            if (!updatedOppRes.ok) throw new Error("Échec de la récupération de l'opportunité.");
+                            const updatedOppData = await updatedOppRes.json();
+                            gce.viewManager.updateItem(oppId, updatedOppData);
+                            gce.viewManager.updateDetailModalIfOpen(oppId, updatedOppData);
+                            showStatusUpdate('Vue mise à jour !', true);
+                        } catch (err) {
+                            showStatusUpdate(`Erreur: ${err.message}`, false);
+                        } finally { btn.disabled = false; btn.textContent = '⚡ Calculer'; }
                     });
 
                     // Création de la sous-table des articles
+                
                     const articlesTableDiv = container.querySelector('.articles-sub-table');
                     // On construit manuellement les colonnes pour avoir un contrôle total
                         let articlesColumns = getTabulatorColumnsFromSchema(articlesSchema, 'articles_devis')

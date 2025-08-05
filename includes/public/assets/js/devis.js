@@ -21,7 +21,30 @@ document.addEventListener('DOMContentLoaded', () => {
     const mainContainer = document.getElementById('gce-devis-table');
     if (!mainContainer) return;
     mainContainer.innerHTML = 'Chargement des devis...';
+    function handleAutoOpenFromUrl() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const devisIdToOpen = urlParams.get('open-devis-id');
+        const modeToOpen = urlParams.get('open-mode') || 'lecture'; // 'ecriture' si spécifié
 
+        if (devisIdToOpen) {
+            const devisIdInt = parseInt(devisIdToOpen, 10);
+            // On cherche le devis dans les données déjà chargées par le viewManager
+            const devisData = gce.viewManager.dataStore.find(d => d.id === devisIdInt);
+
+            if (devisData) {
+                // On utilise gceShowModal (de popup-handler.js) pour ouvrir le modal d'édition
+                gceShowModal(devisData, 'devis', modeToOpen);
+                
+                // On nettoie l'URL pour éviter que le modal ne se rouvre à chaque rafraîchissement
+                const newUrl = new URL(window.location);
+                newUrl.searchParams.delete('open-devis-id');
+                newUrl.searchParams.delete('open-mode');
+                window.history.replaceState({}, document.title, newUrl.toString());
+            } else {
+                alert(`Le devis #${devisIdToOpen} est introuvable ou ne vous est pas assigné.`);
+            }
+        }
+    }
     const devisViewConfig = {
         summaryRenderer: (devis) => {
             // Cette fonction est 100% identique à votre version, aucune modification.
@@ -185,6 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const devisList = devisData.results || [];
         
         gce.viewManager.initialize(mainContainer, devisList, devisViewConfig);
+         handleAutoOpenFromUrl();
     }).catch(err => {
         mainContainer.innerHTML = `<p style="color:red;">Erreur: ${err.message}</p>`;
     });

@@ -551,27 +551,33 @@ if (field.type === "date") {
                 const responseData = await res.json();
                 console.log("✅ Réponse du serveur reçue, sauvegarde confirmée:", responseData);
 
-                close();
-                  // ===================================================================
-                // ==                 LA CORRECTION EST ICI                         ==
+                close(); // Ferme le popup d'édition (ex: interaction)
+
                 // ===================================================================
-                
-                // Si on vient de modifier un article de devis...
-               // On vérifie si un modal d'opportunité est actuellement ouvert en arrière-plan
+                // ==                 LOGIQUE DE RAFRAÎCHISSEMENT UNIVERSELLE       ==
+                // ===================================================================
+                // Cette logique s'applique après TOUTE sauvegarde réussie depuis un popup
+                // pour s'assurer que l'interface sous-jacente est mise à jour.
+
+                // 1. On vérifie si un modal de détail d'opportunité est actuellement ouvert en arrière-plan.
                 const opportuniteModal = document.querySelector('.gce-detail-modal[data-item-id]');
 
                 // Si le modal d'opportunité est ouvert ET que le viewManager existe...
                 if (opportuniteModal && gce.viewManager) {
-                    // On récupère l'ID de l'opportunité depuis le modal
+                    // 2. On récupère l'ID de l'opportunité depuis le modal parent.
                     const oppId = parseInt(opportuniteModal.dataset.itemId, 10);
                     console.log(`[Popup] Modification détectée. Rafraîchissement du modal d'opportunité #${oppId}`);
 
                     try {
-                        // On recharge les données complètes de l'opportunité pour avoir une vue 100% à jour
+                        // 3. On attend un court instant pour s'assurer que le backend a traité la modification.
+                        await new Promise(resolve => setTimeout(resolve, 3000));
+                        
+                        // 4. On recharge les données complètes de l'opportunité.
                         const oppRes = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/row/opportunites/${oppId}`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } });
                         if(oppRes.ok) {
                             const updatedOppData = await oppRes.json();
-                            // On utilise la fonction du viewManager pour fermer et rouvrir le modal avec les nouvelles données
+                            // 5. On met à jour la carte de résumé ET le modal de détail.
+                            gce.viewManager.updateItem(oppId, updatedOppData);
                             gce.viewManager.updateDetailModalIfOpen(oppId, updatedOppData);
                             showStatusUpdate('Vue mise à jour !', true);
                         } else {
@@ -583,13 +589,9 @@ if (field.type === "date") {
                          location.reload(); // Fallback
                     }
                 } else {
-                    // Comportement par défaut : si on n'est pas dans un modal d'opportunité (ex: page Tâches), on recharge la page.
+                    // 6. Comportement par défaut : si on n'est pas dans un modal d'opportunité (ex: page Tâches), on recharge la page.
                     location.reload();
                 }
-                // --- FIN DE LA NOUVELLE LOGIQUE ---
-                // ===================================================================
-                // ==                   FIN DE LA CORRECTION                      ==
-                // ===================================================================
             } catch (err) {
                 console.error("❌ Erreur de sauvegarde:", err);
                 alert("Une erreur est survenue lors de la sauvegarde : " + err.message);
