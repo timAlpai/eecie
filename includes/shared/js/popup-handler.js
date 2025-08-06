@@ -154,14 +154,14 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
             });
         return;
     }
-    
+
     let filteredSchema = schema;
     if (Array.isArray(visibleFields)) {
         filteredSchema = schema.filter(f =>
             visibleFields.includes(f.name) || visibleFields.includes(`field_${f.id}`)
         );
     }
-     if (mode === 'ecriture' && data.Lock === true) {
+    if (mode === 'ecriture' && data.Lock === true) {
         alert("Cet enregistrement est verrouillé et ne peut pas être modifié.");
         mode = 'lecture'; // On bascule en mode lecture
     }
@@ -261,47 +261,50 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
                     const selectedIds = Array.isArray(value) ? value.map(v => v.id) : [];
                     const optionHtml = options.map(opt => `<option value="${opt.id}" ${selectedIds.includes(opt.id) ? 'selected' : ''}>${opt.Nom || opt.Name || `ID: ${opt.id}`}</option>`).join('');
                     return `<div class="gce-field-row" style="flex-direction: column; align-items: stretch;">${label}<select name="${fieldKey}" id="${fieldKey}" multiple style="min-height: 100px;">${optionHtml}</select></div>`;
+
+                    // NOUVELLE LOGIQUE : Si ce n'est pas le cas spécial ci-dessus, on affiche juste les liens sans champ de formulaire.
                 } else {
                     let displayValue = '—';
-                    let hiddenInputValue = '';
                     if (Array.isArray(value) && value.length > 0) {
-                        if (value[0]?.id) { hiddenInputValue = value[0].id; }
+                        // Logique pour trouver le bon slug (reste la même)
                         const rawNameToSlugMap = { 't1_user': 'utilisateurs', 'assigne': 'utilisateurs', 'contacts': 'contacts', 'contact': 'contacts', 'task_input': 'opportunites', 'opportunite': 'opportunites', 'opportunité': 'opportunites', 'appel': 'appels', 'appels': 'appels', 'interaction': 'interactions', 'interactions': 'interactions', 'devis': 'devis', 'articles_devis': 'articles_devis', 'article': 'articles_devis' };
                         const tableSlug = rawNameToSlugMap[field.name.toLowerCase()] || field.name.toLowerCase();
+                        // Logique d'affichage (reste la même)
                         displayValue = value.map(obj => {
                             if (!obj || !obj.id) return '';
                             return `<a href="#" class="gce-popup-link" data-table="${tableSlug}" data-id="${obj.id}" data-mode="lecture">${obj.value || 'Détail'}</a>`;
                         }).join(', ');
                     }
-                    return `<div class="gce-field-row">${label}<div>${displayValue}</div><input type="hidden" id="${fieldKey}" name="${fieldKey}" value="${hiddenInputValue}"></div>`;
+                    // LA CORRECTION : On retourne seulement le label et la valeur affichée, SANS <input type="hidden">
+                    return `<div class="gce-field-row">${label}<div>${displayValue}</div></div>`;
                 }
             }
 
             // BLOC CORRIGÉ
-if (field.type === "date") {
-    let dateValue = value || '';
-    // Si on a une date (ex: "2025-07-23T16:26:00Z"), on la formate
-    if (dateValue) {
-        const d = new Date(dateValue);
-        // On ajuste la date au fuseau horaire du navigateur pour l'affichage
-        d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); 
+            if (field.type === "date") {
+                let dateValue = value || '';
+                // Si on a une date (ex: "2025-07-23T16:26:00Z"), on la formate
+                if (dateValue) {
+                    const d = new Date(dateValue);
+                    // On ajuste la date au fuseau horaire du navigateur pour l'affichage
+                    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
 
-        if (field.date_include_time) {
-            // Format pour datetime-local: YYYY-MM-DDTHH:mm
-            dateValue = d.toISOString().slice(0, 16);
-        } else {
-            // Format pour date: YYYY-MM-DD
-            dateValue = d.toISOString().slice(0, 10);
-        }
-    }
-    const inputType = field.date_include_time ? "datetime-local" : "date";
-    return `<div class="gce-field-row">${label}<input type="${inputType}" id="${fieldKey}" name="${fieldKey}" value="${dateValue}"></div>`;
-}
+                    if (field.date_include_time) {
+                        // Format pour datetime-local: YYYY-MM-DDTHH:mm
+                        dateValue = d.toISOString().slice(0, 16);
+                    } else {
+                        // Format pour date: YYYY-MM-DD
+                        dateValue = d.toISOString().slice(0, 10);
+                    }
+                }
+                const inputType = field.date_include_time ? "datetime-local" : "date";
+                return `<div class="gce-field-row">${label}<input type="${inputType}" id="${fieldKey}" name="${fieldKey}" value="${dateValue}"></div>`;
+            }
             if (field.read_only) {
                 return `<div class="gce-field-row">${label}<input type="text" value="${value || ''}" readonly disabled></div>`;
             }
 
- // AJOUTER CE BLOC AU DÉBUT DE LA SECTION 'ecriture'
+            // AJOUTER CE BLOC AU DÉBUT DE LA SECTION 'ecriture'
             if (field.name === 'Progression') {
                 const currentValue = value || 0;
                 return `
@@ -476,15 +479,15 @@ if (field.type === "date") {
                 if (window.tinymce) tinymce.triggerSave();
                 const standardFormData = new FormData(form);
                 const payload = {};
-                 if (!data.id) { // On est en mode création
+                if (!data.id) { // On est en mode création
                     for (const key in data) {
                         const fieldInSchema = schema.find(f => f.name === key);
                         // Si le champ existe dans le schéma et n'était pas visible dans le formulaire...
                         if (fieldInSchema && (!visibleFields || !visibleFields.includes(key))) {
                             const fieldApiId = `field_${fieldInSchema.id}`;
-                            
+
                             // On gère spécifiquement les champs de liaison
-                            if(fieldInSchema.type === 'link_row' && Array.isArray(data[key])) {
+                            if (fieldInSchema.type === 'link_row' && Array.isArray(data[key])) {
                                 payload[fieldApiId] = data[key].map(item => item.id);
                             } else {
                                 payload[fieldApiId] = data[key];
@@ -495,12 +498,12 @@ if (field.type === "date") {
 
                 for (let field of filteredSchema) {
                     if (field.read_only) continue;
-                    
+
                     const key = `field_${field.id}`;
                     // On déclare rawValue une seule fois au début, accessible à tous les 'else if'.
-                        let rawValue = standardFormData.get(key);
+                    let rawValue = standardFormData.get(key);
 
-                        if (rawValue === null || (rawValue === '' && field.type !== 'boolean')) continue;
+                    if (rawValue === null || (rawValue === '' && field.type !== 'boolean')) continue;
 
                     // ================== LOGIQUE DE PAYLOAD MODIFIÉE ==================
                     if (field.type === "file") {
@@ -522,9 +525,9 @@ if (field.type === "date") {
                             payload[key] = intValue;
                         }
                     }
-                    
+
                     if (!standardFormData.has(key)) continue;
-                    
+
 
                     if (field.type === "boolean") payload[key] = rawValue === "true";
                     else if (["number", "decimal"].includes(field.type)) payload[key] = parseFloat(String(rawValue).replace(',', '.'));
@@ -571,10 +574,10 @@ if (field.type === "date") {
                     try {
                         // 3. On attend un court instant pour s'assurer que le backend a traité la modification.
                         await new Promise(resolve => setTimeout(resolve, 3000));
-                        
+
                         // 4. On recharge les données complètes de l'opportunité.
                         const oppRes = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/row/opportunites/${oppId}`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } });
-                        if(oppRes.ok) {
+                        if (oppRes.ok) {
                             const updatedOppData = await oppRes.json();
                             // 5. On met à jour la carte de résumé ET le modal de détail.
                             gce.viewManager.updateItem(oppId, updatedOppData);
@@ -585,8 +588,8 @@ if (field.type === "date") {
                             throw new Error("Failed to refresh opportunity data.");
                         }
                     } catch (refreshError) {
-                         console.error("Erreur lors du rafraîchissement du modal:", refreshError);
-                         location.reload(); // Fallback
+                        console.error("Erreur lors du rafraîchissement du modal:", refreshError);
+                        location.reload(); // Fallback
                     }
                 } else {
                     // 6. Comportement par défaut : si on n'est pas dans un modal d'opportunité (ex: page Tâches), on recharge la page.

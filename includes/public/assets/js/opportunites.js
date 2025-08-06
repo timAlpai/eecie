@@ -141,12 +141,12 @@ document.addEventListener('DOMContentLoaded', () => {
                                     if (!res.ok) throw new Error('La mise à jour de la tâche a échoué.');
                                     showStatusUpdate('Tâche terminée, synchronisation...', true);
                                 }
-                                
+
                                 await new Promise(resolve => setTimeout(resolve, 2500));
                                 const updatedOppRes = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/row/opportunites/${oppId}`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } });
                                 if (!updatedOppRes.ok) throw new Error("Échec de la récupération de l'opportunité.");
                                 const updatedOppData = await updatedOppRes.json();
-                                
+
                                 gce.viewManager.updateItem(oppId, updatedOppData);
                                 gce.viewManager.updateDetailModalIfOpen(oppId, updatedOppData);
 
@@ -168,16 +168,16 @@ document.addEventListener('DOMContentLoaded', () => {
                             layout: "fitColumns", columns: tachesColumns, placeholder: "Aucune tâche.",
                         });
                         tachesTable.on("cellEdited", function (cell) {
-                        const rowData = cell.getRow().getData();
-                        const cleanedData = sanitizeRowBeforeSave(rowData, tachesSchema);
-                        showStatusUpdate('Sauvegarde...');
-                        fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/taches/${rowData.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce }, body: JSON.stringify(cleanedData) })
-                            .then(res => { if (!res.ok) { cell.restoreOldValue(); throw new Error("Sauvegarde échouée."); } return res.json(); })
-                            .then(updatedTask => { showStatusUpdate('Tâche mise à jour !', true); cell.getRow().update(updatedTask); })
-                            .catch(err => { showStatusUpdate(`Erreur: ${err.message}`, false); });
+                            const rowData = cell.getRow().getData();
+                            const cleanedData = sanitizeRowBeforeSave(rowData, tachesSchema);
+                            showStatusUpdate('Sauvegarde...');
+                            fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/taches/${rowData.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce }, body: JSON.stringify(cleanedData) })
+                                .then(res => { if (!res.ok) { cell.restoreOldValue(); throw new Error("Sauvegarde échouée."); } return res.json(); })
+                                .then(updatedTask => { showStatusUpdate('Tâche mise à jour !', true); cell.getRow().update(updatedTask); })
+                                .catch(err => { showStatusUpdate(`Erreur: ${err.message}`, false); });
                         });
                     }, 50);
-const tableInteractionsDiv = container.querySelector('.sub-table-container-interactions');
+                    const tableInteractionsDiv = container.querySelector('.sub-table-container-interactions');
                     tableInteractionsDiv.innerHTML = '';
                     const interactionsSchema = window.gceSchemas.interactions;
 
@@ -207,19 +207,19 @@ const tableInteractionsDiv = container.querySelector('.sub-table-container-inter
                                 if (confirm(`Êtes-vous sûr de vouloir supprimer cette interaction ?`)) {
                                     showStatusUpdate('Suppression en cours...');
                                     fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/interactions/${rowData.id}`, { method: 'DELETE', headers: { 'X-WP-Nonce': EECIE_CRM.nonce } })
-                                    .then(async res => {
-                                        if (!res.ok) throw new Error('Échec de la suppression.');
-                                        showStatusUpdate('Interaction supprimée ! Mise à jour...', true);
-                                        const oppId = parseInt(container.closest('.gce-detail-modal').dataset.itemId, 10);
-                                        const oppRes = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/row/opportunites/${oppId}`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } });
-                                        if(oppRes.ok) {
-                                            const updatedOppData = await oppRes.json();
-                                            gce.viewManager.updateDetailModalIfOpen(oppId, updatedOppData);
-                                        } else {
-                                            location.reload();
-                                        }
-                                    })
-                                    .catch(err => alert(`Erreur: ${err.message}`));
+                                        .then(async res => {
+                                            if (!res.ok) throw new Error('Échec de la suppression.');
+                                            showStatusUpdate('Interaction supprimée ! Mise à jour...', true);
+                                            const oppId = parseInt(container.closest('.gce-detail-modal').dataset.itemId, 10);
+                                            const oppRes = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/row/opportunites/${oppId}`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } });
+                                            if (oppRes.ok) {
+                                                const updatedOppData = await oppRes.json();
+                                                gce.viewManager.updateDetailModalIfOpen(oppId, updatedOppData);
+                                            } else {
+                                                location.reload();
+                                            }
+                                        })
+                                        .catch(err => alert(`Erreur: ${err.message}`));
                                 }
                             }
                         }
@@ -232,23 +232,24 @@ const tableInteractionsDiv = container.querySelector('.sub-table-container-inter
                             placeholder: "Aucune interaction."
                         });
                     }, 50);
-                const tableDevisDiv = container.querySelector('.sub-table-container-devis');
-                tableDevisDiv.innerHTML = ''; // Vider le message de chargement
-                const devisSchema = window.gceSchemas.devis;
-                const articlesSchema = window.gceSchemas.articles_devis;
-                
-                if (relatedData.devis && relatedData.devis.length > 0) {
-                    const devis = relatedData.devis[0]; // On prend le premier devis trouvé
-                    const articles = relatedData.articles || [];
+                    const tableDevisDiv = container.querySelector('.sub-table-container-devis');
+                    tableDevisDiv.innerHTML = ''; // Vider le message de chargement
+                    const devisSchema = window.gceSchemas.devis;
+                    const articlesSchema = window.gceSchemas.articles_devis;
 
-                    // Afficher les détails du devis et les boutons d'action
-                    tableDevisDiv.innerHTML = `
+                    if (relatedData.devis && relatedData.devis.length > 0) {
+                        const devis = relatedData.devis[0]; // On prend le premier devis trouvé
+                        const articles = relatedData.articles || [];
+
+                        // Afficher les détails du devis et les boutons d'action
+                        tableDevisDiv.innerHTML = `
                         <div class="devis-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid #eee;">
                             <div>
                                 <strong>Statut :</strong> <span class="gce-badge gce-color-${devis.Status?.color || 'gray'}">${devis.Status?.value || 'N/A'}</span>
                                 <strong style="margin-left: 15px;">Total HT :</strong> ${parseFloat(devis.Montant_total_ht || 0).toFixed(2)} $
                             </div>
                             <div class="devis-actions" style="display: flex; gap: 10px;">
+                                <button class="button button-secondary gce-assign-fournisseur-btn" data-devis-id="${devis.id}">🚚 Assigner Fournisseur</button>
                                 <button class="button gce-add-article-btn">➕ Article</button>
                                 <button class="button button-primary gce-calculate-devis-btn">⚡ Calculer</button>
                             </div>
@@ -256,44 +257,53 @@ const tableInteractionsDiv = container.querySelector('.sub-table-container-inter
                         <div class="articles-sub-table"></div>
                     `;
 
-                    // Logique du bouton "Ajouter Article"
-                    container.querySelector('.gce-add-article-btn').addEventListener('click', () => {
-                         gceShowModal({ "Devis": [{ id: devis.id, value: `Devis #${devis.DevisId}` }] }, "articles_devis", "ecriture", ["Nom", "Quantités", "Prix_unitaire"]);
-                    });
+                        // Logique du bouton "Ajouter Article"
+                        container.querySelector('.gce-add-article-btn').addEventListener('click', () => {
+                            gceShowModal({ "Devis": [{ id: devis.id, value: `Devis #${devis.DevisId}` }] }, "articles_devis", "ecriture", ["Nom", "Quantités", "Prix_unitaire"]);
+                        });
+                        container.querySelector('.gce-assign-fournisseur-btn').addEventListener('click', (e) => {
+                            e.preventDefault();
+                            const devisId = e.target.dataset.devisId;
 
-                    // Logique du bouton "Calculer"
-                    container.querySelector('.gce-calculate-devis-btn').addEventListener('click', async (e) => {
-                        const btn = e.target;
-                        const oppId = opportunite.id;
-                        btn.disabled = true; btn.textContent = 'Calcul...';
-                        showStatusUpdate('Calcul du devis en cours...', true);
-                        try {
-                            const res = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/proxy/calculate-devis`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce },
-                                body: JSON.stringify({ devis_id: devis.id })
-                            });
-                            if (!res.ok) throw new Error('Échec du calcul.');
-                            await res.json();
-                            showStatusUpdate('Calcul terminé ! Synchronisation...', true);
+                            // On a déjà les données complètes du devis dans la variable 'devis'
+                            console.log(`Ouverture du popup pour assigner un fournisseur au devis #${devisId}`);
 
-                            await new Promise(resolve => setTimeout(resolve, 4000)); // Délai plus long
+                            // On appelle gceShowModal en lui demandant d'afficher UNIQUEMENT le champ "Fournisseur"
+                            gceShowModal(devis, 'devis', 'ecriture', ['Fournisseur']);
+                        });
+                        // Logique du bouton "Calculer"
+                        container.querySelector('.gce-calculate-devis-btn').addEventListener('click', async (e) => {
+                            const btn = e.target;
+                            const oppId = opportunite.id;
+                            btn.disabled = true; btn.textContent = 'Calcul...';
+                            showStatusUpdate('Calcul du devis en cours...', true);
+                            try {
+                                const res = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/proxy/calculate-devis`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce },
+                                    body: JSON.stringify({ devis_id: devis.id })
+                                });
+                                if (!res.ok) throw new Error('Échec du calcul.');
+                                await res.json();
+                                showStatusUpdate('Calcul terminé ! Synchronisation...', true);
 
-                            const updatedOppRes = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/row/opportunites/${oppId}`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } });
-                            if (!updatedOppRes.ok) throw new Error("Échec de la récupération de l'opportunité.");
-                            const updatedOppData = await updatedOppRes.json();
-                            gce.viewManager.updateItem(oppId, updatedOppData);
-                            gce.viewManager.updateDetailModalIfOpen(oppId, updatedOppData);
-                            showStatusUpdate('Vue mise à jour !', true);
-                        } catch (err) {
-                            showStatusUpdate(`Erreur: ${err.message}`, false);
-                        } finally { btn.disabled = false; btn.textContent = '⚡ Calculer'; }
-                    });
+                                await new Promise(resolve => setTimeout(resolve, 4000)); // Délai plus long
 
-                    // Création de la sous-table des articles
-                
-                    const articlesTableDiv = container.querySelector('.articles-sub-table');
-                    // On construit manuellement les colonnes pour avoir un contrôle total
+                                const updatedOppRes = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/row/opportunites/${oppId}`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } });
+                                if (!updatedOppRes.ok) throw new Error("Échec de la récupération de l'opportunité.");
+                                const updatedOppData = await updatedOppRes.json();
+                                gce.viewManager.updateItem(oppId, updatedOppData);
+                                gce.viewManager.updateDetailModalIfOpen(oppId, updatedOppData);
+                                showStatusUpdate('Vue mise à jour !', true);
+                            } catch (err) {
+                                showStatusUpdate(`Erreur: ${err.message}`, false);
+                            } finally { btn.disabled = false; btn.textContent = '⚡ Calculer'; }
+                        });
+
+                        // Création de la sous-table des articles
+
+                        const articlesTableDiv = container.querySelector('.articles-sub-table');
+                        // On construit manuellement les colonnes pour avoir un contrôle total
                         let articlesColumns = getTabulatorColumnsFromSchema(articlesSchema, 'articles_devis')
                             .filter(col => col.field !== 'Devis'); // On exclut la colonne "Devis"
 
@@ -315,7 +325,7 @@ const tableInteractionsDiv = container.querySelector('.sub-table-container-inter
                                 if (deleteBtn) {
                                     e.preventDefault();
                                     const rowData = cell.getRow().getData();
-                                    
+
                                     // Fenêtre de confirmation
                                     if (confirm(`Êtes-vous sûr de vouloir supprimer l'article "${rowData.Nom || 'cet article'}" ?`)) {
                                         showStatusUpdate('Suppression en cours...');
@@ -323,49 +333,49 @@ const tableInteractionsDiv = container.querySelector('.sub-table-container-inter
                                             method: 'DELETE',
                                             headers: { 'X-WP-Nonce': EECIE_CRM.nonce }
                                         })
-                                        .then(async res => {
-                                            if (!res.ok) throw new Error('Échec de la suppression.');
-                                            showStatusUpdate('Article supprimé !', true);
+                                            .then(async res => {
+                                                if (!res.ok) throw new Error('Échec de la suppression.');
+                                                showStatusUpdate('Article supprimé !', true);
 
-                                            const oppId = parseInt(container.closest('.gce-detail-modal').dataset.itemId, 10);
-                                            const oppRes = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/row/opportunites/${oppId}`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } });
-                                            if(oppRes.ok) {
-                                                const updatedOppData = await oppRes.json();
-                                                gce.viewManager.updateDetailModalIfOpen(oppId, updatedOppData);
-                                            } else {
-                                                location.reload(); // Fallback
-                                            }
-                                        })
-                                        .catch(err => {
-                                            alert(`Erreur: ${err.message}`);
-                                        });
+                                                const oppId = parseInt(container.closest('.gce-detail-modal').dataset.itemId, 10);
+                                                const oppRes = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/row/opportunites/${oppId}`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } });
+                                                if (oppRes.ok) {
+                                                    const updatedOppData = await oppRes.json();
+                                                    gce.viewManager.updateDetailModalIfOpen(oppId, updatedOppData);
+                                                } else {
+                                                    location.reload(); // Fallback
+                                                }
+                                            })
+                                            .catch(err => {
+                                                alert(`Erreur: ${err.message}`);
+                                            });
                                     }
                                 }
                             }
                         });
-                    const articlesTable = new Tabulator(articlesTableDiv, {
-                        data: articles,
-                        layout: "fitColumns",
-                        columns: articlesColumns,
-                        placeholder: "Aucun article dans ce devis."
-                    });
+                        const articlesTable = new Tabulator(articlesTableDiv, {
+                            data: articles,
+                            layout: "fitColumns",
+                            columns: articlesColumns,
+                            placeholder: "Aucun article dans ce devis."
+                        });
 
-                    // Activer l'édition en ligne pour les articles
-                    articlesTable.on("cellEdited", function(cell){
-                        const rowData = cell.getRow().getData();
-                        const cleanedData = sanitizeRowBeforeSave(rowData, articlesSchema);
-                        showStatusUpdate('Sauvegarde article...');
-                        fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/articles_devis/${rowData.id}`, {
-                            method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce }, body: JSON.stringify(cleanedData)
-                        })
-                        .then(res => { if (!res.ok) { cell.restoreOldValue(); throw new Error("Sauvegarde échouée."); } return res.json(); })
-                        .then(updatedArticle => { showStatusUpdate('Article mis à jour !', true); cell.getRow().update(updatedArticle); })
-                        .catch(err => { showStatusUpdate(`Erreur: ${err.message}`, false); });
-                    });
+                        // Activer l'édition en ligne pour les articles
+                        articlesTable.on("cellEdited", function (cell) {
+                            const rowData = cell.getRow().getData();
+                            const cleanedData = sanitizeRowBeforeSave(rowData, articlesSchema);
+                            showStatusUpdate('Sauvegarde article...');
+                            fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/articles_devis/${rowData.id}`, {
+                                method: 'PATCH', headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce }, body: JSON.stringify(cleanedData)
+                            })
+                                .then(res => { if (!res.ok) { cell.restoreOldValue(); throw new Error("Sauvegarde échouée."); } return res.json(); })
+                                .then(updatedArticle => { showStatusUpdate('Article mis à jour !', true); cell.getRow().update(updatedArticle); })
+                                .catch(err => { showStatusUpdate(`Erreur: ${err.message}`, false); });
+                        });
 
-                } else {
-                    tableDevisDiv.innerHTML = '<p>Aucun devis n\'a encore été créé pour cette opportunité.</p>';
-                }
+                    } else {
+                        tableDevisDiv.innerHTML = '<p>Aucun devis n\'a encore été créé pour cette opportunité.</p>';
+                    }
                 } catch (err) { container.querySelector('.sub-table-container-taches').innerHTML = `<p style="color:red;">${err.message}</p>`; }
             })();
             return container;
@@ -384,23 +394,32 @@ const tableInteractionsDiv = container.querySelector('.sub-table-container-inter
     }
 
     Promise.all([
-    fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/opportunites', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
-    fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/opportunites/schema', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
-    fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/taches/schema', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
-    fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/appels/schema', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
-    fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/interactions/schema', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
-    // AJOUTER CES DEUX LIGNES
-    fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/devis/schema', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
-    fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/articles_devis/schema', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json())
-]).then(([oppData, oppSchema, tachesSchema, appelsSchema, interactionsSchema, devisSchema, articlesDevisSchema]) => { // Ajouter les nouvelles variables ici
-    window.gceSchemas = { ...window.gceSchemas, 
-        "opportunites": oppSchema, 
-        "taches": tachesSchema, 
-        "appels": appelsSchema, 
-        "interactions": interactionsSchema,
-        "devis": devisSchema, // Ajouter ici
-        "articles_devis": articlesDevisSchema // Ajouter ici
-    }; const myOpps = oppData.results || [];
+        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/opportunites', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
+        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/opportunites/schema', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
+        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/taches/schema', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
+        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/appels/schema', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
+        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/interactions/schema', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
+        // AJOUTER CES DEUX LIGNES
+        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/devis/schema', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
+        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/articles_devis/schema', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
+        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/fournisseurs', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json())
+    ]).then(([oppData, oppSchema, tachesSchema, appelsSchema, interactionsSchema, devisSchema, articlesDevisSchema, fournisseursData]) => {// Ajouter les nouvelles variables ici
+        window.gceSchemas = {
+            ...window.gceSchemas,
+            "opportunites": oppSchema,
+            "taches": tachesSchema,
+            "appels": appelsSchema,
+            "interactions": interactionsSchema,
+            "devis": devisSchema, // Ajouter ici
+            "articles_devis": articlesDevisSchema, // Ajouter ici
+
+        };
+        // NOUVEAU : On met les données des fournisseurs dans le cache global
+        window.gceDataCache = {
+            ...window.gceDataCache,
+            fournisseurs: fournisseursData.results || []
+        };
+        const myOpps = oppData.results || [];
         gce.viewManager.initialize(mainContainer, myOpps, opportunitesViewConfig);
         handleAutoOpenFromUrl();
         const filterContainer = document.getElementById('gce-status-filters');
