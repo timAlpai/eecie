@@ -46,6 +46,7 @@ function gce_get_table_id_to_slug_map() {
         'Input_mail_history' => "input_mail_history",
         'Log_reset_opportunite' => 'log_reset_opportunite',
         'Devis_Signatures' => 'devis_signatures',
+        'Rendez_vous_fournisseur' => 'rendezvous_fournisseur', 
         
     ];
 
@@ -130,3 +131,91 @@ function gce_create_jobs_table() {
 
 // Enregistre la fonction pour qu'elle s'exécute à l'activation du plugin
 register_activation_hook(__FILE__, 'gce_create_jobs_table');
+
+function gce_display_schedule_form() {
+    // 1. Récupérer les paramètres de l'URL
+    $rdv_id = isset($_GET['rdv_id']) ? intval($_GET['rdv_id']) : 0;
+    $token = isset($_GET['token']) ? sanitize_text_field($_GET['token']) : '';
+
+    // 2. Validation initiale côté serveur
+    if (!$rdv_id || empty($token)) {
+        return "<h2>Planifier l'intervention</h2><p style='color:red;'>Ce lien est invalide (paramètres manquants).</p>";
+    }
+
+    // 3. Appel à Baserow pour vérifier le token (logique serveur)
+    $rdv_table_id = eecie_crm_guess_table_id('Rendez_vous_fournisseur');
+    if (!$rdv_table_id) {
+        return "<h2>Planifier l'intervention</h2><p style='color:red;'>Erreur de configuration (table RDV introuvable).</p>";
+    }
+
+    $rdv_data = eecie_crm_baserow_get("rows/table/{$rdv_table_id}/{$rdv_id}/?user_field_names=true");
+    
+    // 4. Conditions de validation
+    $is_valid = true;
+    if (is_wp_error($rdv_data)) {
+        $is_valid = false;
+    } elseif ($rdv_data['Validation_Token'] !== $token) {
+        $is_valid = false;
+    } elseif (!empty($rdv_data['Date_Heure_RDV'])) {
+        // Le lien a déjà été utilisé
+        return "<h2>Planifier l'intervention</h2><p style='color:orange;'>Ce rendez-vous a déjà été planifié pour le " . esc_html(date_i18n(get_option('date_format') . ' H:i', strtotime($rdv_data['Date_Heure_RDV']))) . ".</p>";
+    }
+
+    // 5. Affichage conditionnel
+    ob_start();
+    ?>
+    <h2>Planifier l'intervention</h2>
+    <?php if ($is_valid): ?>
+        <div id="schedule-form-container" data-rdv-id="<?php echo $rdv_id; ?>" data-token="<?php echo $token; ?>">
+            <p><strong>Dossier :</strong> <?php echo esc_html($rdv_data['Opportunite_liee'][0]['value']); ?></p>
+            <p>Veuillez entrer la date et l'heure convenues avec le client :</p>
+            <form id="rdv-form">
+                <input type="datetime-local" id="date_heure" required style="padding: 8px; font-size: 1.1em;">
+                <button type="submit" style="padding: 10px 15px; background-color: #28a745; color: white; border: none; cursor: pointer;">Soumettre</button>
+            </form>
+            <div id="form-status" style="margin-top: 15px;"></div>
+        </div>
+        
+        <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const container = document.getElementById('schedule-form-container');
+            const form = document.getElementById('rdv-form');
+            const statusDiv = document.getElementById('form-status');
+            const rdvId = container.dataset.rdvId;
+            const token = container.dataset.token;
+
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                form.querySelector('button').disabled = true;
+                statusDiv.textContent = 'Envoi en cours...';
+
+                const dateHeure = document.getElementById('date_heure').value;
+
+                try {
+                    const submitRes = await fetch(`<?php echo rest_url('eecie-crm/v1/rdv/submit-schedule'); ?>`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }, // Pas besoin de Nonce ici car la route est publique
+                        body: JSON.stringify({ id: rdvId, token: token, date_heure: dateHeure })
+                    });
+                    
+                    if (!submitRes.ok) {
+                        const errorData = await submitRes.json();
+                        throw new Error(errorData.message || 'Erreur lors de la soumission.');
+                    }
+
+                    container.innerHTML = '<p style="color:green; font-weight:bold;">Merci ! La date a été enregistrée avec succès.</p>';
+                } catch(error) {
+                    statusDiv.innerHTML = `<p style="color:red;">${error.message}</p>`;
+                    form.querySelector('button').disabled = false;
+                }
+            });
+        });
+        </script>
+    <?php else: ?>
+        <p style='color:red;'>Ce lien est invalide ou a déjà été utilisé.</p>
+    <?php endif; ?>
+    <?php
+    return ob_get_clean();
+}
+// N'oubliez pas d'enregistrer le shortcode si ce n'est pas déjà fait
+add_shortcode('gce_schedule_form', 'gce_display_schedule_form');

@@ -47,8 +47,19 @@ document.addEventListener('DOMContentLoaded', () => {
             const container = document.createElement('div');
             container.className = 'gce-appel-card';
             const progression = parseInt(opportunite.Progression, 10) || 0;
-            const contactLink = opportunite.Contacts?.[0] ? `<a href="#" class="gce-popup-link" data-table="contacts" data-id="${opportunite.Contacts[0].id}">${opportunite.Contacts[0].value}</a>` : 'Non spécifié';
-            const employeLink = opportunite.T1_user?.[0] ? `<a href="#" class="gce-popup-link" data-table="utilisateurs" data-id="${opportunite.T1_user[0].id}">${opportunite.T1_user[0].value}</a>` : 'Non assigné';
+            let contactHtml;
+            const contact = opportunite.Contacts?.[0];
+
+            if (contact) {
+                // Lien pour voir le contact (lecture) + bouton pour l'éditer (ecriture)
+                contactHtml = `
+        <span style="display: inline-flex; align-items: center; gap: 10px;">
+            <a href="#" class="gce-popup-link" data-table="contacts" data-id="${contact.id}" data-mode="ecriture">${contact.value}</a>
+            <button class="button button-small gce-popup-link" data-table="contacts" data-id="${contact.id}" data-mode="ecriture" title="Modifier ce contact">✏️</button>
+        </span>`;
+            } else {
+                contactHtml = '<i>Non spécifié</i>';
+            } const employeLink = opportunite.T1_user?.[0] ? `<a href="#" class="gce-popup-link" data-table="utilisateurs" data-id="${opportunite.T1_user[0].id}">${opportunite.T1_user[0].value}</a>` : 'Non assigné';
             const statutBadge = `<span class="gce-badge gce-color-${opportunite.Status?.color || 'gray'}">${opportunite.Status?.value || 'N/A'}</span>`;
             const travauxHtml = opportunite.Travaux ? `<div style="margin-top:10px; padding:10px; background-color:#f9f9f9; border-radius:4px;">${opportunite.Travaux}</div>` : '<p><i>Aucune description des travaux.</i></p>';
 
@@ -62,7 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
                 <div class="gce-appel-details">
-                    <p><strong>Contact:</strong> ${contactLink}</p>
+                    <p><strong>Contact:</strong> ${contactHtml}</p>
                     <p><strong>Chargé de projet:</strong> ${employeLink}</p>
                     <p><strong>Ville:</strong> ${opportunite.Ville || 'N/A'}</p>
                     <p><strong>Statut:</strong> ${statutBadge}</p>
@@ -240,8 +251,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (relatedData.devis && relatedData.devis.length > 0) {
                         const devis = relatedData.devis[0]; // On prend le premier devis trouvé
                         const articles = relatedData.articles || [];
+                        // 1. On crée une variable pour contenir le HTML du lien PDF
+                        let pdfLinkHtml = '';
 
-                        // Afficher les détails du devis et les boutons d'action
+                        // 2. On vérifie si le champ 'File' du devis contient des données
+                        if (devis.File && Array.isArray(devis.File) && devis.File.length > 0) {
+                            const pdfFile = devis.File[0]; // On prend le premier fichier
+                            // 3. On construit le bouton avec le lien
+                            pdfLinkHtml = `
+                                <a href="${pdfFile.url}" target="_blank" class="button" title="${pdfFile.visible_name}">
+                                    📄 Voir le PDF
+                                </a>`;
+                        }
+
+                        // 4. On injecte la variable (qui sera soit le bouton, soit une chaîne vide)
                         tableDevisDiv.innerHTML = `
                         <div class="devis-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid #eee;">
                             <div>
@@ -249,6 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <strong style="margin-left: 15px;">Total HT :</strong> ${parseFloat(devis.Montant_total_ht || 0).toFixed(2)} $
                             </div>
                             <div class="devis-actions" style="display: flex; gap: 10px;">
+                                ${pdfLinkHtml} <!-- NOTRE NOUVEAU BOUTON EST INJECTÉ ICI -->
                                 <button class="button button-secondary gce-assign-fournisseur-btn" data-devis-id="${devis.id}">🚚 Assigner Fournisseur</button>
                                 <button class="button gce-add-article-btn">➕ Article</button>
                                 <button class="button button-primary gce-calculate-devis-btn">⚡ Calculer</button>
@@ -256,6 +280,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                         <div class="articles-sub-table"></div>
                     `;
+                      
 
                         // Logique du bouton "Ajouter Article"
                         container.querySelector('.gce-add-article-btn').addEventListener('click', () => {

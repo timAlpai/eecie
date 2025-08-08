@@ -18,6 +18,7 @@ $known_usages = [
     'Input_mail_history' => 'input_mail_history',
     'Log_reset_opportunite' => 'log_reset_opportunite',
     'Devis_Signatures' => 'devis_signatures',
+    'Rendez_vous_fournisseur' => 'rendezvous_fournisseur',
 ];
 
 $api_key = get_option('gce_baserow_api_key', '');
