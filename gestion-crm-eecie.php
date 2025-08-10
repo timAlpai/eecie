@@ -46,7 +46,10 @@ function gce_get_table_id_to_slug_map() {
         'Input_mail_history' => "input_mail_history",
         'Log_reset_opportunite' => 'log_reset_opportunite',
         'Devis_Signatures' => 'devis_signatures',
-        'Rendez_vous_fournisseur' => 'rendezvous_fournisseur', 
+        'Rendez_vous_fournisseur' => 'rendezvous_fournisseur',
+        'Rapports_Livraison' => 'rapports_livraison',
+        'Articles_Livraison' => 'articles_livraison',
+        'Signatures_Livraison' => 'signatures_livraison',
         
     ];
 
@@ -97,6 +100,69 @@ function eecie_crm_register_global_rest_nonce() {
 
 add_action('wp_enqueue_scripts', 'eecie_crm_register_global_rest_nonce');
 add_action('admin_enqueue_scripts', 'eecie_crm_register_global_rest_nonce');
+/**
+ * Gère les en-têtes CORS pour toutes les requêtes de l'API REST.
+ * Cette fonction s'exécute pour chaque requête API et gère à la fois
+ * les requêtes normales et les requêtes de pré-vérification (OPTIONS).
+ */
+function gce_handle_rest_api_cors() {
+    // La liste blanche des domaines autorisés à faire des requêtes
+    $allowed_origins = [
+        'https://prestataire.eecie.ca',
+        // 'http://localhost:8080', // Décommentez pour le développement local
+    ];
+
+    // Vérifie si l'origine de la requête est dans notre liste blanche
+    if (isset($_SERVER['HTTP_ORIGIN']) && in_array($_SERVER['HTTP_ORIGIN'], $allowed_origins)) {
+        // L'origine est autorisée, on la renvoie dans l'en-tête
+        header('Access-Control-Allow-Origin: ' . $_SERVER['HTTP_ORIGIN']);
+        header('Vary: Origin'); // Bonne pratique pour le cache
+    } else {
+        // Si l'origine n'est pas dans la liste, on ne fait rien.
+        // WordPress gérera ou non l'en-tête pour son propre domaine.
+        // Pour une requête OPTIONS, cela reviendra à un refus.
+    }
+    
+    // On définit les autres en-têtes nécessaires pour notre PWA
+    header('Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS');
+    header('Access-Control-Allow-Credentials: true');
+    header('Access-Control-Allow-Headers: Authorization, Content-Type, X-WP-Nonce');
+
+    // Si c'est une requête de pré-vérification (preflight), on s'arrête ici.
+    if ('OPTIONS' === $_SERVER['REQUEST_METHOD']) {
+        status_header(204); // Réponse HTTP "204 No Content"
+        exit(); // On arrête l'exécution de PHP, WordPress ne continue pas.
+    }
+}
+
+/**
+ * S'assure que notre gestionnaire CORS est bien en place et
+ * que celui de WordPress est désactivé.
+ */
+function gce_setup_cors_for_rest_api() {
+    // On retire le filtre par défaut de WordPress qui cause des conflits
+    remove_filter('rest_pre_serve_request', 'rest_send_cors_headers');
+    
+    // On ajoute notre propre fonction pour gérer les en-têtes
+    add_action('rest_pre_serve_request', 'gce_handle_rest_api_cors');
+}
+
+// On s'accroche à l'initialisation de l'API REST
+add_action('rest_api_init', 'gce_setup_cors_for_rest_api');
+
+// --- FIN BLOC CORS ULTIME ---
+
+
+// --- DÉBUT CONFIGURATION JWT (ne change pas) ---
+function gce_jwt_override_auth_endpoints($endpoints) {
+    if (isset($endpoints['/wp-json/jwt-auth/v1/token'])) {
+        $endpoints['/wp-json/jwt-auth/v1/token']['isAuth'] = false;
+    }
+    return $endpoints;
+}
+add_filter('jwt_auth_public_endpoints', 'gce_jwt_override_auth_endpoints');
+// --- FIN CONFIGURATION JWT ---
+
 
 /**
  * Crée la table de base de données personnalisée pour les tâches (jobs).

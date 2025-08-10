@@ -19,6 +19,9 @@ $known_usages = [
     'Log_reset_opportunite' => 'log_reset_opportunite',
     'Devis_Signatures' => 'devis_signatures',
     'Rendez_vous_fournisseur' => 'rendezvous_fournisseur',
+    'Rapports_Livraison' => 'rapports_livraison',
+    'Articles_Livraison' => 'articles_livraison',
+    'Signatures_Livraison' => 'signatures_livraison',
 ];
 
 $api_key = get_option('gce_baserow_api_key', '');
