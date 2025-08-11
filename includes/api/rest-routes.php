@@ -46,6 +46,9 @@
             '#^/eecie-crm/v1/devis/accept$#',
             '#^/eecie-crm/v1/rdv/verify$#',
             '#^/eecie-crm/v1/rdv/submit-schedule$#',
+             '#^/jwt-auth/v1/token$#',
+             '#^/jwt-auth/v1/token/validate$#',
+             '#^/eecie-crm/v1/fournisseur/mes-jobs$#',
         ];
 
         $route = $request->get_route();
@@ -3265,83 +3268,14 @@ function gce_api_check_jwt_permission($request) {
 }
 
 
-/**
- * Callback pour la route GET /fournisseur/mes-jobs
- *
- * @param WP_REST_Request $request
- * @return WP_REST_Response
- */
 function gce_api_get_fournisseur_jobs($request) {
-    // Le plugin JWT a validé le token et nous donne l'ID de l'utilisateur WordPress connecté.
+    $params = $request->get_json_params();
+
     $user_id_wp = get_current_user_id();
     $user_email = wp_get_current_user()->user_email;
+    return new WP_REST_Response(['success' => true, 'message' => 'Rapport soumis.'], 200);
 
-    // 1. Trouver le contact "Fournisseur" dans Baserow lié à cet email
-    $contact_fournisseur = gce_get_baserow_user_by_email($user_email, 'Fournisseur');
-    if (!$contact_fournisseur) {
-        return new WP_Error('no_provider_contact', "Aucun contact fournisseur trouvé pour cet utilisateur.", ['status' => 404]);
-    }
-
-    // 2. Récupérer l'enregistrement "Fournisseur" principal lié à ce contact
-    if (empty($contact_fournisseur['Fournisseur'][0]['id'])) {
-         return new WP_Error('no_provider_linked', "Ce contact n'est lié à aucune fiche Fournisseur.", ['status' => 404]);
-    }
-    $fournisseur_id = $contact_fournisseur['Fournisseur'][0]['id'];
-    
-    // 3. Chercher les opportunités dans Baserow
-    $opp_table_id = get_option('gce_baserow_table_opportunites');
-    $devis_table_id = get_option('gce_baserow_table_devis');
-
-    // On cherche les devis liés à ce fournisseur
-    $params_devis = [
-        'user_field_names' => 'true',
-        'filter__Fournisseur__link_row_has' => $fournisseur_id,
-        'include' => 'Task_input' // Pour récupérer l'ID de l'opportunité
-    ];
-    $devis_lies = eecie_crm_baserow_get("rows/table/{$devis_table_id}/", $params_devis);
-
-    if (is_wp_error($devis_lies) || empty($devis_lies['results'])) {
-        return new WP_REST_Response([], 200); // Pas de devis, donc pas de job
-    }
-    
-    // Extraire les IDs des opportunités liées à ces devis
-    $opportunite_ids = [];
-    foreach ($devis_lies['results'] as $devis) {
-        if (!empty($devis['Task_input'][0]['id'])) {
-            $opportunite_ids[] = $devis['Task_input'][0]['id'];
-        }
-    }
-
-    if (empty($opportunite_ids)) {
-        return new WP_REST_Response([], 200);
-    }
-    
-    // 4. Filtrer ces opportunités pour ne garder que celles avec le statut "Realisation"
-    $params_opp = [
-        'user_field_names' => 'true',
-        'filter__Status__equal' => 'Realisation', // Le statut exact
-        'filter__id__in' => implode(',', $opportunite_ids) // On ne cherche que parmi les IDs trouvés
-    ];
-    
-    $jobs = eecie_crm_baserow_get("rows/table/{$opp_table_id}/", $params_opp);
-
-    if (is_wp_error($jobs)) {
-        return $jobs;
-    }
-
-    // On ne retourne que les champs utiles pour l'application
-    $cleaned_jobs = array_map(function($job) {
-        return [
-            'id' => $job['id'],
-            'NomClient' => $job['NomClient'],
-            'Ville' => $job['Ville'],
-            'Travaux' => $job['Travaux'] ?? 'Aucune description',
-        ];
-    }, $jobs['results']);
-
-    return new WP_REST_Response($cleaned_jobs, 200);
 }
-
 
 /**
  * Callback pour la route POST /livraison/submit-report

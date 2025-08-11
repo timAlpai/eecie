@@ -101,54 +101,86 @@ function eecie_crm_register_global_rest_nonce() {
 add_action('wp_enqueue_scripts', 'eecie_crm_register_global_rest_nonce');
 add_action('admin_enqueue_scripts', 'eecie_crm_register_global_rest_nonce');
 /**
- * Fonction centrale pour gérer les en-têtes CORS.
- * Elle est conçue pour s'exécuter avant que WordPress ne traite la requête.
+ * Fonction principale qui s'accroche tôt dans le chargement de WordPress.
  */
-function gce_handle_cors_and_preflight() {
-    // On ne s'exécute que si l'en-tête Origin est présent
-    if ( ! isset($_SERVER['HTTP_ORIGIN']) ) {
+function gce_init_cors_rules() {
+    // Simule la lecture d'une option "activée" comme le ferait le plugin.
+    // Pour nous, c'est toujours activé.
+    $is_cors_enabled = true; 
+
+    if ( ! $is_cors_enabled ) {
         return;
     }
-    
-    // Liste blanche des domaines autorisés
-    $allowed_origins = [
-        'https://prestataire.eecie.ca',
-        // 'http://localhost:8080', // Pour le développement local
-    ];
 
-    // Si l'origine de la requête est dans notre liste, on continue
-    if ( in_array( $_SERVER['HTTP_ORIGIN'], $allowed_origins ) ) {
+    // On ajoute les en-têtes CORS en utilisant la même méthode que le plugin.
+    gce_add_cors_headers();
 
-        // On envoie les en-têtes CORS essentiels
-        header('Access-Control-Allow-Origin: ' . $_SERVER['HTTP_ORIGIN']);
-        header('Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS');
-        header('Access-Control-Allow-Credentials: true');
-        header('Access-Control-Allow-Headers: Authorization, Content-Type, X-WP-Nonce');
-        header('Vary: Origin'); // Bonne pratique pour les caches
-
-        // Si c'est une requête de pré-vérification (preflight) OPTIONS, 
-        // on envoie une réponse 204 et on arrête tout.
-        if ('OPTIONS' === $_SERVER['REQUEST_METHOD']) {
-            status_header(204);
-            exit();
-        }
-    }
+    // On s'assure de retirer le filtre par défaut de WordPress.
+    // On le fait dans 'rest_api_init' pour être certain que le filtre existe avant de le retirer.
+    add_action('rest_api_init', function() {
+        remove_filter('rest_pre_serve_request', 'rest_send_cors_headers');
+    });
 }
-
-// On s'accroche à l'action 'init', qui est l'une des premières à s'exécuter.
-// Cela nous permet d'intercepter la requête OPTIONS avant que l'API REST ne soit chargée.
-add_action('init', 'gce_handle_cors_and_preflight');
+// On utilise le même hook que le plugin : 'plugins_loaded'.
+add_action('plugins_loaded', 'gce_init_cors_rules');
 
 
 /**
- * Retire la gestion CORS par défaut de l'API REST de WordPress,
- * car nous gérons maintenant tout nous-mêmes avec la fonction ci-dessus.
+ * Fonction qui génère et envoie les en-têtes CORS.
+ * C'est une copie simplifiée de la logique de Headers.php
  */
-function gce_remove_default_wp_cors() {
-    remove_filter('rest_pre_serve_request', 'rest_send_cors_headers');
-}
-add_action('rest_api_init', 'gce_remove_default_wp_cors');
+function gce_add_cors_headers() {
+    // On vérifie que l'en-tête Origin existe.
+    if ( ! isset($_SERVER['HTTP_ORIGIN']) ) {
+        return;
+    }
 
+    $allowed_origins = ['https://prestataires.eecie.ca'];
+
+    // Si l'origine n'est pas dans notre liste, on arrête tout.
+    if ( ! in_array($_SERVER['HTTP_ORIGIN'], $allowed_origins) ) {
+        return;
+    }
+
+    // Si on arrive ici, l'origine est autorisée.
+    header('Access-Control-Allow-Origin: ' . $_SERVER['HTTP_ORIGIN']);
+    header('Vary: Origin');
+    header('Access-Control-Allow-Methods: GET, POST, OPTIONS, PUT, DELETE, PATCH');
+    header('Access-Control-Allow-Credentials: true');
+    header('Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept, Authorization, X-WP-Nonce');
+
+    // On gère la requête OPTIONS et on arrête le script, comme le fait le plugin.
+    if ('OPTIONS' === $_SERVER['REQUEST_METHOD']) {
+        header('HTTP/1.1 204 No Content');
+        exit();
+    }
+}
+
+// --- FIN BLOC CORS ---
+
+// === AJOUTER CETTE NOUVELLE FONCTION CRUCIALE ===
+/**
+ * Court-circuite l'authentification du plugin JWT pour les requêtes OPTIONS.
+ * C'est la solution au problème de 401 sur la requête de pré-vérification.
+ *
+ * @param mixed           $result Le résultat du filtre.
+ * @param WP_REST_Request $request L'objet de la requête.
+ * @return bool|null
+ */
+function gce_bypass_jwt_auth_for_options_request($result, $request) {
+    // Si la méthode de la requête est OPTIONS, on retourne 'true'
+    // pour dire au plugin JWT "Ne fais rien, considère cette requête comme valide".
+    if ('OPTIONS' === $request->get_method()) {
+        return true;
+    }
+
+    // Pour toutes les autres requêtes (POST, GET...), on ne fait rien
+    // et on laisse le plugin JWT faire son travail d'authentification normal.
+    return $result;
+}
+// Le plugin JWT utilise le filtre 'jwt_auth_token_check' pour sa validation.
+// En nous y accrochant, nous pouvons l'intercepter.
+add_filter('jwt_auth_token_check', 'gce_bypass_jwt_auth_for_options_request', 10, 2);
 // --- DÉBUT CONFIGURATION JWT (ne change pas) ---
 function gce_jwt_override_auth_endpoints($endpoints) {
     if (isset($endpoints['/wp-json/jwt-auth/v1/token'])) {
@@ -159,6 +191,18 @@ function gce_jwt_override_auth_endpoints($endpoints) {
 add_filter('jwt_auth_public_endpoints', 'gce_jwt_override_auth_endpoints');
 // --- FIN CONFIGURATION JWT ---
 
+/**
+ * Ajoute l'URL de notre PWA à la liste blanche (whitelist) du plugin JWT.
+ * C'est la solution à l'erreur "missing allow origin".
+ *
+ * @param array $allowed_origins La liste des origines déjà autorisées.
+ * @return array La liste modifiée avec notre origine.
+ */
+function gce_add_pwa_to_jwt_allowed_origins($allowed_origins) {
+    $allowed_origins[] = 'https://prestataires.eecie.ca';
+    return $allowed_origins;
+}
+add_filter('jwt_auth_allowed_origins', 'gce_add_pwa_to_jwt_allowed_origins');
 
 /**
  * Crée la table de base de données personnalisée pour les tâches (jobs).
