@@ -358,9 +358,59 @@ function eecie_crm_baserow_request($method, $path, $payload = []) {
 function eecie_crm_baserow_patch($path, $payload) {
     return eecie_crm_baserow_request('PATCH', $path, $payload);
 }
+/**
+ * Effectue une requête GET à Baserow en utilisant la méthode de filtre JSON avancée.
+ * VERSION CORRIGÉE : Construit l'URL manuellement pour éviter les problèmes de http_build_query.
+ */
+function eecie_crm_baserow_get_with_json_filter($path, $filters, $otherParams = []) {
+    
+    // --- LA CORRECTION EST ICI ---
+    
+    // 1. On transforme notre tableau de filtres en une chaîne de caractères JSON.
+    $filters_json_string = json_encode($filters);
+    
+    // 2. On encode cette chaîne pour qu'elle soit sûre pour une URL.
+    $filters_url_encoded = urlencode($filters_json_string);
+    
+    // 3. On construit la partie "filtres" de la chaîne de requête.
+    $query_string = 'filters=' . $filters_url_encoded;
+    
+    // 4. On ajoute les autres paramètres (comme user_field_names).
+    if (!empty($otherParams)) {
+        $query_string .= '&' . http_build_query($otherParams);
+    }
 
+    // On récupère les infos de base
+    $baseUrl = rtrim(get_option('gce_baserow_url'), '/');
+    $token = get_option('gce_baserow_api_key');
+    if (empty($baseUrl) || empty($token)) {
+        return new WP_Error('missing_credentials', 'Baserow credentials not configured.', ['status' => 500]);
+    }
 
+    // 5. On assemble l'URL finale.
+    $url = "$baseUrl/api/database/$path?" . $query_string;
+    
+    // --- FIN DE LA CORRECTION ---
 
-// =========================================================================
-// ==                  FIN DU CODE MANQUANT À AJOUTER                     ==
-// =========================================================================
+    // La suite de la fonction est la même que dans eecie_crm_baserow_get
+    $response = wp_remote_get($url, [
+        'headers' => [
+            'Authorization' => 'Token ' . sanitize_text_field($token),
+            'Content-Type'  => 'application/json',
+        ],
+        'timeout' => 10,
+    ]);
+
+    if (is_wp_error($response)) {
+        return new WP_Error('baserow_error', $response->get_error_message(), ['status' => 502]);
+    }
+
+    $status = wp_remote_retrieve_response_code($response);
+    $body = wp_remote_retrieve_body($response);
+
+    if ($status !== 200) {
+        return new WP_Error('baserow_api_error', "Erreur Baserow ($status)", ['status' => $status, 'body' => json_decode($body, true)]);
+    }
+    
+    return json_decode($body, true);
+}

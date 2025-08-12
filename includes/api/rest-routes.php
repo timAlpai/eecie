@@ -40,38 +40,8 @@
         // On utilise le proxy existant pour récupérer les données
         return eecie_crm_baserow_get("rows/table/$table_id/$row_id/", ['user_field_names' => 'true']);
     }
-    add_filter('rest_pre_dispatch', function ($result, $server, $request) {
-        // ... votre liste blanche de routes publiques ...
-        $public_routes = [
-            '#^/eecie-crm/v1/devis/accept$#',
-            '#^/eecie-crm/v1/rdv/verify$#',
-            '#^/eecie-crm/v1/rdv/submit-schedule$#',
-             '#^/jwt-auth/v1/token$#',
-             '#^/jwt-auth/v1/token/validate$#',
-             '#^/eecie-crm/v1/fournisseur/mes-jobs$#',
-        ];
 
-        $route = $request->get_route();
-        $is_public = false;
-
-        foreach ($public_routes as $pattern) {
-            if (preg_match($pattern, $route)) {
-                $is_public = true;
-                break;
-            }
-        }
-
-        // Voici la ligne problématique :
-        if (!$is_public && !is_user_logged_in()) {
-            return new WP_Error(
-                'rest_not_logged_in',
-                'Vous devez être connecté pour effectuer cette action.',
-                ['status' => 401]
-            );
-        }
-
-        return $result;
-    }, 10, 3);
+ 
 
     add_action('rest_api_init', function () {
 
@@ -2370,7 +2340,7 @@
         register_rest_route('eecie-crm/v1', '/fournisseur/mes-jobs', [
             'methods'  => 'GET',
             'callback' => 'gce_api_get_fournisseur_jobs',
-            'permission_callback' => 'gce_api_check_jwt_permission', // <- Utilise notre fonction de sécurité
+            'permission_callback' => 'is_user_logged_in', // <- Utilise notre fonction de sécurité
         ]);
 
         // 2. ROUTE POUR SOUMETTRE LE RAPPORT DE LIVRAISON
@@ -2378,7 +2348,7 @@
         register_rest_route('eecie-crm/v1', '/livraison/submit-report', [
             'methods'  => 'POST',
             'callback' => 'gce_api_submit_livraison_report',
-            'permission_callback' => 'gce_api_check_jwt_permission', // <- Utilise la même fonction
+            'permission_callback' => 'is_user_logged_in', 
         ]);
 
         // Route pour soumettre la date du RDV
@@ -3247,34 +3217,69 @@
         // ==                  FIN DU CODE D'ÉCRITURE COMPLET                   ==
         // =========================================================================
     }
+
 /**
- * Fonction de permission réutilisable qui vérifie la validité d'un token JWT.
- * Le plugin JWT ajoute les données de l'utilisateur à la requête si le token est valide.
+ * Callback pour la route GET /fournisseur/mes-jobs
+ * Version corrigée qui suit la structure : Contact -> Fournisseur -> Devis -> Opportunité
  *
  * @param WP_REST_Request $request
- * @return bool|WP_Error
+ * @return WP_REST_Response|WP_Error
  */
-function gce_api_check_jwt_permission($request) {
-    // La fonction `apply_filters` est la manière dont le plugin JWT s'accroche à la validation.
-    $error = apply_filters('jwt_auth_token_check', null, $request);
-
-    // Si le plugin retourne une erreur, le token est invalide ou manquant.
-    if (is_wp_error($error)) {
-        return $error;
-    }
-    
-    // Si tout va bien, le plugin ne retourne rien (null) et on autorise l'accès.
-    return true;
-}
-
-
 function gce_api_get_fournisseur_jobs($request) {
-    $params = $request->get_json_params();
-
-    $user_id_wp = get_current_user_id();
+    // === ÉTAPE 1: IDENTIFIER LE FOURNISSEUR (Logique 100% validée) ===
+    // Cette partie est correcte et nous donne $fournisseur_id.
     $user_email = wp_get_current_user()->user_email;
-    return new WP_REST_Response(['success' => true, 'message' => 'Rapport soumis.'], 200);
+    $contacts_table_id = get_option('gce_baserow_table_contacts');
+    if (!$contacts_table_id) return new WP_Error('config_error', "ID table Contacts non configuré.", ['status' => 500]);
+    $id_option_fournisseur = 3065;
+    $params_contact = ['user_field_names' => 'true', 'filter__Email__equal' => $user_email, 'filter__Type__single_select_equal' => $id_option_fournisseur, 'size' => 1];
+    $contact_response = eecie_crm_baserow_get("rows/table/{$contacts_table_id}/", $params_contact);
+    if (is_wp_error($contact_response) || empty($contact_response['results'])) {
+        return new WP_Error('no_provider_contact', "Aucun contact de type Fournisseur trouvé pour l'email: " . $user_email, ['status' => 404]);
+    }
+    $contact_fournisseur = $contact_response['results'][0];
+    if (empty($contact_fournisseur['Fournisseur'][0]['id'])) {
+        return new WP_Error('no_provider_linked', "Le contact trouvé n'est lié à aucune fiche Fournisseur.", ['status' => 404]);
+    }
+    $fournisseur_id = $contact_fournisseur['Fournisseur'][0]['id'];
 
+    // === ÉTAPE 2: TROUVER LES DEVIS LIÉS (avec la syntaxe cURL qui fonctionne) ===
+    $devis_table_id = get_option('gce_baserow_table_devis');
+    if (!$devis_table_id) return new WP_Error('config_error', "ID table Devis non configuré.", ['status' => 500]);
+    $id_field_fournisseur_in_devis = 6958;
+    $params_devis = [
+        'user_field_names' => 'true',
+        'filter__field_' . $id_field_fournisseur_in_devis . '__link_row_has' => $fournisseur_id
+    ];
+    $devis_lies = eecie_crm_baserow_get("rows/table/{$devis_table_id}/", $params_devis);
+    if (is_wp_error($devis_lies) || empty($devis_lies['results'])) return new WP_REST_Response([], 200);
+
+    // === ÉTAPE 3: EXTRAIRE LES IDs DES OPPORTUNITÉS (Logique validée) ===
+    $opportunite_ids_du_fournisseur = array_unique(array_filter(array_map(fn($devis) => $devis['Task_input'][0]['id'] ?? null, $devis_lies['results'])));
+    if (empty($opportunite_ids_du_fournisseur)) return new WP_REST_Response([], 200);
+
+    // === ÉTAPE 4: RÉCUPÉRER TOUTES LES OPPORTUNITÉS EN "LIVRAISON" ===
+    $opp_table_id = get_option('gce_baserow_table_opportunites');
+    if (!$opp_table_id) return new WP_Error('config_error', "ID table Opportunites non configuré.", ['status' => 500]);
+    $id_option_livraison = 3155;
+    $params_opp = ['user_field_names' => 'true', 'filter__Status__single_select_equal' => $id_option_livraison, 'size' => 200]; // On prend toutes les opps en livraison
+    $toutes_les_opps_en_livraison = eecie_crm_baserow_get("rows/table/{$opp_table_id}/", $params_opp);
+    if (is_wp_error($toutes_les_opps_en_livraison) || empty($toutes_les_opps_en_livraison['results'])) return new WP_REST_Response([], 200);
+
+    // === ÉTAPE 5: FILTRER EN PHP (La méthode 100% fiable) ===
+    $jobs_filtres = [];
+    foreach ($toutes_les_opps_en_livraison['results'] as $job) {
+        if (in_array($job['id'], $opportunite_ids_du_fournisseur)) {
+            $jobs_filtres[] = $job;
+        }
+    }
+
+    // === ÉTAPE 6: FORMATER LA RÉPONSE ===
+    $cleaned_jobs = array_map(function($job) {
+        return ['id' => $job['id'], 'NomClient' => $job['NomClient'], 'Ville' => $job['Ville'], 'Travaux' => $job['Travaux'] ?? 'Aucune description'];
+    }, $jobs_filtres);
+
+    return new WP_REST_Response($cleaned_jobs, 200);
 }
 
 /**
@@ -3296,7 +3301,7 @@ function gce_api_submit_livraison_report($request) {
 
     // 2. Déclencher le workflow n8n
     // IMPORTANT: Remplacez cette URL par celle de votre nouveau webhook n8n
-    $webhook_url = 'https://n8n.eecie.ca/webhook/VOTRE_WEBHOOK_LIVRAISON_ICI';
+    $webhook_url = 'https://n8n.eecie.ca/webhook/cb6e6c68-17fd-47c3-86a7-322121f7e0dc';
     
     $response = wp_remote_post($webhook_url, [
         'headers' => ['Content-Type' => 'application/json'],
@@ -3312,21 +3317,54 @@ function gce_api_submit_livraison_report($request) {
 }
 
 
+
 /**
  * Helper pour trouver un contact dans Baserow par email et par type.
+ * VERSION DÉFINITIVE ET VALIDÉE
  */
-function gce_get_baserow_user_by_email($email, $type = 'Fournisseur') {
+/**
+ * Helper pour trouver un contact dans Baserow par email et par type.
+ * VERSION DÉFINITIVE ET VALIDÉE PAR LE TEST cURL
+ */
+function gce_get_baserow_user_by_email($email, $type_string_ignored = 'Fournisseur') {
     $contacts_table_id = get_option('gce_baserow_table_contacts');
-    if (!$contacts_table_id) return null;
+    if (!$contacts_table_id) {
+        return null;
+    }
 
-    $params = [
-        'user_field_names' => 'true',
-        'filter__Email__equal' => $email,
-        'filter__Type__equal' => $type,
-        'size' => 1
+    // ID numérique de l'option "Fournisseur" que nous avons validé.
+    $id_option_fournisseur = 3065; 
+
+    // On construit le filtre sous forme de tableau PHP.
+    // Cette structure correspond EXACTEMENT à la requête cURL qui a réussi.
+    $filters = [
+        'filter_type' => 'AND',
+        'filters' => [
+            [
+                'field' => 'Email',
+                'type'  => 'equal', // Correct pour un champ texte
+                'value' => $email
+            ],
+            [
+                'field' => 'Type',
+                'type'  => 'single_select_equal', // L'opérateur correct pour ce champ
+                'value' => (string) $id_option_fournisseur  // La valeur correcte (ID numérique)
+            ]
+        ]
     ];
 
-    $response = eecie_crm_baserow_get("rows/table/{$contacts_table_id}/", $params);
+    // Les autres paramètres de la requête
+    $otherParams = [
+        'user_field_names' => 'true',
+        'size' => 1
+    ];
+    
+    // On appelle notre fonction spécialisée pour les filtres JSON, qui est correcte.
+    $response = eecie_crm_baserow_get_with_json_filter(
+        "rows/table/{$contacts_table_id}/", 
+        $filters, 
+        $otherParams
+    );
 
     if (is_wp_error($response) || empty($response['results'])) {
         return null;
@@ -3334,3 +3372,4 @@ function gce_get_baserow_user_by_email($email, $type = 'Fournisseur') {
 
     return $response['results'][0];
 }
+
