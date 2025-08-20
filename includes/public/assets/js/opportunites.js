@@ -263,6 +263,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     📄 Voir le PDF
                                 </a>`;
                         }
+                        sendDraftButtonHtml = `<button class="button button-primary gce-send-draft-btn" data-devis-id="${devis.id}">📧 Envoyer au client</button>`;
 
                         // 4. On injecte la variable (qui sera soit le bouton, soit une chaîne vide)
                         tableDevisDiv.innerHTML = `
@@ -276,11 +277,12 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <button class="button button-secondary gce-assign-fournisseur-btn" data-devis-id="${devis.id}">🚚 Assigner Fournisseur</button>
                                 <button class="button gce-add-article-btn">➕ Article</button>
                                 <button class="button button-primary gce-calculate-devis-btn">⚡ Calculer</button>
+                                 ${sendDraftButtonHtml}
                             </div>
                         </div>
                         <div class="articles-sub-table"></div>
                     `;
-                      
+
 
                         // Logique du bouton "Ajouter Article"
                         container.querySelector('.gce-add-article-btn').addEventListener('click', () => {
@@ -397,6 +399,54 @@ document.addEventListener('DOMContentLoaded', () => {
                                 .then(updatedArticle => { showStatusUpdate('Article mis à jour !', true); cell.getRow().update(updatedArticle); })
                                 .catch(err => { showStatusUpdate(`Erreur: ${err.message}`, false); });
                         });
+
+                        const sendDraftBtn = container.querySelector('.gce-send-draft-btn');
+                        if (sendDraftBtn) {
+                            sendDraftBtn.addEventListener('click', async (e) => {
+                                const btn = e.target;
+                                const devisId = btn.dataset.devisId;
+
+                                if (!confirm(`Êtes-vous sûr de vouloir envoyer ce devis au client ?\n\n`)) {
+                                    return;
+                                }
+
+                                btn.disabled = true;
+                                btn.textContent = 'Envoi...';
+                                showStatusUpdate('Transmission de la demande d\'envoi...', true);
+
+                                try {
+                                    const res = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/devis/${devisId}/send-draft`, {
+                                        method: 'POST',
+                                        headers: { 'X-WP-Nonce': EECIE_CRM.nonce }
+                                    });
+
+                                    if (!res.ok) {
+                                        const errorData = await res.json();
+                                        throw new Error(errorData.message || 'Le serveur a retourné une erreur.');
+                                    }
+
+                                    showStatusUpdate('Devis envoyé !', true);
+
+                                    // On attend quelques secondes pour laisser le temps à n8n de mettre à jour le statut
+                                    await new Promise(resolve => setTimeout(resolve, 3000));
+
+                                    const oppId = opportunite.id;
+                                    const updatedOppRes = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/row/opportunites/${oppId}`, { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } });
+                                    if (updatedOppRes.ok) {
+                                        const updatedOppData = await updatedOppRes.json();
+                                        gce.viewManager.updateItem(oppId, updatedOppData);
+                                        gce.viewManager.updateDetailModalIfOpen(oppId, updatedOppData);
+                                    } else {
+                                        location.reload(); // Solution de secours
+                                    }
+
+                                } catch (err) {
+                                    showStatusUpdate(`Erreur: ${err.message}`, false);
+                                    btn.disabled = false;
+                                    btn.textContent = '📧 Envoyer au client';
+                                }
+                            });
+                        }
 
                     } else {
                         tableDevisDiv.innerHTML = '<p>Aucun devis n\'a encore été créé pour cette opportunité.</p>';
