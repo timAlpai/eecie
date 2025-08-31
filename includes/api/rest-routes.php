@@ -41,7 +41,7 @@
         return eecie_crm_baserow_get("rows/table/$table_id/$row_id/", ['user_field_names' => 'true']);
     }
 
- 
+
 
     add_action('rest_api_init', function () {
 
@@ -2348,7 +2348,7 @@
         register_rest_route('eecie-crm/v1', '/livraison/submit-report', [
             'methods'  => 'POST',
             'callback' => 'gce_api_submit_livraison_report',
-            'permission_callback' => 'is_user_logged_in', 
+            'permission_callback' => 'is_user_logged_in',
         ]);
 
         // Route pour soumettre la date du RDV
@@ -2577,59 +2577,57 @@
         ]);
 
 
-         // ROUTE DE DÉBOGAGE TEMPORAIRE
-    register_rest_route('eecie-crm/v1', '/debug/server-vars', [
-        'methods' => 'GET',
-        'callback' => function() {
-            return new WP_REST_Response($_SERVER, 200);
-        },
-        'permission_callback' => '__return_true' // Ouvert à tous pour le test
-    ]);
+        // ROUTE DE DÉBOGAGE TEMPORAIRE
+        register_rest_route('eecie-crm/v1', '/debug/server-vars', [
+            'methods' => 'GET',
+            'callback' => function () {
+                return new WP_REST_Response($_SERVER, 200);
+            },
+            'permission_callback' => '__return_true' // Ouvert à tous pour le test
+        ]);
 
-         // --- NOUVELLE ROUTE POUR ENVOYER UN DEVIS BROUILLON ---
-    register_rest_route('eecie-crm/v1', '/devis/(?P<id>\\d+)/send-draft', [
-        'methods'             => 'POST',
-        'callback'            => 'gce_send_devis_draft_callback',
-        'permission_callback' => function () {
-            return is_user_logged_in();
-        },
-        'args' => [
-            'id' => [
-                'validate_callback' => function($param, $request, $key) {
-                    return is_numeric($param);
-                }
+        // --- NOUVELLE ROUTE POUR ENVOYER UN DEVIS BROUILLON ---
+        register_rest_route('eecie-crm/v1', '/devis/(?P<id>\\d+)/send-draft', [
+            'methods'             => 'POST',
+            'callback'            => 'gce_send_devis_draft_callback',
+            'permission_callback' => function () {
+                return is_user_logged_in();
+            },
+            'args' => [
+                'id' => [
+                    'validate_callback' => function ($param, $request, $key) {
+                        return is_numeric($param);
+                    }
+                ],
             ],
-        ],
-    ]);
-
-
-
+        ]);
     }); //fin api init
 
-function gce_send_devis_draft_callback($request) {
-    $devis_id = (int) $request['id'];
+    function gce_send_devis_draft_callback($request)
+    {
+        $devis_id = (int) $request['id'];
 
-    // Remplacez par votre URL de webhook n8n de PRODUCTION
-    $n8n_webhook_url = 'https://n8n.eecie.ca/webhook/send-devis-draft';
+        // Remplacez par votre URL de webhook n8n de PRODUCTION
+        $n8n_webhook_url = 'https://n8n.eecie.ca/webhook/send-devis-draft';
 
-    $response = wp_remote_post($n8n_webhook_url, [
-        'method'    => 'POST',
-        'headers'   => ['Content-Type' => 'application/json; charset=utf-8'],
-        'body'      => json_encode(['devis_id' => $devis_id]),
-        'timeout'   => 20, // Augmenter le timeout car n8n peut prendre du temps
-    ]);
+        $response = wp_remote_post($n8n_webhook_url, [
+            'method'    => 'POST',
+            'headers'   => ['Content-Type' => 'application/json; charset=utf-8'],
+            'body'      => json_encode(['devis_id' => $devis_id]),
+            'timeout'   => 20, // Augmenter le timeout car n8n peut prendre du temps
+        ]);
 
-    if (is_wp_error($response)) {
-        return new WP_Error('n8n_trigger_failed', 'La communication avec le service d\'automatisation a échoué.', ['status' => 502]);
+        if (is_wp_error($response)) {
+            return new WP_Error('n8n_trigger_failed', 'La communication avec le service d\'automatisation a échoué.', ['status' => 502]);
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+        if ($response_code >= 300) {
+            return new WP_Error('n8n_workflow_error', 'Le service d\'automatisation a retourné une erreur.', ['status' => $response_code]);
+        }
+
+        return new WP_REST_Response(['success' => true, 'message' => 'La demande d\'envoi a été transmise.'], 200);
     }
-
-    $response_code = wp_remote_retrieve_response_code($response);
-    if ($response_code >= 300) {
-        return new WP_Error('n8n_workflow_error', 'Le service d\'automatisation a retourné une erreur.', ['status' => $response_code]);
-    }
-
-    return new WP_REST_Response(['success' => true, 'message' => 'La demande d\'envoi a été transmise.'], 200);
-}
 
     function eecie_crm_get_utilisateurs_secure(WP_REST_Request $request)
     {
@@ -2677,53 +2675,54 @@ function gce_send_devis_draft_callback($request) {
 
 
 
-function gce_get_user_opportunites() {
-   $current_user = wp_get_current_user();
-    if (!$current_user || !$current_user->exists()) {
-        return new WP_Error('not_logged_in', 'Utilisateur non connecté.', ['status' => 401]);
+    function gce_get_user_opportunites()
+    {
+        $current_user = wp_get_current_user();
+        if (!$current_user || !$current_user->exists()) {
+            return new WP_Error('not_logged_in', 'Utilisateur non connecté.', ['status' => 401]);
+        }
+
+        // 1. Trouver l'utilisateur Baserow correspondant via son e-mail
+        $baserow_user = gce_get_baserow_t1_user_by_email($current_user->user_email);
+
+        if (!$baserow_user || !isset($baserow_user['id'])) {
+            return rest_ensure_response(['count' => 0, 'next' => null, 'previous' => null, 'results' => []]);
+        }
+
+        $baserow_user_id = $baserow_user['id'];
+
+        // 2. Récupérer l'ID de la table des opportunités
+        $table_id = get_option('gce_baserow_table_opportunites') ?: eecie_crm_guess_table_id('Task_input');
+        if (!$table_id) {
+            return new WP_Error('config_error', 'Table des opportunités non configurée.', ['status' => 500]);
+        }
+
+        // 3. Construire le filtre pour Baserow
+        // D'après le workflow `assignTask.json`, l'ID du champ de liaison 'T1_user' est 6840.
+        // === VOTRE CORRECTION EST APPLIQUÉE ICI ===
+        $params = [
+            'user_field_names'             => 'true',
+            'filter__field_6840__link_row_has' => $baserow_user_id, // On utilise le filtre link_row_has
+            'size'                         => 200,
+        ];
+        // ===========================================
+
+        // 4. Appeler la fonction qui récupère toutes les pages de résultats
+        $path = "rows/table/{$table_id}/";
+        $results = eecie_crm_baserow_get_all_paginated_results($path, $params);
+
+        if (is_wp_error($results)) {
+            return $results;
+        }
+
+        // 5. Retourner une réponse formatée que le JavaScript comprendra
+        return rest_ensure_response([
+            'count'    => count($results),
+            'next'     => null,
+            'previous' => null,
+            'results'  => $results
+        ]);
     }
-
-    // 1. Trouver l'utilisateur Baserow correspondant via son e-mail
-    $baserow_user = gce_get_baserow_t1_user_by_email($current_user->user_email);
-
-    if (!$baserow_user || !isset($baserow_user['id'])) {
-        return rest_ensure_response(['count' => 0, 'next' => null, 'previous' => null, 'results' => []]);
-    }
-
-    $baserow_user_id = $baserow_user['id'];
-
-    // 2. Récupérer l'ID de la table des opportunités
-    $table_id = get_option('gce_baserow_table_opportunites') ?: eecie_crm_guess_table_id('Task_input');
-    if (!$table_id) {
-        return new WP_Error('config_error', 'Table des opportunités non configurée.', ['status' => 500]);
-    }
-
-    // 3. Construire le filtre pour Baserow
-    // D'après le workflow `assignTask.json`, l'ID du champ de liaison 'T1_user' est 6840.
-    // === VOTRE CORRECTION EST APPLIQUÉE ICI ===
-    $params = [
-        'user_field_names'             => 'true',
-        'filter__field_6840__link_row_has' => $baserow_user_id, // On utilise le filtre link_row_has
-        'size'                         => 200,
-    ];
-    // ===========================================
-
-    // 4. Appeler la fonction qui récupère toutes les pages de résultats
-    $path = "rows/table/{$table_id}/";
-    $results = eecie_crm_baserow_get_all_paginated_results($path, $params);
-
-    if (is_wp_error($results)) {
-        return $results;
-    }
-
-    // 5. Retourner une réponse formatée que le JavaScript comprendra
-    return rest_ensure_response([
-        'count'    => count($results),
-        'next'     => null,
-        'previous' => null,
-        'results'  => $results
-    ]);
-}
 
 
     function eecie_crm_create_utilisateur(WP_REST_Request $request)
@@ -3261,199 +3260,255 @@ function gce_get_user_opportunites() {
         // =========================================================================
     }
 
-/**
- * Callback pour la route GET /fournisseur/mes-jobs
- * Version corrigée qui suit la structure : Contact -> Fournisseur -> Devis -> Opportunité
- *
- * @param WP_REST_Request $request
- * @return WP_REST_Response|WP_Error
- */
-function gce_api_get_fournisseur_jobs($request) {
-    // === ÉTAPE 1: IDENTIFIER LE FOURNISSEUR (Logique 100% validée) ===
-    $user_email = wp_get_current_user()->user_email;
-    $contacts_table_id = get_option('gce_baserow_table_contacts');
-    if (!$contacts_table_id) return new WP_Error('config_error', "ID table Contacts non configuré.", ['status' => 500]);
-    $id_option_fournisseur = 3065;
-    $params_contact = ['user_field_names' => 'true', 'filter__Email__equal' => $user_email, 'filter__Type__single_select_equal' => $id_option_fournisseur, 'size' => 1];
-    $contact_response = eecie_crm_baserow_get("rows/table/{$contacts_table_id}/", $params_contact);
-    if (is_wp_error($contact_response) || empty($contact_response['results'])) {
-        return new WP_Error('no_provider_contact', "Aucun contact de type Fournisseur trouvé pour l'email: " . $user_email, ['status' => 404]);
-    }
-    $contact_fournisseur = $contact_response['results'][0];
-    if (empty($contact_fournisseur['Fournisseur'][0]['id'])) {
-        return new WP_Error('no_provider_linked', "Le contact trouvé n'est lié à aucune fiche Fournisseur.", ['status' => 404]);
-    }
-    $fournisseur_id = $contact_fournisseur['Fournisseur'][0]['id'];
+    /**
+     * Callback pour la route GET /fournisseur/mes-jobs
+     * Version corrigée qui suit la structure : Contact -> Fournisseur -> Devis -> Opportunité
+     *
+     * @param WP_REST_Request $request
+     * @return WP_REST_Response|WP_Error
+     */
+    function gce_api_get_fournisseur_jobs($request)
+    {
+         error_log("================= [PWA DEBUG] DÉBUT DE LA REQUÊTE /mes-jobs =================");
+        // === ÉTAPE 1: IDENTIFIER LE FOURNISSEUR (Logique 100% validée) ===
+        $user_email = wp_get_current_user()->user_email;
+        error_log("[PWA DEBUG 1.1] Utilisateur WP authentifié : " . $user_email);
 
-    // === ÉTAPE 2: TROUVER LES DEVIS LIÉS (Syntaxe validée par cURL) ===
-    $devis_table_id = get_option('gce_baserow_table_devis');
-    if (!$devis_table_id) return new WP_Error('config_error', "ID table Devis non configuré.", ['status' => 500]);
-    $id_field_fournisseur_in_devis = 6958;
-    $params_devis = [
-        'user_field_names' => 'true',
-        'filter__field_' . $id_field_fournisseur_in_devis . '__link_row_has' => $fournisseur_id
-    ];
-    $devis_lies = eecie_crm_baserow_get("rows/table/{$devis_table_id}/", $params_devis);
-    if (is_wp_error($devis_lies) || empty($devis_lies['results'])) return new WP_REST_Response([], 200);
 
-    // === ÉTAPE 3: EXTRAIRE LES IDs DES OPPORTUNITÉS (Logique validée) ===
-    $opportunite_ids_du_fournisseur = array_unique(array_filter(array_map(fn($devis) => $devis['Task_input'][0]['id'] ?? null, $devis_lies['results'])));
-    if (empty($opportunite_ids_du_fournisseur)) return new WP_REST_Response([], 200);
 
-    // === ÉTAPE 4: RÉCUPÉRER TOUTES LES OPPORTUNITÉS EN "LIVRAISON" ===
-    $opp_table_id = get_option('gce_baserow_table_opportunites');
-    if (!$opp_table_id) return new WP_Error('config_error', "ID table Opportunites non configuré.", ['status' => 500]);
-    $id_option_livraison = 3155;
-    $params_opp = ['user_field_names' => 'true', 'filter__Status__single_select_equal' => $id_option_livraison, 'size' => 200];
-    $toutes_les_opps_en_livraison = eecie_crm_baserow_get("rows/table/{$opp_table_id}/", $params_opp);
-    if (is_wp_error($toutes_les_opps_en_livraison) || empty($toutes_les_opps_en_livraison['results'])) return new WP_REST_Response([], 200);
-
-    // === ÉTAPE 5: FILTRER EN PHP (La méthode 100% fiable) ===
-    $jobs_filtres = [];
-    foreach ($toutes_les_opps_en_livraison['results'] as $job) {
-        if (in_array($job['id'], $opportunite_ids_du_fournisseur)) {
-            $jobs_filtres[] = $job;
-        }
-    }
-
-  // === ÉTAPE 6: ENRICHIR AVEC LES ARTICLES ET FORMATER LA RÉPONSE (VERSION CORRIGÉE) ===
-    $devis_table_id = get_option('gce_baserow_table_devis');
-    $articles_table_id = get_option('gce_baserow_table_articles_devis');
-    if (!$devis_table_id || !$articles_table_id) {
-        return new WP_Error('config_error', "IDs de table Devis ou Articles Devis non configurés.", ['status' => 500]);
-    }
-    
-    $cleaned_jobs = [];
-    
-    // On boucle sur la liste des opportunités qui ont déjà été correctement filtrées
-    foreach ($jobs_filtres as $job) {
-        $articles_du_devis = [];
+        $contacts_table_id = get_option('gce_baserow_table_contacts');
+        if (!$contacts_table_id) return new WP_Error('config_error', "ID table Contacts non configuré.", ['status' => 500]);
+        $id_option_fournisseur = 3065;
+        $params_contact = ['user_field_names' => 'true', 'filter__Email__equal' => $user_email, 'filter__Type__single_select_equal' => $id_option_fournisseur, 'size' => 1];
+        $contact_response = eecie_crm_baserow_get("rows/table/{$contacts_table_id}/", $params_contact);
         
-        // On vérifie si l'opportunité est bien liée à un devis
+        if (is_wp_error($contact_response) || empty($contact_response['results'])) {
+             error_log("[PWA DEBUG 1.2] ERREUR : Aucun contact de type Fournisseur trouvé pour " . $user_email . ". Fin.");
+            return new WP_Error('no_provider_contact', "Aucun contact de type Fournisseur trouvé pour l'email: " . $user_email, ['status' => 404]);
+        }
+        $contact_fournisseur = $contact_response['results'][0];
+         error_log("[PWA DEBUG 1.2] Contact Baserow trouvé : ID " . $contact_fournisseur['id']);
+        if (empty($contact_fournisseur['Fournisseur'][0]['id'])) {
+             error_log("[PWA DEBUG 1.3] ERREUR : Le contact trouvé n'est pas lié à une fiche Fournisseur. Fin.");
+            return new WP_Error('no_provider_linked', "Le contact trouvé n'est lié à aucune fiche Fournisseur.", ['status' => 404]);
+        }
+        $fournisseur_id = $contact_fournisseur['Fournisseur'][0]['id'];
+ error_log("[PWA DEBUG 1.3] ID du Fournisseur extrait : " . $fournisseur_id);
+
+
+        // === ÉTAPE 2: TROUVER LES DEVIS LIÉS (Syntaxe validée par cURL) ===
+        $devis_table_id = get_option('gce_baserow_table_devis');
+        if (!$devis_table_id) return new WP_Error('config_error', "ID table Devis non configuré.", ['status' => 500]);
+        $id_field_fournisseur_in_devis = 6958;
+        $params_devis = [
+            'user_field_names' => 'true',
+            'filter__field_' . $id_field_fournisseur_in_devis . '__link_row_has' => $fournisseur_id
+        ];
+        $devis_lies = eecie_crm_baserow_get("rows/table/{$devis_table_id}/", $params_devis);
+        error_log("[PWA DEBUG 2.1] Nombre de devis trouvés pour ce fournisseur : " . count($devis_lies));
+        if (is_wp_error($devis_lies) || empty($devis_lies['results'])) return new WP_REST_Response([], 200);
+
+        // === ÉTAPE 3: EXTRAIRE LES IDs DES OPPORTUNITÉS (Logique validée) ===
+        $opportunite_ids_du_fournisseur = array_unique(array_filter(array_map(fn($devis) => $devis['Task_input'][0]['id'] ?? null, $devis_lies['results'])));
+        error_log("[PWA DEBUG 3.1] IDs des opportunités extraites des devis : " . implode(', ', $opportunite_ids_du_fournisseur));
+        if (empty($opportunite_ids_du_fournisseur)) return new WP_REST_Response([], 200);
+
+        // === ÉTAPE 4: RÉCUPÉRER TOUTES LES OPPORTUNITÉS EN "LIVRAISON" ===
+        $opp_table_id = get_option('gce_baserow_table_opportunites');
+        if (!$opp_table_id) return new WP_Error('config_error', "ID table Opportunites non configuré.", ['status' => 500]);
+        $id_option_livraison = 3155;
+        $params_opp = ['user_field_names' => 'true', 'filter__Status__single_select_equal' => $id_option_livraison, 'size' => 200];
+        $toutes_les_opps_en_livraison = eecie_crm_baserow_get("rows/table/{$opp_table_id}/", $params_opp);
+          error_log("[PWA DEBUG 4.1] Nombre total d'opportunités au statut 'Livraison' : " . count($toutes_les_opps_en_livraison));
+        if (is_wp_error($toutes_les_opps_en_livraison) || empty($toutes_les_opps_en_livraison['results'])) return new WP_REST_Response([], 200);
+
+        // === ÉTAPE 5: FILTRER EN PHP (La méthode 100% fiable) ===
+        $jobs_filtres = [];
+        foreach ($toutes_les_opps_en_livraison['results'] as $job) {
+            if (in_array($job['id'], $opportunite_ids_du_fournisseur)) {
+                $jobs_filtres[] = $job;
+            }
+        }
+error_log("[PWA DEBUG 5.1] Nombre de jobs après filtrage (correspondance fournisseur ET statut) : " . count($jobs_filtres));
+    // On récupère les IDs des tables une seule fois
+    // On récupère les IDs des tables une seule fois
+     error_log("[PWA DEBUG 6.0] Début de l'enrichissement des " . count($jobs_filtres) . " job(s).");
+    $articles_devis_table_id = get_option('gce_baserow_table_articles_devis');
+    $rapports_table_id = eecie_crm_guess_table_id('Rapports_Livraison');
+    $signatures_table_id = eecie_crm_guess_table_id('Signature_Livraison');
+    $articles_livraison_table_id = eecie_crm_guess_table_id('Articles_Livraison');
+    
+    // On prépare le tableau final qui sera renvoyé
+    $cleaned_jobs = [];
+
+    foreach ($jobs_filtres as $job) {
+         error_log("--- Enrichissement du Job ID: " . $job['id'] . " ---");
+        $final_job_data = [
+            'id'               => $job['id'],
+            'NomClient'        => $job['NomClient'],
+            'Ville'            => $job['Ville'],
+            'Travaux'          => $job['Travaux'] ?? 'Aucune description',
+            'ArticlesDevis'    => [], // Sera rempli ci-dessous
+            'RapportLivraison' => null // Sera rempli ci-dessous
+        ];
+
+        // 6.1 - Enrichir avec les Articles du Devis (les articles prévus)
         if (!empty($job['Devis'][0]['id'])) {
             $devis_id = $job['Devis'][0]['id'];
-            
-            // On récupère la fiche complète du devis pour avoir la liste de ses articles liés
-            $devis_complet = eecie_crm_baserow_get("rows/table/{$devis_table_id}/{$devis_id}/?user_field_names=true");
-            
+            $devis_complet = eecie_crm_get_row_by_slug_and_id('devis', $devis_id);
             if (!is_wp_error($devis_complet) && !empty($devis_complet['Articles_devis'])) {
-                
-                // --- LA CORRECTION EST ICI ---
-                // On boucle sur chaque article lié au devis pour récupérer ses détails
                 foreach ($devis_complet['Articles_devis'] as $article_ref) {
-                    $article_id = $article_ref['id'];
-                    $article_data = eecie_crm_baserow_get("rows/table/{$articles_table_id}/{$article_id}/?user_field_names=true");
-                    
+                    $article_data = eecie_crm_get_row_by_slug_and_id('articles_devis', $article_ref['id']);
                     if (!is_wp_error($article_data)) {
-                        // On ajoute l'article complet à notre liste
-                        $articles_du_devis[] = $article_data;
+                        $final_job_data['ArticlesDevis'][] = $article_data;
                     }
                 }
-                // --- FIN DE LA CORRECTION ---
+            }
+        }
+        error_log("[PWA DEBUG 6.1] Articles du devis initial trouvés : " . count($final_job_data['ArticlesDevis']));
+        
+       // 6.2 - Enrichir avec le Rapport de Livraison (s'il existe)
+        if ($rapports_table_id) {
+            $params_rapport = ['user_field_names' => 'true', 'filter__Opportunite_liee__link_row_has' => $job['id'], 'size' => 1];
+            $rapport_response = eecie_crm_baserow_get("rows/table/{$rapports_table_id}/", $params_rapport);
+
+            if (!is_wp_error($rapport_response) && !empty($rapport_response['results'])) {
+                $rapport_enrichi = $rapport_response['results'][0];
+                 $test=print_r($rapport_enrichi,1);
+                 $test2=$rapport_enrichi['Signature_client'][0]['id'];
+                 $test3=$signatures_table_id;
+               
+                // 6.2.1 - Hydrater la Signature liée au rapport
+              
+                if (!empty($rapport_enrichi['Signature_client'][0]['id'])) {
+                   
+                    $signature_id = $rapport_enrichi['Signature_client'][0]['id'];
+                    $signature_data = eecie_crm_get_row_by_slug_and_id('Signatures_Livraison', $signature_id); // Assumant que le slug est 'devis_signatures'
+                   
+                    if (!is_wp_error($signature_data) && !empty($signature_data['Fichier_signature'][0]['url'])) {
+                       
+                        $rapport_enrichi['Signature_Image_URL'] = $signature_data['Fichier_signature'][0]['url'];
+                    }
+                }
+
+
+                // 6.2.2 - **LA CORRECTION CRUCIALE** - Hydrater les Articles de Livraison liés au rapport
+                    $test=print_r($rapport_enrichi,1);
+                    error_log($test);
+                  error_log("[PWA DEBUG 6.2] Articles livraison initial trouvés : " . count($rapport_enrichi['Articles_Livraison']));
+      
+                if (!empty($rapport_enrichi['Articles_Livraison'])) {
+                    error_log("6.2.1 verif 1 ok");
+                    $articles_complets = [];
+                    foreach ($rapport_enrichi['Articles_Livraison'] as $article_ref) {
+                        // On utilise la fonction eecie_crm_get_row_by_slug_and_id qui est faite pour ça
+                        $article_data = eecie_crm_get_row_by_slug_and_id('articles_livraison', $article_ref['id']); 
+                        if (!is_wp_error($article_data)) {
+                            $articles_complets[] = $article_data;
+                        }
+                    }
+                    // On remplace le tableau de références par le tableau d'objets complets
+                    $rapport_enrichi['Articles_Livraison'] = $articles_complets;
+                }
+                
+                $final_job_data['RapportLivraison'] = $rapport_enrichi;
             }
         }
 
-        // On construit l'objet final pour cette opportunité
-        $cleaned_jobs[] = [
-            'id'            => $job['id'],
-            'NomClient'     => $job['NomClient'],
-            'Ville'         => $job['Ville'],
-            'Travaux'       => $job['Travaux'] ?? 'Aucune description',
-            'ArticlesDevis' => $articles_du_devis // On ajoute la liste des articles qui a été construite
-        ];
+        $cleaned_jobs[] = $final_job_data;
     }
 
     return new WP_REST_Response($cleaned_jobs, 200);
 }
+    /**
+     * Callback pour la route POST /livraison/submit-report
+     *
+     * @param WP_REST_Request $request
+     * @return WP_REST_Response
+     */
+    function gce_api_submit_livraison_report($request)
+    {
+        $params = $request->get_json_params();
 
-/**
- * Callback pour la route POST /livraison/submit-report
- *
- * @param WP_REST_Request $request
- * @return WP_REST_Response
- */
-function gce_api_submit_livraison_report($request) {
-    $params = $request->get_json_params();
+        // 1. Validation basique des données
+        if (empty($params['opportunite_id']) || empty($params['signature_base64'])) {
+            return new WP_Error('bad_request', 'ID de l\'opportunité et signature manquants.', ['status' => 400]);
+        }
 
-    // 1. Validation basique des données
-    if (empty($params['opportunite_id']) || empty($params['signature_base64'])) {
-        return new WP_Error('bad_request', 'ID de l\'opportunité et signature manquants.', ['status' => 400]);
-    }
-    
-    // On ajoute l'adresse IP du client pour la traçabilité
-    $params['ip_address'] = $_SERVER['REMOTE_ADDR'];
+        // On ajoute l'adresse IP du client pour la traçabilité
+        $params['ip_address'] = $_SERVER['REMOTE_ADDR'];
 
-    // 2. Déclencher le workflow n8n
-    // IMPORTANT: Remplacez cette URL par celle de votre nouveau webhook n8n
-    $webhook_url = 'https://n8n.eecie.ca/webhook/cb6e6c68-17fd-47c3-86a7-322121f7e0dc';
-    
-    $response = wp_remote_post($webhook_url, [
-        'headers' => ['Content-Type' => 'application/json'],
-        'body'    => json_encode($params),
-        'timeout' => 25,
-    ]);
+        // 2. Déclencher le workflow n8n
+        // IMPORTANT: Remplacez cette URL par celle de votre nouveau webhook n8n
+        $webhook_url = 'https://n8n.eecie.ca/webhook/cb6e6c68-17fd-47c3-86a7-322121f7e0dc';
 
-    if (is_wp_error($response) || wp_remote_retrieve_response_code($response) >= 400) {
-        return new WP_Error('n8n_error', 'Le traitement du rapport a échoué.', ['status' => 502]);
-    }
+        $response = wp_remote_post($webhook_url, [
+            'headers' => ['Content-Type' => 'application/json'],
+            'body'    => json_encode($params),
+            'timeout' => 25,
+        ]);
 
-    return new WP_REST_Response(['success' => true, 'message' => 'Rapport soumis.'], 200);
-}
+        if (is_wp_error($response) || wp_remote_retrieve_response_code($response) >= 400) {
+            return new WP_Error('n8n_error', 'Le traitement du rapport a échoué.', ['status' => 502]);
+        }
 
-
-
-/**
- * Helper pour trouver un contact dans Baserow par email et par type.
- * VERSION DÉFINITIVE ET VALIDÉE
- */
-/**
- * Helper pour trouver un contact dans Baserow par email et par type.
- * VERSION DÉFINITIVE ET VALIDÉE PAR LE TEST cURL
- */
-function gce_get_baserow_user_by_email($email, $type_string_ignored = 'Fournisseur') {
-    $contacts_table_id = get_option('gce_baserow_table_contacts');
-    if (!$contacts_table_id) {
-        return null;
+        return new WP_REST_Response(['success' => true, 'message' => 'Rapport soumis.'], 200);
     }
 
-    // ID numérique de l'option "Fournisseur" que nous avons validé.
-    $id_option_fournisseur = 3065; 
 
-    // On construit le filtre sous forme de tableau PHP.
-    // Cette structure correspond EXACTEMENT à la requête cURL qui a réussi.
-    $filters = [
-        'filter_type' => 'AND',
-        'filters' => [
-            [
-                'field' => 'Email',
-                'type'  => 'equal', // Correct pour un champ texte
-                'value' => $email
-            ],
-            [
-                'field' => 'Type',
-                'type'  => 'single_select_equal', // L'opérateur correct pour ce champ
-                'value' => (string) $id_option_fournisseur  // La valeur correcte (ID numérique)
+
+    /**
+     * Helper pour trouver un contact dans Baserow par email et par type.
+     * VERSION DÉFINITIVE ET VALIDÉE
+     */
+    /**
+     * Helper pour trouver un contact dans Baserow par email et par type.
+     * VERSION DÉFINITIVE ET VALIDÉE PAR LE TEST cURL
+     */
+    function gce_get_baserow_user_by_email($email, $type_string_ignored = 'Fournisseur')
+    {
+        $contacts_table_id = get_option('gce_baserow_table_contacts');
+        if (!$contacts_table_id) {
+            return null;
+        }
+
+        // ID numérique de l'option "Fournisseur" que nous avons validé.
+        $id_option_fournisseur = 3065;
+
+        // On construit le filtre sous forme de tableau PHP.
+        // Cette structure correspond EXACTEMENT à la requête cURL qui a réussi.
+        $filters = [
+            'filter_type' => 'AND',
+            'filters' => [
+                [
+                    'field' => 'Email',
+                    'type'  => 'equal', // Correct pour un champ texte
+                    'value' => $email
+                ],
+                [
+                    'field' => 'Type',
+                    'type'  => 'single_select_equal', // L'opérateur correct pour ce champ
+                    'value' => (string) $id_option_fournisseur  // La valeur correcte (ID numérique)
+                ]
             ]
-        ]
-    ];
+        ];
 
-    // Les autres paramètres de la requête
-    $otherParams = [
-        'user_field_names' => 'true',
-        'size' => 1
-    ];
-    
-    // On appelle notre fonction spécialisée pour les filtres JSON, qui est correcte.
-    $response = eecie_crm_baserow_get_with_json_filter(
-        "rows/table/{$contacts_table_id}/", 
-        $filters, 
-        $otherParams
-    );
+        // Les autres paramètres de la requête
+        $otherParams = [
+            'user_field_names' => 'true',
+            'size' => 1
+        ];
 
-    if (is_wp_error($response) || empty($response['results'])) {
-        return null;
+        // On appelle notre fonction spécialisée pour les filtres JSON, qui est correcte.
+        $response = eecie_crm_baserow_get_with_json_filter(
+            "rows/table/{$contacts_table_id}/",
+            $filters,
+            $otherParams
+        );
+
+        if (is_wp_error($response) || empty($response['results'])) {
+            return null;
+        }
+
+        return $response['results'][0];
     }
-
-    return $response['results'][0];
-}
-

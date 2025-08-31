@@ -321,12 +321,10 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
 
             if (field.type === "boolean") {
                 return `
-                    <div class="gce-field-row">${label}
-                      <select name="${fieldKey}" id="${fieldKey}">
-                        <option value="true" ${value === true ? "selected" : ""}>Oui</option>
-                        <option value="false" ${value !== true ? "selected" : ""}>Non</option>
-                      </select>
-                    </div>`;
+        <div class="gce-field-row" style="align-items: center;">
+            ${label}
+            <input type="checkbox" id="${fieldKey}" name="${fieldKey}" ${value === true ? "checked" : ""} style="width: 20px; height: 20px;">
+        </div>`;
             }
 
             if (field.type === "single_select" && field.select_options) {
@@ -505,6 +503,7 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
 
                     if (rawValue === null || (rawValue === '' && field.type !== 'boolean')) continue;
 
+
                     // ================== LOGIQUE DE PAYLOAD MODIFIÉE ==================
                     if (field.type === "file") {
                         const existingFiles = Array.isArray(data[field.name]) ? data[field.name] : [];
@@ -529,7 +528,10 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
                     if (!standardFormData.has(key)) continue;
 
 
-                    if (field.type === "boolean") payload[key] = rawValue === "true";
+                    if (field.type === "boolean") {
+                        // La nouvelle logique pour une case à cocher
+                        payload[key] = form.querySelector(`[name="${key}"]`).checked;
+                    }
                     else if (["number", "decimal"].includes(field.type)) payload[key] = parseFloat(String(rawValue).replace(',', '.'));
                     else if (["single_select"].includes(field.type)) payload[key] = parseInt(rawValue, 10);
                     else if (field.type === "link_row") payload[key] = [parseInt(rawValue, 10)];
