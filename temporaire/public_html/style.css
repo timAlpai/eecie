@@ -1,0 +1,204 @@
+/* style.css - Version Mobile-First Professionnelle */
+
+:root {
+    --primary-color: #2980b9;
+    --success-color: #27ae60;
+    --danger-color: #c0392b;
+    --light-gray: #f4f5f7;
+    --medium-gray: #dfe1e6;
+    --dark-gray: #5e6c84;
+    --text-color: #172b4d;
+    --card-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    background-color: var(--light-gray);
+    color: var(--text-color);
+}
+
+/* Structure générale */
+.screen {
+    display: none;
+    padding: 15px;
+    max-width: 800px;
+    margin: 0 auto;
+}
+.screen.active { display: block; }
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 0 5px;
+}
+header h2 { margin: 0; font-size: 1.5em; }
+.header-btn {
+    background: none; border: none; font-size: 1.5em;
+    cursor: pointer; color: var(--primary-color);
+}
+
+/* Style des "Cartes" */
+.card {
+    background: white;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 20px;
+    box-shadow: var(--card-shadow);
+}
+.card h3 { margin-top: 0; }
+
+/* Grille de détails */
+.details-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px 16px;
+}
+.details-grid span { color: var(--dark-gray); }
+
+/* Tableaux d'articles */
+.articles-table {
+    display: grid;
+    /* On définit 4 colonnes : 
+       1. La première (Description) prend tout l'espace disponible (1fr).
+       2. Les 3 suivantes ont des largeurs fixes adaptées au contenu.
+    */
+    grid-template-columns: 1fr 70px 70px 70px;
+    border: 1px solid var(--medium-gray);
+    border-radius: 5px;
+    overflow: hidden; /* Important pour les coins arrondis */
+}
+
+/* Style commun pour chaque cellule (en-tête et ligne) */
+.articles-table > div > span {
+    padding: 3px;
+    display: flex;
+    align-items: center;
+    word-break: break-word; /* Permet au texte long de passer à la ligne proprement */
+}
+
+/* On utilise un pseudo-élément pour simuler les bordures, c'est plus propre */
+.articles-table > .article-item {
+    display: contents; /* Astuce pour que les spans deviennent des cellules de la grille */
+}
+.articles-table > .article-item > span {
+    background: white;
+    border-bottom: 1px solid var(--medium-gray);
+}
+.articles-table > div:last-child > span {
+    border-bottom: none; /* Pas de bordure pour la dernière ligne */
+}
+
+/* En-tête du tableau */
+.articles-header {
+    display: contents; /* L'en-tête participe aussi à la grille */
+}
+.articles-header > span {
+    font-weight: bold;
+    background-color: var(--light-gray);
+    color: var(--dark-gray);
+    border-bottom: 2px solid var(--medium-gray);
+}
+
+/* Alignement des colonnes numériques */
+.articles-table .qty,
+.articles-table .price,
+.articles-table .total {
+    justify-content: flex-end; /* Aligne le contenu à droite */
+}
+
+.articles-table .total {
+    font-weight: bold;
+}
+
+/* Style pour les articles non modifiables */
+.article-item.readonly > span {
+    background-color: #fafafa;
+    color: #555;
+}
+
+/* Bouton de suppression (inchangé) */
+.article-item .actions {
+    justify-content: center; /* Centre le bouton */
+}
+.article-item .actions button {
+    background: none; border: none; color: var(--danger-color); cursor: pointer;
+    font-size: 1.2em; padding: 0; line-height: 1;
+}
+
+/* Formulaires */
+input, textarea, button {
+    font-size: 1em;
+    width: 100%;
+    padding: 12px;
+    border-radius: 5px;
+    border: 1px solid var(--medium-gray);
+    box-sizing: border-box;
+    margin-bottom: 10px;
+}
+textarea { min-height: 80px; }
+button {
+    background-color: var(--primary-color);
+    color: white; border: none; cursor: pointer; font-weight: bold;
+    transition: background-color 0.2s;
+}
+button:hover { opacity: 0.9; }
+
+.button-primary { background-color: var(--success-color); }
+.btn-danger { background-color: var(--danger-color); }
+.btn-full { width: 100%; padding: 15px; font-size: 1.1em; }
+
+.form-row { display: flex; gap: 10px; }
+.add-form button {
+    flex-shrink: 0;
+    width: auto;
+    padding-left: 15px;
+    padding-right: 15px;
+}
+
+/* Total et Signature */
+.total-section {
+    text-align: right;
+    font-size: 1.2em;
+    margin: 15px 0;
+    padding-right: 5px;
+}
+.signature-label { font-weight: bold; margin-bottom: 8px; }
+#signature-canvas {
+    width: 100%;
+    height: 200px;
+    border: 2px dashed var(--medium-gray);
+    border-radius: 5px;
+    cursor: crosshair;
+    touch-action: none;
+}
+#clear-signature-btn { margin-top: 10px; }
+
+.job-item {
+    background: white;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 15px; /* Espace entre les cartes */
+    box-shadow: var(--card-shadow);
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    border-left: 5px solid var(--primary-color); /* Ajoute une barre de couleur pour le style */
+}
+
+/* Effet de survol pour indiquer que l'élément est cliquable */
+.job-item:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
+}
+
+.job-item strong {
+    font-size: 1.1em;
+    display: block; /* Met le nom du client sur sa propre ligne */
+    margin-bottom: 5px;
+}
+
+.job-item span {
+    color: var(--dark-gray);
+}

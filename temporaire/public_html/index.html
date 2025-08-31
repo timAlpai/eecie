@@ -1,0 +1,109 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portail Fournisseur EECIE</title>
+    <link rel="stylesheet" href="/style.css">
+    <link rel="manifest" href="/manifest.json">
+
+</head>
+
+<body>
+
+    <!-- Écran de Connexion (visible par défaut) -->
+    <div id="login-screen" class="screen active">
+        <h2>Portail Fournisseur</h2>
+        <form id="login-form">
+            <input type="text" id="username" placeholder="Nom d'utilisateur" required>
+            <input type="password" id="password" placeholder="Mot de passe" required>
+            <button type="submit">Connexion</button>
+            <p id="login-error" class="error-message"></p>
+        </form>
+    </div>
+
+    <!-- Écran des Missions (caché) -->
+    <div id="jobs-screen" class="screen">
+        <header>
+            <h2>Mes Interventions</h2>
+            <button id="logout-btn">Déconnexion</button>
+        </header>
+        <div id="jobs-list">
+            <div class="loader">Chargement des missions...</div>
+        </div>
+    </div>
+
+        
+<!-- Écran du Rapport d'Intervention (caché) -->
+<div id="report-screen" class="screen">
+    <header>
+        <button id="back-to-jobs-btn" class="header-btn">← Retour</button>
+        <h2 id="report-title">Rapport d'intervention</h2>
+    </header>
+
+    <!-- Section des Détails (maintenant pliable) -->
+    <div class="card collapsible">
+        <h3 class="collapsible-header">Détails de l'intervention</h3>
+        <div class="collapsible-content" style="display:none;"> <!-- Cachée par défaut -->
+            <div class="details-grid">
+                <span>Client :</span><strong id="report-client-name"></strong>
+                <span>Adresse :</span><strong id="report-client-address"></strong>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section des Travaux (maintenant pliable) -->
+    <div class="card collapsible">
+        <h3 class="collapsible-header">Travaux prévus</h3>
+        <div class="collapsible-content" style="display:none;"> <!-- Cachée par défaut -->
+            <p id="report-general-scope"></p>
+            <div class="articles-table" id="initial-articles-list">
+                <!-- Les articles prévus seront injectés ici -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Section des Ajouts (maintenant pliable) -->
+    <div class="card collapsible">
+        <h3 class="collapsible-header">Ajouts de dernière minute</h3>
+        <div class="collapsible-content" style="display:none;"> <!-- Cachée par défaut -->
+            <div class="articles-table" id="added-articles-list">
+                <!-- Les articles ajoutés seront injectés ici -->
+            </div>
+        <form id="add-article-form" class="add-form">
+            <input type="text" id="article-name" placeholder="Nom matériel/prestation" required>
+            <div class="form-row">
+                <input type="number" id="article-qty" placeholder="Qté" value="1" min="0.1" step="0.1" required>
+                <input type="number" id="article-price" placeholder="Prix Unitaire" min="0" step="0.01" required>
+                <button type="submit">➕</button>
+            </div>
+        </form>
+        <div class="total-section">
+            <strong>Total des ajouts :</strong>
+            <span id="added-total">0.00</span>
+        </div>
+    </div>
+
+   <div class="card collapsible">
+        <h3 class="collapsible-header">Notes et Signature</h3>
+        <div class="collapsible-content" style="display:none;"> <!-- Cachée par défaut -->
+            <textarea id="report-notes" placeholder="Notes complémentaires..."></textarea>
+            <p class="signature-label">Signature du Client :</p>
+        <div id="signature-pad">
+            <canvas id="signature-canvas" ></canvas>
+            <button id="clear-signature-btn" class="btn-danger">Effacer</button>
+        </div>
+    </div>
+
+    <button id="submit-report-btn" class="button-primary btn-full">Soumettre le Rapport Signé</button>
+</div>
+
+  
+
+    <!-- Le script app.js peut rester relatif, mais c'est plus propre comme ça -->
+    <script src="/app.js"></script>
+    <meta name="theme-color" content="#333" />
+</body>
+
+</html>

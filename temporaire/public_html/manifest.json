@@ -1,0 +1,21 @@
+{
+  "name": "Portail Fournisseur EECIE",
+  "short_name": "EECIE App",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#333333",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon/other/android.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/icon/other/android.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}
