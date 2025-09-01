@@ -1235,8 +1235,7 @@
                 $valid = wp_verify_nonce($nonce, 'wp_rest');
                 $user = is_user_logged_in();
 
-                error_log("[CRM] nonce = $nonce / valide = " . ($valid ? '✅' : '❌') . " / connecté = " . ($user ? '✅' : '❌'));
-
+               
                 return $user && $valid;
             },
 
@@ -2110,8 +2109,7 @@
                 $valid = wp_verify_nonce($nonce, 'wp_rest');
                 $user = is_user_logged_in();
 
-                error_log("[CRM] nonce = $nonce / valide = " . ($valid ? '✅' : '❌') . " / connecté = " . ($user ? '✅' : '❌'));
-
+              
                 return $user && $valid;
             },
 
@@ -2354,6 +2352,19 @@
         register_rest_route('eecie-crm/v1', '/livraison/invalidate-report/(?P<id>\\d+)', [
             'methods' => WP_REST_Server::CREATABLE, // Correspond à POST
             'callback' => 'gce_invalidate_livraison_report',
+            'permission_callback' => 'is_user_logged_in',
+            'args' => [
+                'id' => [
+                    'validate_callback' => function ($param, $request, $key) {
+                        return is_numeric($param);
+                    }
+                ],
+            ],
+        ]);
+        // NOUVEL ENDPOINT POUR SUPPRIMER UN ARTICLE DE LIVRAISON
+        register_rest_route('eecie-crm/v1', '/articles-livraison/(?P<id>\\d+)', [
+            'methods' => WP_REST_Server::DELETABLE, // Correspond à DELETE
+            'callback' => 'gce_delete_article_livraison',
             'permission_callback' => 'is_user_logged_in',
             'args' => [
                 'id' => [
@@ -3131,13 +3142,11 @@
     function gce_handle_devis_acceptance(WP_REST_Request $request)
     {
         // --- DÉBUT DES LOGS ---
-        error_log("====== NOUVELLE TENTATIVE D'ACCEPTATION DE DEVIS ======");
-
+       
         // 1. Logger les paramètres bruts reçus de l'URL
         $devis_id_raw = $request->get_param('devis_id');
         $token_raw = $request->get_param('token');
-        error_log("[LOG 1] Paramètres reçus : devis_id = '{$devis_id_raw}', token = '{$token_raw}'");
-
+       
         // 2. Nettoyer et valider les paramètres
         $devis_id = (int) $devis_id_raw;
         $token = sanitize_text_field($token_raw);
@@ -3150,8 +3159,7 @@
             wp_redirect(add_query_arg(['status' => 'error', 'message' => 'invalid_link'], $confirmation_page_url));
             exit;
         }
-        error_log("[LOG 2] Validation initiale réussie. devis_id = {$devis_id}");
-
+       
         // 4. Récupérer les détails du devis depuis Baserow
         $devis_table_id = get_option('gce_baserow_table_devis');
         if (empty($devis_table_id)) {
@@ -3159,8 +3167,7 @@
             wp_redirect(add_query_arg(['status' => 'error', 'message' => 'config_error'], $confirmation_page_url));
             exit;
         }
-        error_log("[LOG 3] Tentative de récupération du devis #{$devis_id} depuis la table #{$devis_table_id}");
-
+       
         $devis_data = eecie_crm_baserow_get("rows/table/{$devis_table_id}/{$devis_id}/?user_field_names=true");
 
         if (is_wp_error($devis_data)) {
@@ -3173,16 +3180,14 @@
             wp_redirect(add_query_arg(['status' => 'error', 'message' => 'devis_not_found'], $confirmation_page_url));
             exit;
         }
-        error_log("[LOG 4] Devis récupéré avec succès. Token attendu : '" . $devis_data['Acceptation_Token'] . "'");
-
+       
         // 5. Validation cruciale du token
         if ($devis_data['Acceptation_Token'] !== $token) {
             error_log("[ERREUR E] Incompatibilité des tokens. Reçu: '{$token}', Attendu: '" . $devis_data['Acceptation_Token'] . "'");
             wp_redirect(add_query_arg(['status' => 'error', 'message' => 'token_mismatch'], $confirmation_page_url));
             exit;
         }
-        error_log("[LOG 5] Validation du token réussie !");
-
+       
         // 6. Vérifier si le devis n'est pas déjà accepté
         if ($devis_data['Status']['value'] === 'accepter') {
             error_log("[LOG 6] Le devis est déjà marqué comme accepté. Redirection.");
@@ -3250,7 +3255,6 @@
             $opportunite_id = $devis_data['Task_input'][0]['id'];
             $status_confirmation_id = 3076;
             $opportunite_update_payload = ['Status' => $status_confirmation_id];
-            error_log("[LOG 7.6] Payload de mise à jour de l'opportunité #{$opportunite_id} préparé : " . json_encode($opportunite_update_payload));
 
             $opp_update_result = eecie_crm_baserow_patch("rows/table/{$task_input_table_id}/{$opportunite_id}/?user_field_names=true", $opportunite_update_payload);
 
@@ -3264,7 +3268,6 @@
         }
 
         // F) Redirection finale
-        error_log("[LOG 8] Processus terminé. Redirection vers la page de succès.");
         wp_redirect(add_query_arg('status', 'success', $confirmation_page_url));
         exit;
 
@@ -3282,10 +3285,8 @@
      */
     function gce_api_get_fournisseur_jobs($request)
     {
-        error_log("================= [PWA DEBUG] DÉBUT DE LA REQUÊTE /mes-jobs =================");
         // === ÉTAPE 1: IDENTIFIER LE FOURNISSEUR (Logique 100% validée) ===
         $user_email = wp_get_current_user()->user_email;
-        error_log("[PWA DEBUG 1.1] Utilisateur WP authentifié : " . $user_email);
 
 
 
@@ -3300,13 +3301,11 @@
             return new WP_Error('no_provider_contact', "Aucun contact de type Fournisseur trouvé pour l'email: " . $user_email, ['status' => 404]);
         }
         $contact_fournisseur = $contact_response['results'][0];
-        error_log("[PWA DEBUG 1.2] Contact Baserow trouvé : ID " . $contact_fournisseur['id']);
         if (empty($contact_fournisseur['Fournisseur'][0]['id'])) {
             error_log("[PWA DEBUG 1.3] ERREUR : Le contact trouvé n'est pas lié à une fiche Fournisseur. Fin.");
             return new WP_Error('no_provider_linked', "Le contact trouvé n'est lié à aucune fiche Fournisseur.", ['status' => 404]);
         }
         $fournisseur_id = $contact_fournisseur['Fournisseur'][0]['id'];
-        error_log("[PWA DEBUG 1.3] ID du Fournisseur extrait : " . $fournisseur_id);
 
 
         // === ÉTAPE 2: TROUVER LES DEVIS LIÉS (Syntaxe validée par cURL) ===
@@ -3318,12 +3317,10 @@
             'filter__field_' . $id_field_fournisseur_in_devis . '__link_row_has' => $fournisseur_id
         ];
         $devis_lies = eecie_crm_baserow_get("rows/table/{$devis_table_id}/", $params_devis);
-        error_log("[PWA DEBUG 2.1] Nombre de devis trouvés pour ce fournisseur : " . count($devis_lies));
         if (is_wp_error($devis_lies) || empty($devis_lies['results'])) return new WP_REST_Response([], 200);
 
         // === ÉTAPE 3: EXTRAIRE LES IDs DES OPPORTUNITÉS (Logique validée) ===
         $opportunite_ids_du_fournisseur = array_unique(array_filter(array_map(fn($devis) => $devis['Task_input'][0]['id'] ?? null, $devis_lies['results'])));
-        error_log("[PWA DEBUG 3.1] IDs des opportunités extraites des devis : " . implode(', ', $opportunite_ids_du_fournisseur));
         if (empty($opportunite_ids_du_fournisseur)) return new WP_REST_Response([], 200);
 
         // === ÉTAPE 4: RÉCUPÉRER TOUTES LES OPPORTUNITÉS EN "LIVRAISON" ===
@@ -3332,7 +3329,6 @@
         $id_option_livraison = 3155;
         $params_opp = ['user_field_names' => 'true', 'filter__Status__single_select_equal' => $id_option_livraison, 'size' => 200];
         $toutes_les_opps_en_livraison = eecie_crm_baserow_get("rows/table/{$opp_table_id}/", $params_opp);
-        error_log("[PWA DEBUG 4.1] Nombre total d'opportunités au statut 'Livraison' : " . count($toutes_les_opps_en_livraison));
         if (is_wp_error($toutes_les_opps_en_livraison) || empty($toutes_les_opps_en_livraison['results'])) return new WP_REST_Response([], 200);
 
         // === ÉTAPE 5: FILTRER EN PHP (La méthode 100% fiable) ===
@@ -3342,10 +3338,8 @@
                 $jobs_filtres[] = $job;
             }
         }
-        error_log("[PWA DEBUG 5.1] Nombre de jobs après filtrage (correspondance fournisseur ET statut) : " . count($jobs_filtres));
         // On récupère les IDs des tables une seule fois
         // On récupère les IDs des tables une seule fois
-        error_log("[PWA DEBUG 6.0] Début de l'enrichissement des " . count($jobs_filtres) . " job(s).");
         $articles_devis_table_id = get_option('gce_baserow_table_articles_devis');
         $rapports_table_id = eecie_crm_guess_table_id('Rapports_Livraison');
         $signatures_table_id = eecie_crm_guess_table_id('Signature_Livraison');
@@ -3355,7 +3349,6 @@
         $cleaned_jobs = [];
 
         foreach ($jobs_filtres as $job) {
-            error_log("--- Enrichissement du Job ID: " . $job['id'] . " ---");
             $final_job_data = [
                 'id'               => $job['id'],
                 'NomClient'        => $job['NomClient'],
@@ -3378,7 +3371,6 @@
                     }
                 }
             }
-            error_log("[PWA DEBUG 6.1] Articles du devis initial trouvés : " . count($final_job_data['ArticlesDevis']));
 
             // 6.2 - Enrichir avec le Rapport de Livraison (s'il existe)
             if ($rapports_table_id) {
@@ -3404,9 +3396,6 @@
 
 
                     // 6.2.2 - **LA CORRECTION CRUCIALE** - Hydrater les Articles de Livraison liés au rapport
-                    $test = print_r($rapport_enrichi, 1);
-                    error_log($test);
-                    error_log("[PWA DEBUG 6.2] Articles livraison initial trouvés : " . count($rapport_enrichi['Articles_Livraison']));
 
                     if (!empty($rapport_enrichi['Articles_Livraison'])) {
                         error_log("6.2.1 verif 1 ok");
@@ -3427,47 +3416,124 @@
             }
 
             $cleaned_jobs[] = $final_job_data;
-        }
+            
+
+        }   
+        $test = print_r($cleaned_jobs, 1);
+        error_log($test);
+
 
         return new WP_REST_Response($cleaned_jobs, 200);
     }
-    /**
-     * Callback pour la route POST /livraison/submit-report
-     *
-     * @param WP_REST_Request $request
-     * @return WP_REST_Response
-     */
-    function gce_api_submit_livraison_report($request)
-    {
-        $params = $request->get_json_params();
+// Fichier : includes/api/rest-routes.php
 
-        // 1. Validation basique des données
-        if (empty($params['opportunite_id']) || empty($params['signature_base64'])) {
-            return new WP_Error('bad_request', 'ID de l\'opportunité et signature manquants.', ['status' => 400]);
-        }
+// Fichier : includes/api/rest-routes.php
 
-        // On ajoute l'adresse IP du client pour la traçabilité
-        $params['ip_address'] = $_SERVER['REMOTE_ADDR'];
+// Fichier : includes/api/rest-routes.php
 
-        // 2. Déclencher le workflow n8n
-        // IMPORTANT: Remplacez cette URL par celle de votre nouveau webhook n8n
-        $webhook_url = 'https://n8n.eecie.ca/webhook/cb6e6c68-17fd-47c3-86a7-322121f7e0dc';
+/**
+ * Crée ou met à jour un rapport de livraison et sa signature.
+ * Version finale avec correction du format du payload pour le champ Fichier.
+ *
+ * @param WP_REST_Request $request
+ * @return WP_REST_Response
+ */
+function gce_api_submit_livraison_report(WP_REST_Request $request) {
+    $params = $request->get_json_params();
 
-        $response = wp_remote_post($webhook_url, [
-            'headers' => ['Content-Type' => 'application/json'],
-            'body'    => json_encode($params),
-            'timeout' => 25,
-        ]);
-
-        if (is_wp_error($response) || wp_remote_retrieve_response_code($response) >= 400) {
-            return new WP_Error('n8n_error', 'Le traitement du rapport a échoué.', ['status' => 502]);
-        }
-
-        return new WP_REST_Response(['success' => true, 'message' => 'Rapport soumis.'], 200);
+    if (empty($params['opportunite_id']) || empty($params['signature_base64'])) {
+        return new WP_REST_Response(['message' => 'Données manquantes (opportunité ou signature).'], 400);
+    }
+    
+    $user_id = get_current_user_id();
+    $user = get_userdata($user_id);
+    $fournisseur_baserow = gce_get_baserow_t1_user_by_email($user->user_email);
+    if (!$fournisseur_baserow) {
+        return new WP_REST_Response(['message' => 'Utilisateur fournisseur introuvable dans Baserow.'], 403);
     }
 
+    $rapport_table_id = get_option('gce_baserow_table_rapports_livraison') ?: eecie_crm_guess_table_id('Rapports_Livraison');
+    $articles_table_id = get_option('gce_baserow_table_articles_livraison') ?: eecie_crm_guess_table_id('Articles_Livraison');
+    $signature_table_id = get_option('gce_baserow_table_signatures_livraison') ?: eecie_crm_guess_table_id('Signatures_Livraison');
+    
+    $report_id = null;
 
+    if (isset($params['report_id']) && !empty($params['report_id'])) {
+        // --- CAS MISE À JOUR ---
+        $report_id = (int)$params['report_id'];
+        $update_payload = [
+            'Notes_intervention' => sanitize_textarea_field($params['notes']),
+            'Date_intervention' => gmdate('Y-m-d\TH:i:s\Z'),
+        ];
+        eecie_crm_baserow_patch("rows/table/{$rapport_table_id}/{$report_id}/?user_field_names=true", $update_payload);
+    } else {
+        // --- CAS CRÉATION ---
+        $create_payload = [
+            'Opportunite_liee' => [(int)$params['opportunite_id']],
+            'Fournisseur_intervenant' => [(int)$fournisseur_baserow['id']],
+            'Notes_intervention' => sanitize_textarea_field($params['notes']),
+            'Date_intervention' => gmdate('Y-m-d\TH:i:s\Z'),
+        ];
+        $new_report_data = eecie_crm_baserow_request('POST', "rows/table/{$rapport_table_id}/?user_field_names=true", $create_payload);
+        if (is_wp_error($new_report_data) || !isset($new_report_data['id'])) {
+            return new WP_REST_Response(['message' => 'La création du rapport a échoué.'], 500);
+        }
+        $report_id = $new_report_data['id'];
+    }
+    
+    // Créer les nouveaux articles supplémentaires
+    if (!empty($params['articles_supplementaires']) && is_array($params['articles_supplementaires'])) {
+        foreach ($params['articles_supplementaires'] as $article) {
+            $article_payload = [
+                'Nom' => sanitize_text_field($article['nom']),
+                'Quantités' => (float)$article['quantite'],
+                'Prix_unitaire' => (float)$article['prix_unitaire'],
+                'Rapport_lie' => [$report_id],
+            ];
+            eecie_crm_baserow_request('POST', "rows/table/{$articles_table_id}/?user_field_names=true", $article_payload);
+        }
+    }
+    
+    // Gérer l'upload de la signature
+    preg_match('/^data:image\/(png|jpeg);base64,(.*)$/', $params['signature_base64'], $matches);
+    $image_data = base64_decode($matches[2]);
+    $filename = 'signature_report_' . $report_id . '_' . time() . '.png';
+    $temp_dir = get_temp_dir();
+    $file_path = trailingslashit($temp_dir) . $filename;
+    $file_saved = file_put_contents($file_path, $image_data);
 
+    if ($file_saved === false) {
+        return new WP_REST_Response(['message' => 'Impossible d\'écrire le fichier de signature temporaire.'], 500);
+    }
+    
+    $uploaded_file = eecie_crm_baserow_upload_file($file_path, $filename);
+    unlink($file_path); 
+
+    if (is_wp_error($uploaded_file) || !isset($uploaded_file['name'])) {
+        return new WP_REST_Response(['message' => 'L\'upload de la signature a échoué ou la réponse est invalide.'], 500);
+    }
+    
+    // *** DÉBUT DE LA CORRECTION DÉFINITIVE ***
+    // Créer l'enregistrement de la signature et le lier au rapport
+    $signature_payload = [
+        // On formate correctement le payload pour le champ Fichier
+        'Signature' => [
+            ['name' => $uploaded_file['name']]
+        ],
+        'Rapport_Livraison' => [$report_id],
+        'Date_Signature' => gmdate('Y-m-d\TH:i:s\Z'),
+    ];
+    // *** FIN DE LA CORRECTION DÉFINITIVE ***
+
+    $new_signature = eecie_crm_baserow_request('POST', "rows/table/{$signature_table_id}/?user_field_names=true", $signature_payload);
+    
+    // Finaliser en liant la nouvelle signature au rapport
+    if (isset($new_signature['id'])) {
+        eecie_crm_baserow_patch("rows/table/{$rapport_table_id}/{$report_id}/", ['Signature_client' => [$new_signature['id']]]);
+    }
+
+    return new WP_REST_Response(['message' => 'Rapport soumis avec succès !', 'report_id' => $report_id], 200);
+}
 
     /**
      * Helper pour trouver un contact dans Baserow par email et par type.
@@ -3520,55 +3586,82 @@
 
         return $response['results'][0];
     }
-/**
- * Invalide un rapport de livraison en supprimant sa signature.
- * Version Simplifiée et Corrigée : suit la logique directe "Lire puis Supprimer".
- *
- * @param WP_REST_Request $request
- * @return WP_REST_Response
- */
-function gce_invalidate_livraison_report(WP_REST_Request $request) {
-    $report_id = (int) $request['id'];
-    $rapport_table_id = get_option('gce_baserow_table_rapports_livraison') ?: eecie_crm_guess_table_id('Rapports_Livraison');
-    $signature_table_id = get_option('gce_baserow_table_signatures_livraison') ?: eecie_crm_guess_table_id('Signatures_Livraison');
+    /**
+     * Invalide un rapport de livraison en supprimant sa signature.
+     * Version Simplifiée et Corrigée : suit la logique directe "Lire puis Supprimer".
+     *
+     * @param WP_REST_Request $request
+     * @return WP_REST_Response
+     */
+    function gce_invalidate_livraison_report(WP_REST_Request $request)
+    {
+        $report_id = (int) $request['id'];
+        $rapport_table_id = get_option('gce_baserow_table_rapports_livraison') ?: eecie_crm_guess_table_id('Rapports_Livraison');
+        $signature_table_id = get_option('gce_baserow_table_signatures_livraison') ?: eecie_crm_guess_table_id('Signatures_Livraison');
 
-    if (!$rapport_table_id || !$signature_table_id) {
-        return new WP_REST_Response(['message' => 'Erreur: Configuration des tables de livraison manquante.'], 500);
+        if (!$rapport_table_id || !$signature_table_id) {
+            return new WP_REST_Response(['message' => 'Erreur: Configuration des tables de livraison manquante.'], 500);
+        }
+
+        // --- ÉTAPE 1 : Récupérer le rapport de livraison pour trouver l'ID de la signature ---
+        $report_data = eecie_crm_baserow_get("rows/table/{$rapport_table_id}/{$report_id}/?user_field_names=true");
+
+        if (is_wp_error($report_data)) {
+            error_log('GCE API Invalidate - Erreur lors de la récupération du rapport #' . $report_id . ': ' . $report_data->get_error_message());
+            return new WP_REST_Response(['message' => 'Erreur: Impossible de trouver le rapport de livraison.'], 404);
+        }
+        $test = print_r($report_data, 1);
+        error_log($test);
+        // --- ÉTAPE 2 : Extraire l'ID de la signature du champ de liaison ---
+        // On vérifie que le champ 'Signatures_Livraison' existe, n'est pas vide et est un tableau.
+        if (empty($report_data['Signature_client']) || !is_array($report_data['Signature_client']) || !isset($report_data['Signature_client'][0]['id'])) {
+            // S'il n'y a pas de signature liée, le travail est déjà fait. On renvoie un succès.
+            return new WP_REST_Response(['message' => 'Aucune signature n\'était liée à ce rapport. Modification autorisée.'], 200);
+        }
+
+        // On récupère l'ID de la première signature liée.
+        $signature_id_to_delete = (int) $report_data['Signature_client'][0]['id'];
+
+        // --- ÉTAPE 3 : Envoyer la requête de suppression pour la signature ---
+        $delete_result = eecie_crm_baserow_request('DELETE', "rows/table/{$signature_table_id}/{$signature_id_to_delete}/");
+
+        // L'API Baserow renvoie une réponse vide (null) avec un statut 204 en cas de succès.
+        // Si une erreur se produit, $delete_result sera un objet WP_Error.
+        if (is_wp_error($delete_result)) {
+            error_log('GCE API Invalidate - Erreur lors de la suppression de la signature #' . $signature_id_to_delete . ': ' . $delete_result->get_error_message());
+            return new WP_REST_Response(['message' => 'Erreur: La suppression de la signature dans la base de données a échoué.'], 502);
+        }
+
+        // --- ÉTAPE 4 (Nettoyage) : Vider le champ de liaison sur le rapport ---
+        // C'est une bonne pratique pour éviter les liens "fantômes".
+        $update_payload = ['Signatures_Livraison' => []];
+        eecie_crm_baserow_patch("rows/table/{$rapport_table_id}/{$report_id}/?user_field_names=true", $update_payload);
+
+        return new WP_REST_Response(['message' => 'Signature invalidée avec succès. Le rapport peut être modifié.'], 200);
     }
+    /**
+     * Supprime une ligne spécifique de la table Articles_Livraison.
+     *
+     * @param WP_REST_Request $request
+     * @return WP_REST_Response
+     */
+    function gce_delete_article_livraison(WP_REST_Request $request)
+    {
+        $article_id = (int) $request['id'];
+        $table_id = get_option('gce_baserow_table_articles_livraison') ?: eecie_crm_guess_table_id('Articles_Livraison');
 
-    // --- ÉTAPE 1 : Récupérer le rapport de livraison pour trouver l'ID de la signature ---
-    $report_data = eecie_crm_baserow_get("rows/table/{$rapport_table_id}/{$report_id}/?user_field_names=true");
+        if (!$table_id) {
+            return new WP_REST_Response(['message' => 'Erreur: Configuration de la table Articles_Livraison manquante.'], 500);
+        }
 
-    if (is_wp_error($report_data)) {
-        error_log('GCE API Invalidate - Erreur lors de la récupération du rapport #' . $report_id . ': ' . $report_data->get_error_message());
-        return new WP_REST_Response(['message' => 'Erreur: Impossible de trouver le rapport de livraison.'], 404);
+        // Envoyer la requête de suppression à Baserow
+        $delete_result = eecie_crm_baserow_request('DELETE', "rows/table/{$table_id}/{$article_id}/");
+
+        // En cas de succès, Baserow renvoie un statut 204 avec un corps vide.
+        if (is_wp_error($delete_result)) {
+            error_log('GCE API Delete Article - Erreur lors de la suppression de l\'article #' . $article_id . ': ' . $delete_result->get_error_message());
+            return new WP_REST_Response(['message' => 'Erreur: La suppression de l\'article dans la base de données a échoué.'], 502);
+        }
+
+        return new WP_REST_Response(['message' => 'Article supprimé avec succès.'], 200);
     }
-    $test=print_r($report_data,1);
-    error_log($test);
-    // --- ÉTAPE 2 : Extraire l'ID de la signature du champ de liaison ---
-    // On vérifie que le champ 'Signatures_Livraison' existe, n'est pas vide et est un tableau.
-    if (empty($report_data['Signature_client']) || !is_array($report_data['Signature_client']) || !isset($report_data['Signature_client'][0]['id'])) {
-        // S'il n'y a pas de signature liée, le travail est déjà fait. On renvoie un succès.
-        return new WP_REST_Response(['message' => 'Aucune signature n\'était liée à ce rapport. Modification autorisée.'], 200);
-    }
-    
-    // On récupère l'ID de la première signature liée.
-    $signature_id_to_delete = (int) $report_data['Signature_client'][0]['id'];
-
-    // --- ÉTAPE 3 : Envoyer la requête de suppression pour la signature ---
-    $delete_result = eecie_crm_baserow_request('DELETE', "rows/table/{$signature_table_id}/{$signature_id_to_delete}/");
-
-    // L'API Baserow renvoie une réponse vide (null) avec un statut 204 en cas de succès.
-    // Si une erreur se produit, $delete_result sera un objet WP_Error.
-    if (is_wp_error($delete_result)) {
-        error_log('GCE API Invalidate - Erreur lors de la suppression de la signature #' . $signature_id_to_delete . ': ' . $delete_result->get_error_message());
-        return new WP_REST_Response(['message' => 'Erreur: La suppression de la signature dans la base de données a échoué.'], 502);
-    }
-    
-    // --- ÉTAPE 4 (Nettoyage) : Vider le champ de liaison sur le rapport ---
-    // C'est une bonne pratique pour éviter les liens "fantômes".
-    $update_payload = ['Signatures_Livraison' => []];
-    eecie_crm_baserow_patch("rows/table/{$rapport_table_id}/{$report_id}/?user_field_names=true", $update_payload);
-
-    return new WP_REST_Response(['message' => 'Signature invalidée avec succès. Le rapport peut être modifié.'], 200);
-}

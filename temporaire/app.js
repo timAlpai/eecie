@@ -1,4 +1,4 @@
-// app.js (Version avec fonctionnalité de modification de rapport)
+// app.js (Version finale avec logique de MISE À JOUR de rapport)
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- RÉFÉRENCES AUX ÉLÉMENTS DU DOM ---
@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const jobsList = document.getElementById('jobs-list');
     const reportTitle = document.getElementById('report-title');
     const submitReportBtn = document.getElementById('submit-report-btn');
-    const modifyReportBtn = document.getElementById('modify-report-btn'); // Nouveau bouton
+    const modifyReportBtn = document.getElementById('modify-report-btn');
     const logoutBtn = document.getElementById('logout-btn');
     const backToJobsBtn = document.getElementById('back-to-jobs-btn');
     
@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
         authHeader: null,
         jobs: [],
         currentReport: {
+            id: null, // *** IMPORTANT : Pour stocker l'ID du rapport en cours
             opportunite_id: null,
             notes: '',
             articles_supplementaires: [],
@@ -131,8 +132,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const job = state.jobs.find(j => j.id === jobId);
         if (!job) return;
 
-        document.getElementById('add-article-form').style.display = 'block';
-        document.getElementById('report-notes').disabled = false;
         reportTitle.textContent = `Rapport pour ${job.NomClient}`;
         document.getElementById('report-client-name').textContent = job.NomClient;
         document.getElementById('report-client-address').textContent = job.Ville;
@@ -140,51 +139,59 @@ document.addEventListener('DOMContentLoaded', () => {
         
         let initialTotal = 0;
         const initialArticlesList = document.getElementById('initial-articles-list');
-        initialArticlesList.innerHTML = `<div class="article-item articles-header"><span class="name">Description</span><span class="qty">Qté</span><span class="price">P.U.</span><span class="total">Total</span></div>`;
+        initialArticlesList.innerHTML = `<div class="article-item articles-header"><span class="name">Description</span><span class="qty">Qté</span><span class="price">P.U.</span><span class="total">Total</span><span></span></div>`;
         if (job.ArticlesDevis && Array.isArray(job.ArticlesDevis) && job.ArticlesDevis.length > 0) {
             job.ArticlesDevis.forEach(article => {
                 const totalLigne = parseFloat(article.Prix_hors_taxe || 0);
                 initialTotal += totalLigne;
                 const item = document.createElement('div');
                 item.className = 'article-item readonly';
-                item.innerHTML = `<span class="name">${article.Nom}</span><span class="qty">${parseFloat(article.Quantités || 0).toFixed(2)}</span><span class="price">${parseFloat(article.Prix_unitaire || 0).toFixed(2)}</span><span class="total">${totalLigne.toFixed(2)}</span>`;
+                item.innerHTML = `<span class="name">${article.Nom}</span><span class="qty">${parseFloat(article.Quantités || 0).toFixed(2)}</span><span class="price">${parseFloat(article.Prix_unitaire || 0).toFixed(2)}</span><span class="total">${totalLigne.toFixed(2)}</span><span></span>`;
                 initialArticlesList.appendChild(item);
             });
         } else {
             initialArticlesList.innerHTML += '<div class="article-item">Aucun article spécifique au devis.</div>';
         }
         
-        if (job.RapportLivraison) {
-            // Mode Lecture Seule
-            document.getElementById('report-notes').value = job.RapportLivraison.Notes_intervention || '';
-            state.currentReport.articles_supplementaires = job.RapportLivraison.Articles_Livraison || [];
-            document.getElementById('report-notes').disabled = true;
-            document.getElementById('add-article-form').style.display = 'none';
-            submitReportBtn.style.display = 'none';
-            modifyReportBtn.style.display = 'block'; // AFFICHER le bouton "Modifier"
-            modifyReportBtn.dataset.reportId = job.RapportLivraison.id; // Stocker l'ID du rapport
+        const hasExistingReport = job.RapportLivraison;
+        const isSigned = hasExistingReport && job.RapportLivraison.Signature_Image_URL;
 
-            const signaturePad = document.getElementById('signature-pad');
-            if (job.RapportLivraison.Signature_Image_URL) {
-                signaturePad.innerHTML = `<p><strong>Signature du Client :</strong></p><img src="${job.RapportLivraison.Signature_Image_URL}" alt="Signature" style="border: 1px solid #ccc; max-width: 100%; border-radius: 5px;">`;
-            } else {
-                signaturePad.innerHTML = '<p><strong>Signature du Client :</strong><br>Signature enregistrée (image non disponible).</p>';
-            }
-        } else {
-            // Mode Création
-            document.getElementById('report-notes').value = '';
-            submitReportBtn.style.display = 'block';
-            modifyReportBtn.style.display = 'none'; // CACHER le bouton "Modifier"
-            document.getElementById('signature-pad').innerHTML = `<canvas id="signature-canvas"></canvas><button id="clear-signature-btn" class="btn-danger">Effacer</button>`;
-            setupSignatureCanvas();
+        if (hasExistingReport) {
+            document.getElementById('report-notes').value = job.RapportLivraison.Notes_intervention || '';
             state.currentReport = {
+                id: job.RapportLivraison.id, // *** CORRECTION 1 : On stocke l'ID du rapport existant
+                opportunite_id: job.id,
+                articles_supplementaires: job.RapportLivraison.Articles_Livraison || [],
+                initialTotalHT: initialTotal,
+            };
+        } else {
+            document.getElementById('report-notes').value = '';
+            state.currentReport = {
+                id: null, // Pas de rapport existant
                 opportunite_id: job.id,
                 notes: '',
                 articles_supplementaires: [],
+                initialTotalHT: initialTotal,
             };
         }
+
+        if (isSigned) {
+            document.getElementById('report-notes').disabled = true;
+            document.getElementById('add-article-form').style.display = 'none';
+            submitReportBtn.style.display = 'none';
+            modifyReportBtn.style.display = 'block';
+            modifyReportBtn.dataset.reportId = job.RapportLivraison.id;
+            const signaturePad = document.getElementById('signature-pad');
+            signaturePad.innerHTML = `<p><strong>Signature du Client :</strong></p><img src="${job.RapportLivraison.Signature_Image_URL}" alt="Signature" style="border: 1px solid #ccc; max-width: 100%; border-radius: 5px;">`;
+        } else {
+            document.getElementById('report-notes').disabled = false;
+            document.getElementById('add-article-form').style.display = 'block';
+            submitReportBtn.style.display = 'block';
+            modifyReportBtn.style.display = 'none';
+            document.getElementById('signature-pad').innerHTML = `<canvas id="signature-canvas"></canvas><button id="clear-signature-btn" class="btn-danger">Effacer</button>`;
+            setupSignatureCanvas();
+        }
         
-        state.currentReport.initialTotalHT = initialTotal;
         renderAddedArticles();
         showScreen('report');
     }
@@ -195,24 +202,34 @@ document.addEventListener('DOMContentLoaded', () => {
         const nouveauTotalSpan = document.getElementById('nouveau-total-ht');
         addedArticlesList.innerHTML = '';
         let totalAjouts = 0;
+        const isEditing = !document.getElementById('report-notes').disabled;
 
-        addedArticlesList.innerHTML = `<div class="article-item articles-header"><span class="name">Description</span><span class="qty">Qté</span><span class="price">P.U.</span><span class="total">Total</span></div>`;
+        addedArticlesList.innerHTML = `<div class="article-item articles-header"><span class="name">Description</span><span class="qty">Qté</span><span class="price">P.U.</span><span class="total">Total</span><span class="actions"></span></div>`;
 
         if (state.currentReport.articles_supplementaires.length === 0) {
             addedArticlesList.innerHTML += '<div class="article-item" style="grid-column: 1 / -1; text-align: center; padding: 10px;">Aucun ajout pour le moment.</div>';
         } else {
-            state.currentReport.articles_supplementaires.forEach((article) => {
+            state.currentReport.articles_supplementaires.forEach((article, index) => {
                 const item = document.createElement('div');
                 item.className = 'article-item';
                 const nom = article.nom || article.Nom || '';
                 const quantite = parseFloat(article.quantite || article.Quantités || 0);
                 const prixUnitaire = parseFloat(article.prix_unitaire || article.Prix_unitaire || 0);
                 const totalLigne = parseFloat(article.Prix_hors_taxe) || (quantite * prixUnitaire);
+                let deleteButtonHtml = '<span></span>';
+                if (isEditing) {
+                    if (article.id) {
+                        deleteButtonHtml = `<span class="actions"><button class="delete-saved-article-btn" data-id="${article.id}" title="Supprimer cet article de la base de données">🗑️</button></span>`;
+                    } else {
+                        deleteButtonHtml = `<span class="actions"><button class="delete-unsaved-article-btn" data-index="${index}" title="Supprimer cet article ajouté">❌</button></span>`;
+                    }
+                }
                 item.innerHTML = `
                     <span class="name">${nom}</span>
                     <span class="qty">${quantite.toFixed(2)}</span>
                     <span class="price">${prixUnitaire.toFixed(2)}</span>
                     <span class="total">${totalLigne.toFixed(2)}</span>
+                    ${deleteButtonHtml}
                 `;
                 addedArticlesList.appendChild(item);
                 totalAjouts += totalLigne;
@@ -236,23 +253,46 @@ document.addEventListener('DOMContentLoaded', () => {
         renderAddedArticles();
         form.reset();
     }
-
-    function handleDeleteArticle(e) {
-        if (!e.target.classList.contains('delete-article-btn')) return;
-        const index = parseInt(e.target.dataset.index, 10);
+    
+    function handleDeleteUnsavedArticle(e) {
+        const deleteBtn = e.target.closest('.delete-unsaved-article-btn');
+        if (!deleteBtn) return;
+        const index = parseInt(deleteBtn.dataset.index, 10);
         state.currentReport.articles_supplementaires.splice(index, 1);
         renderAddedArticles();
     }
     
+    async function handleDeleteSavedArticle(e) {
+        const deleteBtn = e.target.closest('.delete-saved-article-btn');
+        if (!deleteBtn) return;
+        const articleId = deleteBtn.dataset.id;
+        if (!confirm("Êtes-vous sûr de vouloir supprimer cet article ? Cette action est irréversible.")) return;
+        deleteBtn.disabled = true;
+        try {
+            const response = await fetch(`https://portal.eecie.ca/wp-json/eecie-crm/v1/articles-livraison/${articleId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': state.authHeader }
+            });
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.message || 'La suppression a échoué.');
+            }
+            state.currentReport.articles_supplementaires = state.currentReport.articles_supplementaires.filter(a => a.id != articleId);
+            renderAddedArticles();
+            alert("Article supprimé avec succès.");
+        } catch (error) {
+            alert(`Erreur : ${error.message}`);
+            deleteBtn.disabled = false;
+        }
+    }
+
     function setupSignatureCanvas() {
         signatureCanvas = document.getElementById('signature-canvas');
         if (!signatureCanvas) return;
         ctx = signatureCanvas.getContext('2d');
         drawing = false;
-
         const getMousePos = (e) => ({ x: e.clientX - signatureCanvas.getBoundingClientRect().left, y: e.clientY - signatureCanvas.getBoundingClientRect().top });
         const getTouchPos = (e) => ({ x: e.touches[0].clientX - signatureCanvas.getBoundingClientRect().left, y: e.touches[0].clientY - signatureCanvas.getBoundingClientRect().top });
-
         const draw = (e) => {
             e.preventDefault();
             if (!drawing) return;
@@ -262,14 +302,12 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.beginPath();
             ctx.moveTo(pos.x, pos.y);
         };
-
         signatureCanvas.addEventListener('mousedown', (e) => { drawing = true; draw(e); });
         signatureCanvas.addEventListener('mouseup', () => { drawing = false; ctx.beginPath(); });
         signatureCanvas.addEventListener('mousemove', draw);
         signatureCanvas.addEventListener('touchstart', (e) => { drawing = true; draw(e); }, { passive: false });
         signatureCanvas.addEventListener('touchend', () => { drawing = false; ctx.beginPath(); });
         signatureCanvas.addEventListener('touchmove', draw, { passive: false });
-
         document.getElementById('clear-signature-btn').addEventListener('click', clearSignature);
     }
     
@@ -289,10 +327,11 @@ document.addEventListener('DOMContentLoaded', () => {
         submitReportBtn.textContent = 'Envoi en cours...';
 
         const payload = {
+            report_id: state.currentReport.id, // *** CORRECTION 2 : On envoie l'ID du rapport (sera null si nouveau)
             opportunite_id: state.currentReport.opportunite_id,
             notes: document.getElementById('report-notes').value,
             signature_base64: signatureCanvas.toDataURL('image/png'),
-            articles_supplementaires: state.currentReport.articles_supplementaires,
+            articles_supplementaires: state.currentReport.articles_supplementaires.filter(a => !a.id),
         };
 
         try {
@@ -319,7 +358,6 @@ document.addEventListener('DOMContentLoaded', () => {
         showScreen('login');
     }
 
-    // *** NOUVELLE FONCTION ***
     function enableReportEditing() {
         document.getElementById('report-notes').disabled = false;
         document.getElementById('add-article-form').style.display = 'block';
@@ -327,41 +365,28 @@ document.addEventListener('DOMContentLoaded', () => {
         modifyReportBtn.style.display = 'none';
         document.getElementById('signature-pad').innerHTML = `<canvas id="signature-canvas"></canvas><button id="clear-signature-btn" class="btn-danger">Effacer</button>`;
         setupSignatureCanvas();
+        renderAddedArticles();
         requestAnimationFrame(resizeCanvas);
     }
     
-   // *** NOUVELLE FONCTION (VERSION CORRIGÉE) ***
     async function handleModifyReport(e) {
         const reportId = e.target.dataset.reportId;
         if (!reportId) return;
-
-        if (!confirm("Voulez-vous vraiment modifier ce rapport ? La signature actuelle sera supprimée et une nouvelle signature sera requise.")) {
-            return;
-        }
-
+        if (!confirm("Voulez-vous vraiment modifier ce rapport ? La signature actuelle sera supprimée et une nouvelle signature sera requise.")) return;
         modifyReportBtn.disabled = true;
         modifyReportBtn.textContent = "Invalidation...";
-
         try {
-            // --- DÉBUT DE LA CORRECTION ---
             const response = await fetch(`https://portal.eecie.ca/wp-json/eecie-crm/v1/livraison/invalidate-report/${reportId}`, {
                 method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json', // En-tête crucial ajouté
-                    'Authorization': state.authHeader 
-                },
-                body: JSON.stringify({}) // Corps JSON vide mais valide ajouté
+                headers: { 'Content-Type': 'application/json', 'Authorization': state.authHeader },
+                body: JSON.stringify({})
             });
-            // --- FIN DE LA CORRECTION ---
-
             if (!response.ok) {
                 const errData = await response.json();
                 throw new Error(errData.message || 'Impossible d\'invalider la signature.');
             }
-
             alert("Le rapport est déverrouillé. Vous pouvez maintenant le modifier.");
-            enableReportEditing(); // On passe en mode édition
-
+            enableReportEditing();
         } catch (error) {
             alert(`Erreur : ${error.message}`);
         } finally {
@@ -392,9 +417,15 @@ document.addEventListener('DOMContentLoaded', () => {
         logoutBtn.addEventListener('click', handleLogout);
         backToJobsBtn.addEventListener('click', () => showScreen('jobs'));
         submitReportBtn.addEventListener('click', handleSubmitReport);
-        modifyReportBtn.addEventListener('click', handleModifyReport); // Attacher le nouvel événement
+        modifyReportBtn.addEventListener('click', handleModifyReport);
         document.getElementById('add-article-form').addEventListener('submit', handleAddArticle);
-        document.getElementById('added-articles-list').addEventListener('click', handleDeleteArticle);
+        
+        const addedArticlesList = document.getElementById('added-articles-list');
+        addedArticlesList.addEventListener('click', (e) => {
+            handleDeleteUnsavedArticle(e);
+            handleDeleteSavedArticle(e);
+        });
+
         setupCollapsibleSections();
         window.addEventListener('resize', () => {
             if (screens.report.classList.contains('active') && document.getElementById('signature-canvas')) {

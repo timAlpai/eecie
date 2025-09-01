@@ -65,7 +65,7 @@ header h2 { margin: 0; font-size: 1.5em; }
        1. La première (Description) prend tout l'espace disponible (1fr).
        2. Les 3 suivantes ont des largeurs fixes adaptées au contenu.
     */
-    grid-template-columns: 1fr 70px 70px 70px;
+    grid-template-columns: 1fr 70px 70px 70px 50px;
     border: 1px solid var(--medium-gray);
     border-radius: 5px;
     overflow: hidden; /* Important pour les coins arrondis */
