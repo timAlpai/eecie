@@ -2350,6 +2350,19 @@
             'callback' => 'gce_api_submit_livraison_report',
             'permission_callback' => 'is_user_logged_in',
         ]);
+        // NOUVEL ENDPOINT POUR INVALIDER UN RAPPORT DE LIVRAISON SIGNÉ
+        register_rest_route('eecie-crm/v1', '/livraison/invalidate-report/(?P<id>\\d+)', [
+            'methods' => WP_REST_Server::CREATABLE, // Correspond à POST
+            'callback' => 'gce_invalidate_livraison_report',
+            'permission_callback' => 'is_user_logged_in',
+            'args' => [
+                'id' => [
+                    'validate_callback' => function ($param, $request, $key) {
+                        return is_numeric($param);
+                    }
+                ],
+            ],
+        ]);
 
         // Route pour soumettre la date du RDV
         register_rest_route('eecie-crm/v1', '/rdv/submit-schedule', [
@@ -3269,7 +3282,7 @@
      */
     function gce_api_get_fournisseur_jobs($request)
     {
-         error_log("================= [PWA DEBUG] DÉBUT DE LA REQUÊTE /mes-jobs =================");
+        error_log("================= [PWA DEBUG] DÉBUT DE LA REQUÊTE /mes-jobs =================");
         // === ÉTAPE 1: IDENTIFIER LE FOURNISSEUR (Logique 100% validée) ===
         $user_email = wp_get_current_user()->user_email;
         error_log("[PWA DEBUG 1.1] Utilisateur WP authentifié : " . $user_email);
@@ -3281,19 +3294,19 @@
         $id_option_fournisseur = 3065;
         $params_contact = ['user_field_names' => 'true', 'filter__Email__equal' => $user_email, 'filter__Type__single_select_equal' => $id_option_fournisseur, 'size' => 1];
         $contact_response = eecie_crm_baserow_get("rows/table/{$contacts_table_id}/", $params_contact);
-        
+
         if (is_wp_error($contact_response) || empty($contact_response['results'])) {
-             error_log("[PWA DEBUG 1.2] ERREUR : Aucun contact de type Fournisseur trouvé pour " . $user_email . ". Fin.");
+            error_log("[PWA DEBUG 1.2] ERREUR : Aucun contact de type Fournisseur trouvé pour " . $user_email . ". Fin.");
             return new WP_Error('no_provider_contact', "Aucun contact de type Fournisseur trouvé pour l'email: " . $user_email, ['status' => 404]);
         }
         $contact_fournisseur = $contact_response['results'][0];
-         error_log("[PWA DEBUG 1.2] Contact Baserow trouvé : ID " . $contact_fournisseur['id']);
+        error_log("[PWA DEBUG 1.2] Contact Baserow trouvé : ID " . $contact_fournisseur['id']);
         if (empty($contact_fournisseur['Fournisseur'][0]['id'])) {
-             error_log("[PWA DEBUG 1.3] ERREUR : Le contact trouvé n'est pas lié à une fiche Fournisseur. Fin.");
+            error_log("[PWA DEBUG 1.3] ERREUR : Le contact trouvé n'est pas lié à une fiche Fournisseur. Fin.");
             return new WP_Error('no_provider_linked', "Le contact trouvé n'est lié à aucune fiche Fournisseur.", ['status' => 404]);
         }
         $fournisseur_id = $contact_fournisseur['Fournisseur'][0]['id'];
- error_log("[PWA DEBUG 1.3] ID du Fournisseur extrait : " . $fournisseur_id);
+        error_log("[PWA DEBUG 1.3] ID du Fournisseur extrait : " . $fournisseur_id);
 
 
         // === ÉTAPE 2: TROUVER LES DEVIS LIÉS (Syntaxe validée par cURL) ===
@@ -3319,7 +3332,7 @@
         $id_option_livraison = 3155;
         $params_opp = ['user_field_names' => 'true', 'filter__Status__single_select_equal' => $id_option_livraison, 'size' => 200];
         $toutes_les_opps_en_livraison = eecie_crm_baserow_get("rows/table/{$opp_table_id}/", $params_opp);
-          error_log("[PWA DEBUG 4.1] Nombre total d'opportunités au statut 'Livraison' : " . count($toutes_les_opps_en_livraison));
+        error_log("[PWA DEBUG 4.1] Nombre total d'opportunités au statut 'Livraison' : " . count($toutes_les_opps_en_livraison));
         if (is_wp_error($toutes_les_opps_en_livraison) || empty($toutes_les_opps_en_livraison['results'])) return new WP_REST_Response([], 200);
 
         // === ÉTAPE 5: FILTRER EN PHP (La méthode 100% fiable) ===
@@ -3329,97 +3342,95 @@
                 $jobs_filtres[] = $job;
             }
         }
-error_log("[PWA DEBUG 5.1] Nombre de jobs après filtrage (correspondance fournisseur ET statut) : " . count($jobs_filtres));
-    // On récupère les IDs des tables une seule fois
-    // On récupère les IDs des tables une seule fois
-     error_log("[PWA DEBUG 6.0] Début de l'enrichissement des " . count($jobs_filtres) . " job(s).");
-    $articles_devis_table_id = get_option('gce_baserow_table_articles_devis');
-    $rapports_table_id = eecie_crm_guess_table_id('Rapports_Livraison');
-    $signatures_table_id = eecie_crm_guess_table_id('Signature_Livraison');
-    $articles_livraison_table_id = eecie_crm_guess_table_id('Articles_Livraison');
-    
-    // On prépare le tableau final qui sera renvoyé
-    $cleaned_jobs = [];
+        error_log("[PWA DEBUG 5.1] Nombre de jobs après filtrage (correspondance fournisseur ET statut) : " . count($jobs_filtres));
+        // On récupère les IDs des tables une seule fois
+        // On récupère les IDs des tables une seule fois
+        error_log("[PWA DEBUG 6.0] Début de l'enrichissement des " . count($jobs_filtres) . " job(s).");
+        $articles_devis_table_id = get_option('gce_baserow_table_articles_devis');
+        $rapports_table_id = eecie_crm_guess_table_id('Rapports_Livraison');
+        $signatures_table_id = eecie_crm_guess_table_id('Signature_Livraison');
+        $articles_livraison_table_id = eecie_crm_guess_table_id('Articles_Livraison');
 
-    foreach ($jobs_filtres as $job) {
-         error_log("--- Enrichissement du Job ID: " . $job['id'] . " ---");
-        $final_job_data = [
-            'id'               => $job['id'],
-            'NomClient'        => $job['NomClient'],
-            'Ville'            => $job['Ville'],
-            'Travaux'          => $job['Travaux'] ?? 'Aucune description',
-            'ArticlesDevis'    => [], // Sera rempli ci-dessous
-            'RapportLivraison' => null // Sera rempli ci-dessous
-        ];
+        // On prépare le tableau final qui sera renvoyé
+        $cleaned_jobs = [];
 
-        // 6.1 - Enrichir avec les Articles du Devis (les articles prévus)
-        if (!empty($job['Devis'][0]['id'])) {
-            $devis_id = $job['Devis'][0]['id'];
-            $devis_complet = eecie_crm_get_row_by_slug_and_id('devis', $devis_id);
-            if (!is_wp_error($devis_complet) && !empty($devis_complet['Articles_devis'])) {
-                foreach ($devis_complet['Articles_devis'] as $article_ref) {
-                    $article_data = eecie_crm_get_row_by_slug_and_id('articles_devis', $article_ref['id']);
-                    if (!is_wp_error($article_data)) {
-                        $final_job_data['ArticlesDevis'][] = $article_data;
-                    }
-                }
-            }
-        }
-        error_log("[PWA DEBUG 6.1] Articles du devis initial trouvés : " . count($final_job_data['ArticlesDevis']));
-        
-       // 6.2 - Enrichir avec le Rapport de Livraison (s'il existe)
-        if ($rapports_table_id) {
-            $params_rapport = ['user_field_names' => 'true', 'filter__Opportunite_liee__link_row_has' => $job['id'], 'size' => 1];
-            $rapport_response = eecie_crm_baserow_get("rows/table/{$rapports_table_id}/", $params_rapport);
+        foreach ($jobs_filtres as $job) {
+            error_log("--- Enrichissement du Job ID: " . $job['id'] . " ---");
+            $final_job_data = [
+                'id'               => $job['id'],
+                'NomClient'        => $job['NomClient'],
+                'Ville'            => $job['Ville'],
+                'Travaux'          => $job['Travaux'] ?? 'Aucune description',
+                'ArticlesDevis'    => [], // Sera rempli ci-dessous
+                'RapportLivraison' => null // Sera rempli ci-dessous
+            ];
 
-            if (!is_wp_error($rapport_response) && !empty($rapport_response['results'])) {
-                $rapport_enrichi = $rapport_response['results'][0];
-                 $test=print_r($rapport_enrichi,1);
-                 $test2=$rapport_enrichi['Signature_client'][0]['id'];
-                 $test3=$signatures_table_id;
-               
-                // 6.2.1 - Hydrater la Signature liée au rapport
-              
-                if (!empty($rapport_enrichi['Signature_client'][0]['id'])) {
-                   
-                    $signature_id = $rapport_enrichi['Signature_client'][0]['id'];
-                    $signature_data = eecie_crm_get_row_by_slug_and_id('Signatures_Livraison', $signature_id); // Assumant que le slug est 'devis_signatures'
-                   
-                    if (!is_wp_error($signature_data) && !empty($signature_data['Fichier_signature'][0]['url'])) {
-                       
-                        $rapport_enrichi['Signature_Image_URL'] = $signature_data['Fichier_signature'][0]['url'];
-                    }
-                }
-
-
-                // 6.2.2 - **LA CORRECTION CRUCIALE** - Hydrater les Articles de Livraison liés au rapport
-                    $test=print_r($rapport_enrichi,1);
-                    error_log($test);
-                  error_log("[PWA DEBUG 6.2] Articles livraison initial trouvés : " . count($rapport_enrichi['Articles_Livraison']));
-      
-                if (!empty($rapport_enrichi['Articles_Livraison'])) {
-                    error_log("6.2.1 verif 1 ok");
-                    $articles_complets = [];
-                    foreach ($rapport_enrichi['Articles_Livraison'] as $article_ref) {
-                        // On utilise la fonction eecie_crm_get_row_by_slug_and_id qui est faite pour ça
-                        $article_data = eecie_crm_get_row_by_slug_and_id('articles_livraison', $article_ref['id']); 
+            // 6.1 - Enrichir avec les Articles du Devis (les articles prévus)
+            if (!empty($job['Devis'][0]['id'])) {
+                $devis_id = $job['Devis'][0]['id'];
+                $devis_complet = eecie_crm_get_row_by_slug_and_id('devis', $devis_id);
+                if (!is_wp_error($devis_complet) && !empty($devis_complet['Articles_devis'])) {
+                    foreach ($devis_complet['Articles_devis'] as $article_ref) {
+                        $article_data = eecie_crm_get_row_by_slug_and_id('articles_devis', $article_ref['id']);
                         if (!is_wp_error($article_data)) {
-                            $articles_complets[] = $article_data;
+                            $final_job_data['ArticlesDevis'][] = $article_data;
                         }
                     }
-                    // On remplace le tableau de références par le tableau d'objets complets
-                    $rapport_enrichi['Articles_Livraison'] = $articles_complets;
                 }
-                
-                $final_job_data['RapportLivraison'] = $rapport_enrichi;
             }
+            error_log("[PWA DEBUG 6.1] Articles du devis initial trouvés : " . count($final_job_data['ArticlesDevis']));
+
+            // 6.2 - Enrichir avec le Rapport de Livraison (s'il existe)
+            if ($rapports_table_id) {
+                $params_rapport = ['user_field_names' => 'true', 'filter__Opportunite_liee__link_row_has' => $job['id'], 'size' => 1];
+                $rapport_response = eecie_crm_baserow_get("rows/table/{$rapports_table_id}/", $params_rapport);
+
+                if (!is_wp_error($rapport_response) && !empty($rapport_response['results'])) {
+                    $rapport_enrichi = $rapport_response['results'][0];
+
+
+                    // 6.2.1 - Hydrater la Signature liée au rapport
+
+                    if (!empty($rapport_enrichi['Signature_client'][0]['id'])) {
+
+                        $signature_id = $rapport_enrichi['Signature_client'][0]['id'];
+                        $signature_data = eecie_crm_get_row_by_slug_and_id('Signatures_Livraison', $signature_id); // Assumant que le slug est 'devis_signatures'
+
+                        if (!is_wp_error($signature_data) && !empty($signature_data['Fichier_signature'][0]['url'])) {
+
+                            $rapport_enrichi['Signature_Image_URL'] = $signature_data['Fichier_signature'][0]['url'];
+                        }
+                    }
+
+
+                    // 6.2.2 - **LA CORRECTION CRUCIALE** - Hydrater les Articles de Livraison liés au rapport
+                    $test = print_r($rapport_enrichi, 1);
+                    error_log($test);
+                    error_log("[PWA DEBUG 6.2] Articles livraison initial trouvés : " . count($rapport_enrichi['Articles_Livraison']));
+
+                    if (!empty($rapport_enrichi['Articles_Livraison'])) {
+                        error_log("6.2.1 verif 1 ok");
+                        $articles_complets = [];
+                        foreach ($rapport_enrichi['Articles_Livraison'] as $article_ref) {
+                            // On utilise la fonction eecie_crm_get_row_by_slug_and_id qui est faite pour ça
+                            $article_data = eecie_crm_get_row_by_slug_and_id('articles_livraison', $article_ref['id']);
+                            if (!is_wp_error($article_data)) {
+                                $articles_complets[] = $article_data;
+                            }
+                        }
+                        // On remplace le tableau de références par le tableau d'objets complets
+                        $rapport_enrichi['Articles_Livraison'] = $articles_complets;
+                    }
+
+                    $final_job_data['RapportLivraison'] = $rapport_enrichi;
+                }
+            }
+
+            $cleaned_jobs[] = $final_job_data;
         }
 
-        $cleaned_jobs[] = $final_job_data;
+        return new WP_REST_Response($cleaned_jobs, 200);
     }
-
-    return new WP_REST_Response($cleaned_jobs, 200);
-}
     /**
      * Callback pour la route POST /livraison/submit-report
      *
@@ -3457,10 +3468,7 @@ error_log("[PWA DEBUG 5.1] Nombre de jobs après filtrage (correspondance fourni
 
 
 
-    /**
-     * Helper pour trouver un contact dans Baserow par email et par type.
-     * VERSION DÉFINITIVE ET VALIDÉE
-     */
+
     /**
      * Helper pour trouver un contact dans Baserow par email et par type.
      * VERSION DÉFINITIVE ET VALIDÉE PAR LE TEST cURL
@@ -3512,3 +3520,55 @@ error_log("[PWA DEBUG 5.1] Nombre de jobs après filtrage (correspondance fourni
 
         return $response['results'][0];
     }
+/**
+ * Invalide un rapport de livraison en supprimant sa signature.
+ * Version Simplifiée et Corrigée : suit la logique directe "Lire puis Supprimer".
+ *
+ * @param WP_REST_Request $request
+ * @return WP_REST_Response
+ */
+function gce_invalidate_livraison_report(WP_REST_Request $request) {
+    $report_id = (int) $request['id'];
+    $rapport_table_id = get_option('gce_baserow_table_rapports_livraison') ?: eecie_crm_guess_table_id('Rapports_Livraison');
+    $signature_table_id = get_option('gce_baserow_table_signatures_livraison') ?: eecie_crm_guess_table_id('Signatures_Livraison');
+
+    if (!$rapport_table_id || !$signature_table_id) {
+        return new WP_REST_Response(['message' => 'Erreur: Configuration des tables de livraison manquante.'], 500);
+    }
+
+    // --- ÉTAPE 1 : Récupérer le rapport de livraison pour trouver l'ID de la signature ---
+    $report_data = eecie_crm_baserow_get("rows/table/{$rapport_table_id}/{$report_id}/?user_field_names=true");
+
+    if (is_wp_error($report_data)) {
+        error_log('GCE API Invalidate - Erreur lors de la récupération du rapport #' . $report_id . ': ' . $report_data->get_error_message());
+        return new WP_REST_Response(['message' => 'Erreur: Impossible de trouver le rapport de livraison.'], 404);
+    }
+    $test=print_r($report_data,1);
+    error_log($test);
+    // --- ÉTAPE 2 : Extraire l'ID de la signature du champ de liaison ---
+    // On vérifie que le champ 'Signatures_Livraison' existe, n'est pas vide et est un tableau.
+    if (empty($report_data['Signature_client']) || !is_array($report_data['Signature_client']) || !isset($report_data['Signature_client'][0]['id'])) {
+        // S'il n'y a pas de signature liée, le travail est déjà fait. On renvoie un succès.
+        return new WP_REST_Response(['message' => 'Aucune signature n\'était liée à ce rapport. Modification autorisée.'], 200);
+    }
+    
+    // On récupère l'ID de la première signature liée.
+    $signature_id_to_delete = (int) $report_data['Signature_client'][0]['id'];
+
+    // --- ÉTAPE 3 : Envoyer la requête de suppression pour la signature ---
+    $delete_result = eecie_crm_baserow_request('DELETE', "rows/table/{$signature_table_id}/{$signature_id_to_delete}/");
+
+    // L'API Baserow renvoie une réponse vide (null) avec un statut 204 en cas de succès.
+    // Si une erreur se produit, $delete_result sera un objet WP_Error.
+    if (is_wp_error($delete_result)) {
+        error_log('GCE API Invalidate - Erreur lors de la suppression de la signature #' . $signature_id_to_delete . ': ' . $delete_result->get_error_message());
+        return new WP_REST_Response(['message' => 'Erreur: La suppression de la signature dans la base de données a échoué.'], 502);
+    }
+    
+    // --- ÉTAPE 4 (Nettoyage) : Vider le champ de liaison sur le rapport ---
+    // C'est une bonne pratique pour éviter les liens "fantômes".
+    $update_payload = ['Signatures_Livraison' => []];
+    eecie_crm_baserow_patch("rows/table/{$rapport_table_id}/{$report_id}/?user_field_names=true", $update_payload);
+
+    return new WP_REST_Response(['message' => 'Signature invalidée avec succès. Le rapport peut être modifié.'], 200);
+}

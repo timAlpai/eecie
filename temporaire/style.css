@@ -202,3 +202,13 @@ button:hover { opacity: 0.9; }
 .job-item span {
     color: var(--dark-gray);
 }
+
+.grand-total {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 2px solid var(--primary-color);
+    font-size: 1.3em;
+    font-weight: bold;
+}
+.btn-secondary { background-color: var(--dark-gray); }
+.btn-secondary:hover { background-color: var(--text-color); }
