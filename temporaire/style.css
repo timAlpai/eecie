@@ -212,3 +212,7 @@ button:hover { opacity: 0.9; }
 }
 .btn-secondary { background-color: var(--dark-gray); }
 .btn-secondary:hover { background-color: var(--text-color); }
+
+/* Ajoutez cette nouvelle classe à la fin du fichier */
+.btn-success { background-color: var(--success-color); }
+.btn-success:hover { background-color: #229954; } /* Une teinte un peu plus foncée */

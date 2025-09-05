@@ -1235,7 +1235,7 @@
                 $valid = wp_verify_nonce($nonce, 'wp_rest');
                 $user = is_user_logged_in();
 
-               
+
                 return $user && $valid;
             },
 
@@ -2109,7 +2109,7 @@
                 $valid = wp_verify_nonce($nonce, 'wp_rest');
                 $user = is_user_logged_in();
 
-              
+
                 return $user && $valid;
             },
 
@@ -2374,6 +2374,26 @@
                 ],
             ],
         ]);
+        // NOUVEL ENDPOINT POUR CLÔTURER UN DOSSIER
+        register_rest_route('eecie-crm/v1', '/opportunite/(?P<id>\\d+)/cloturer', [
+            'methods' => WP_REST_Server::CREATABLE, // Correspond à POST
+            'callback' => 'gce_api_cloturer_opportunite',
+            'permission_callback' => 'is_user_logged_in',
+            'args' => [
+                'id' => [
+                    'validate_callback' => function ($param, $request, $key) {
+                        return is_numeric($param);
+                    }
+                ],
+            ],
+        ]);
+
+
+        /***********************************************************************************************
+         * PWA Employés route                                                                          *
+         * *********************************************************************************************
+         */
+
 
         // Route pour soumettre la date du RDV
         register_rest_route('eecie-crm/v1', '/rdv/submit-schedule', [
@@ -3142,11 +3162,11 @@
     function gce_handle_devis_acceptance(WP_REST_Request $request)
     {
         // --- DÉBUT DES LOGS ---
-       
+
         // 1. Logger les paramètres bruts reçus de l'URL
         $devis_id_raw = $request->get_param('devis_id');
         $token_raw = $request->get_param('token');
-       
+
         // 2. Nettoyer et valider les paramètres
         $devis_id = (int) $devis_id_raw;
         $token = sanitize_text_field($token_raw);
@@ -3159,7 +3179,7 @@
             wp_redirect(add_query_arg(['status' => 'error', 'message' => 'invalid_link'], $confirmation_page_url));
             exit;
         }
-       
+
         // 4. Récupérer les détails du devis depuis Baserow
         $devis_table_id = get_option('gce_baserow_table_devis');
         if (empty($devis_table_id)) {
@@ -3167,7 +3187,7 @@
             wp_redirect(add_query_arg(['status' => 'error', 'message' => 'config_error'], $confirmation_page_url));
             exit;
         }
-       
+
         $devis_data = eecie_crm_baserow_get("rows/table/{$devis_table_id}/{$devis_id}/?user_field_names=true");
 
         if (is_wp_error($devis_data)) {
@@ -3180,14 +3200,14 @@
             wp_redirect(add_query_arg(['status' => 'error', 'message' => 'devis_not_found'], $confirmation_page_url));
             exit;
         }
-       
+
         // 5. Validation cruciale du token
         if ($devis_data['Acceptation_Token'] !== $token) {
             error_log("[ERREUR E] Incompatibilité des tokens. Reçu: '{$token}', Attendu: '" . $devis_data['Acceptation_Token'] . "'");
             wp_redirect(add_query_arg(['status' => 'error', 'message' => 'token_mismatch'], $confirmation_page_url));
             exit;
         }
-       
+
         // 6. Vérifier si le devis n'est pas déjà accepté
         if ($devis_data['Status']['value'] === 'accepter') {
             error_log("[LOG 6] Le devis est déjà marqué comme accepté. Redirection.");
@@ -3338,7 +3358,7 @@
                 $jobs_filtres[] = $job;
             }
         }
-        // On récupère les IDs des tables une seule fois
+
         // On récupère les IDs des tables une seule fois
         $articles_devis_table_id = get_option('gce_baserow_table_articles_devis');
         $rapports_table_id = eecie_crm_guess_table_id('Rapports_Livraison');
@@ -3416,124 +3436,162 @@
             }
 
             $cleaned_jobs[] = $final_job_data;
-            
-
-        }   
+        }
         $test = print_r($cleaned_jobs, 1);
         error_log($test);
 
 
         return new WP_REST_Response($cleaned_jobs, 200);
     }
-// Fichier : includes/api/rest-routes.php
 
-// Fichier : includes/api/rest-routes.php
 
-// Fichier : includes/api/rest-routes.php
+    /**
+     * Crée ou met à jour un rapport de livraison et sa signature.
+     * Version finale avec journalisation et correction de l'URL de l'API.
+     *
+     * @param WP_REST_Request $request
+     * @return WP_REST_Response|WP_Error
+     */
+    function gce_api_submit_livraison_report(WP_REST_Request $request)
+    {
+        // --- ÉTAPE 1: DÉMARRAGE ET VALIDATION DES PARAMÈTRES ---
 
-/**
- * Crée ou met à jour un rapport de livraison et sa signature.
- * Version finale avec correction du format du payload pour le champ Fichier.
- *
- * @param WP_REST_Request $request
- * @return WP_REST_Response
- */
-function gce_api_submit_livraison_report(WP_REST_Request $request) {
-    $params = $request->get_json_params();
+        $params = $request->get_json_params();
 
-    if (empty($params['opportunite_id']) || empty($params['signature_base64'])) {
-        return new WP_REST_Response(['message' => 'Données manquantes (opportunité ou signature).'], 400);
-    }
-    
-    $user_id = get_current_user_id();
-    $user = get_userdata($user_id);
-    $fournisseur_baserow = gce_get_baserow_t1_user_by_email($user->user_email);
-    if (!$fournisseur_baserow) {
-        return new WP_REST_Response(['message' => 'Utilisateur fournisseur introuvable dans Baserow.'], 403);
-    }
-
-    $rapport_table_id = get_option('gce_baserow_table_rapports_livraison') ?: eecie_crm_guess_table_id('Rapports_Livraison');
-    $articles_table_id = get_option('gce_baserow_table_articles_livraison') ?: eecie_crm_guess_table_id('Articles_Livraison');
-    $signature_table_id = get_option('gce_baserow_table_signatures_livraison') ?: eecie_crm_guess_table_id('Signatures_Livraison');
-    
-    $report_id = null;
-
-    if (isset($params['report_id']) && !empty($params['report_id'])) {
-        // --- CAS MISE À JOUR ---
-        $report_id = (int)$params['report_id'];
-        $update_payload = [
-            'Notes_intervention' => sanitize_textarea_field($params['notes']),
-            'Date_intervention' => gmdate('Y-m-d\TH:i:s\Z'),
-        ];
-        eecie_crm_baserow_patch("rows/table/{$rapport_table_id}/{$report_id}/?user_field_names=true", $update_payload);
-    } else {
-        // --- CAS CRÉATION ---
-        $create_payload = [
-            'Opportunite_liee' => [(int)$params['opportunite_id']],
-            'Fournisseur_intervenant' => [(int)$fournisseur_baserow['id']],
-            'Notes_intervention' => sanitize_textarea_field($params['notes']),
-            'Date_intervention' => gmdate('Y-m-d\TH:i:s\Z'),
-        ];
-        $new_report_data = eecie_crm_baserow_request('POST', "rows/table/{$rapport_table_id}/?user_field_names=true", $create_payload);
-        if (is_wp_error($new_report_data) || !isset($new_report_data['id'])) {
-            return new WP_REST_Response(['message' => 'La création du rapport a échoué.'], 500);
+        if (empty($params['opportunite_id']) || empty($params['signature_base64'])) {
+            return new WP_REST_Response(['message' => 'Données manquantes (opportunité ou signature).'], 400);
         }
-        $report_id = $new_report_data['id'];
-    }
-    
-    // Créer les nouveaux articles supplémentaires
-    if (!empty($params['articles_supplementaires']) && is_array($params['articles_supplementaires'])) {
-        foreach ($params['articles_supplementaires'] as $article) {
-            $article_payload = [
-                'Nom' => sanitize_text_field($article['nom']),
-                'Quantités' => (float)$article['quantite'],
-                'Prix_unitaire' => (float)$article['prix_unitaire'],
-                'Rapport_lie' => [$report_id],
-            ];
-            eecie_crm_baserow_request('POST', "rows/table/{$articles_table_id}/?user_field_names=true", $article_payload);
+
+        // --- ÉTAPE 2: IDENTIFICATION DE L'UTILISATEUR ET DES TABLES ---
+        $user_id = get_current_user_id();
+        $user = get_userdata($user_id);
+        $fournisseur_baserow = gce_get_baserow_t1_user_by_email($user->user_email);
+        if (!$fournisseur_baserow) {
+            return new WP_REST_Response(['message' => 'Utilisateur fournisseur introuvable dans Baserow.'], 403);
         }
-    }
-    
-    // Gérer l'upload de la signature
-    preg_match('/^data:image\/(png|jpeg);base64,(.*)$/', $params['signature_base64'], $matches);
-    $image_data = base64_decode($matches[2]);
-    $filename = 'signature_report_' . $report_id . '_' . time() . '.png';
-    $temp_dir = get_temp_dir();
-    $file_path = trailingslashit($temp_dir) . $filename;
-    $file_saved = file_put_contents($file_path, $image_data);
 
-    if ($file_saved === false) {
-        return new WP_REST_Response(['message' => 'Impossible d\'écrire le fichier de signature temporaire.'], 500);
-    }
-    
-    $uploaded_file = eecie_crm_baserow_upload_file($file_path, $filename);
-    unlink($file_path); 
+        $rapport_table_id = get_option('gce_baserow_table_rapports_livraison') ?: eecie_crm_guess_table_id('Rapports_Livraison');
+        $articles_table_id = get_option('gce_baserow_table_articles_livraison') ?: eecie_crm_guess_table_id('Articles_Livraison');
+        $signature_table_id = get_option('gce_baserow_table_signatures_livraison') ?: eecie_crm_guess_table_id('Signatures_Livraison');
 
-    if (is_wp_error($uploaded_file) || !isset($uploaded_file['name'])) {
-        return new WP_REST_Response(['message' => 'L\'upload de la signature a échoué ou la réponse est invalide.'], 500);
-    }
-    
-    // *** DÉBUT DE LA CORRECTION DÉFINITIVE ***
-    // Créer l'enregistrement de la signature et le lier au rapport
-    $signature_payload = [
-        // On formate correctement le payload pour le champ Fichier
-        'Signature' => [
-            ['name' => $uploaded_file['name']]
-        ],
-        'Rapport_Livraison' => [$report_id],
-        'Date_Signature' => gmdate('Y-m-d\TH:i:s\Z'),
-    ];
-    // *** FIN DE LA CORRECTION DÉFINITIVE ***
+        if (!$rapport_table_id || !$articles_table_id || !$signature_table_id) {
+            return new WP_REST_Response(['message' => 'Erreur critique de configuration des tables.'], 500);
+        }
 
-    $new_signature = eecie_crm_baserow_request('POST', "rows/table/{$signature_table_id}/?user_field_names=true", $signature_payload);
-    
-    // Finaliser en liant la nouvelle signature au rapport
-    if (isset($new_signature['id'])) {
-        eecie_crm_baserow_patch("rows/table/{$rapport_table_id}/{$report_id}/", ['Signature_client' => [$new_signature['id']]]);
+        // --- ÉTAPE 3: GESTION DU RAPPORT (CRÉATION OU MISE À JOUR) ---
+        $report_id = null;
+
+        if (isset($params['report_id']) && !empty($params['report_id'])) {
+            $report_id = (int)$params['report_id'];
+            $update_payload = ['Notes_intervention' => sanitize_textarea_field($params['notes']), 'Date_intervention' => gmdate('Y-m-d\TH:i:s\Z')];
+            eecie_crm_baserow_patch("rows/table/{$rapport_table_id}/{$report_id}/", $update_payload);
+        } else {
+            $create_payload = ['Opportunite_liee' => [(int)$params['opportunite_id']], 'Fournisseur_intervenant' => [(int)$fournisseur_baserow['id']], 'Notes_intervention' => sanitize_textarea_field($params['notes']), 'Date_intervention' => gmdate('Y-m-d\TH:i:s\Z')];
+            $new_report_data = eecie_crm_baserow_request('POST', "rows/table/{$rapport_table_id}/", $create_payload);
+
+            if (is_wp_error($new_report_data) || !isset($new_report_data['id'])) {
+                return new WP_REST_Response(['message' => 'La création du rapport a échoué.'], 500);
+            }
+            $report_id = $new_report_data['id'];
+        }
+
+        // --- ÉTAPE 4: CRÉATION DES ARTICLES SUPPLÉMENTAIRES (VERSION CORRIGÉE) ---
+        if (!empty($params['articles_supplementaires']) && is_array($params['articles_supplementaires'])) {
+
+            // Étape 4.1 : Récupérer le schéma de la table des articles pour mapper les noms aux IDs de champs
+            $articles_schema = eecie_crm_baserow_get_fields($articles_table_id);
+            $articles_field_map = [];
+            if (!is_wp_error($articles_schema)) {
+                foreach ($articles_schema as $field) {
+                    $articles_field_map[$field['name']] = 'field_' . $field['id'];
+                }
+            } else {
+                error_log("[EECIE PWA LOG] ERREUR ÉTAPE 4.1: Impossible de récupérer le schéma de la table Articles_Livraison.");
+                // On ne bloque pas tout, mais on log l'erreur
+            }
+
+            foreach ($params['articles_supplementaires'] as $article) {
+                // Étape 4.2 : Construire le payload avec les field_IDs, comme pour la signature
+                $article_payload = [
+                    $articles_field_map['Nom'] => sanitize_text_field($article['nom']),
+                    $articles_field_map['Quantités'] => (float)$article['quantite'],
+                    $articles_field_map['Prix_unitaire'] => (float)$article['prix_unitaire'],
+                    $articles_field_map['Rapport_lie'] => [$report_id],
+                ];
+
+
+                // Étape 4.4 : Appeler l'API SANS le paramètre ?user_field_names=true
+                eecie_crm_baserow_request('POST', "rows/table/{$articles_table_id}/", $article_payload);
+            }
+        } else {
+        }
+
+        // --- ÉTAPE 5: GESTION DE L'IMAGE DE SIGNATURE ---
+        preg_match('/^data:image\/(png|jpeg);base64,(.*)$/', $params['signature_base64'], $matches);
+        $image_data = base64_decode($matches[2]);
+        $filename = 'signature_report_' . $report_id . '_' . time() . '.png';
+        $temp_dir = get_temp_dir();
+        $file_path = trailingslashit($temp_dir) . $filename;
+
+        if (file_put_contents($file_path, $image_data) === false) {
+            error_log("[EECIE PWA LOG] ERREUR ÉTAPE 5.1: Impossible d'écrire le fichier de signature temporaire sur le disque.");
+            return new WP_REST_Response(['message' => 'Impossible de sauvegarder le fichier de signature.'], 500);
+        }
+
+        $uploaded_file = eecie_crm_baserow_upload_file($file_path, $filename);
+        unlink($file_path);
+
+        if (is_wp_error($uploaded_file) || !isset($uploaded_file['name'])) {
+            error_log("[EECIE PWA LOG] ERREUR ÉTAPE 5.2: L'upload du fichier signature vers Baserow a échoué. Réponse: " . json_encode($uploaded_file));
+            return new WP_REST_Response(['message' => 'L\'upload de la signature a échoué.'], 500);
+        }
+
+        // --- ÉTAPE 6: CRÉATION DE L'ENREGISTREMENT DE LA SIGNATURE ---
+        $signature_schema = eecie_crm_baserow_get_fields($signature_table_id);
+        $field_map = [];
+        foreach ($signature_schema as $field) {
+            $field_map[$field['name']] = 'field_' . $field['id'];
+        }
+
+        if (!isset($field_map['Fichier_signature']) || !isset($field_map['Rapports_Livraison']) || !isset($field_map['Date_signature']) || !isset($field_map['Addresse_IP']) || !isset($field_map['User_Agent'])) {
+            return new WP_REST_Response(['message' => 'Erreur de configuration de la table des signatures.'], 500);
+        }
+
+        $signature_payload = [
+            $field_map['Fichier_signature']  => [['name' => $uploaded_file['name']]],
+            $field_map['Rapports_Livraison'] => [$report_id],
+            $field_map['Date_signature']     => gmdate('Y-m-d\TH:i:s\Z'),
+            $field_map['Addresse_IP']        => $_SERVER['REMOTE_ADDR'] ?? 'N/A',
+            $field_map['User_Agent']         => $_SERVER['HTTP_USER_AGENT'] ?? 'N/A',
+        ];
+
+
+        // CORRECTION : On retire ?user_field_names=true de l'URL pour la création.
+        $new_signature = eecie_crm_baserow_request('POST', "rows/table/{$signature_table_id}/", $signature_payload);
+
+        if (is_wp_error($new_signature) || !isset($new_signature['id'])) {
+
+            return new WP_REST_Response(['message' => 'La création de l\'enregistrement de la signature a échoué.'], 500);
+        }
+
+
+        // --- ÉTAPE 7: FINALISATION - LIER LA SIGNATURE AU RAPPORT ---
+        $rapport_schema = eecie_crm_baserow_get_fields($rapport_table_id);
+        $signature_client_field_id = null;
+        foreach ($rapport_schema as $field) {
+            if ($field['name'] === 'Signature_client') {
+                $signature_client_field_id = $field['id'];
+                break;
+            }
+        }
+
+        if ($signature_client_field_id) {
+            eecie_crm_baserow_patch("rows/table/{$rapport_table_id}/{$report_id}/", ['field_' . $signature_client_field_id => [$new_signature['id']]]);
+        }
+        return new WP_REST_Response(['message' => 'Rapport soumis avec succès !', 'report_id' => $report_id], 200);
     }
 
-    return new WP_REST_Response(['message' => 'Rapport soumis avec succès !', 'report_id' => $report_id], 200);
-}
+
 
     /**
      * Helper pour trouver un contact dans Baserow par email et par type.
@@ -3665,3 +3723,58 @@ function gce_api_submit_livraison_report(WP_REST_Request $request) {
 
         return new WP_REST_Response(['message' => 'Article supprimé avec succès.'], 200);
     }
+
+
+    /**
+     * Change le statut d'une opportunité à "Finaliser".
+     *
+     * @param WP_REST_Request $request
+     * @return WP_REST_Response|WP_Error
+     */
+    function gce_api_cloturer_opportunite(WP_REST_Request $request)
+    {
+        $opportunite_id = (int) $request['id'];
+
+        // Récupérer l'ID de la table des opportunités
+        $opp_table_id = get_option('gce_baserow_table_opportunites') ?: eecie_crm_guess_table_id('Task_input');
+        if (!$opp_table_id) {
+            return new WP_Error('config_error', "La table des opportunités n'est pas configurée.", ['status' => 500]);
+        }
+
+        // Récupérer le schéma de la table pour trouver l'ID du champ et de l'option
+        $opp_schema = eecie_crm_baserow_get_fields($opp_table_id);
+        if (is_wp_error($opp_schema)) {
+            return new WP_Error('schema_error', "Impossible de lire la structure de la table des opportunités.", ['status' => 500]);
+        }
+
+        $status_field = array_values(array_filter($opp_schema, fn($f) => $f['name'] === 'Status'))[0] ?? null;
+        if (!$status_field) {
+            return new WP_Error('schema_error', "Le champ 'Status' est introuvable.", ['status' => 500]);
+        }
+
+        $finaliser_option = array_values(array_filter($status_field['select_options'], fn($o) => $o['value'] === 'Finaliser'))[0] ?? null;
+        if (!$finaliser_option) {
+            return new WP_Error('schema_error', "L'option de statut 'Finaliser' est introuvable.", ['status' => 500]);
+        }
+
+        // Préparer le payload pour la mise à jour
+        $payload = [
+            'field_' . $status_field['id'] => $finaliser_option['id']
+        ];
+
+        // Envoyer la requête PATCH à Baserow
+        $update_result = eecie_crm_baserow_patch("rows/table/{$opp_table_id}/{$opportunite_id}/", $payload);
+
+        if (is_wp_error($update_result)) {
+            return new WP_Error('baserow_error', "La mise à jour du statut dans Baserow a échoué.", ['status' => 502]);
+        }
+
+        return new WP_REST_Response(['success' => true, 'message' => 'Dossier clôturé avec succès.'], 200);
+    }
+
+
+
+    /**********************************************************
+     * FONCTION PWA EMPLOYES
+     * ********************************************************
+     */

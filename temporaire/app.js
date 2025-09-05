@@ -14,9 +14,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const modifyReportBtn = document.getElementById('modify-report-btn');
     const logoutBtn = document.getElementById('logout-btn');
     const backToJobsBtn = document.getElementById('back-to-jobs-btn');
-    
+    const cloturerDossierBtn = document.getElementById('cloturer-dossier-btn');
+
     let signatureCanvas = null;
-    let ctx = null; 
+    let ctx = null;
     let drawing = false;
 
     // --- ÉTAT DE L'APPLICATION ---
@@ -56,6 +57,46 @@ document.addEventListener('DOMContentLoaded', () => {
             signatureCanvas.width = rect.width;
             signatureCanvas.height = rect.height;
             initCanvas();
+        }
+    }
+
+    // --- NOUVELLE FONCTION POUR LA CLÔTURE ---
+    async function handleSubmitFinal(e) {
+        const opportuniteId = e.target.dataset.opportuniteId;
+        if (!opportuniteId) return;
+
+        if (!confirm("Cette action clôturera définitivement le dossier et changera son statut à 'Finaliser'. Êtes-vous sûr de vouloir continuer ?")) {
+            return;
+        }
+
+        const btn = e.target;
+        btn.disabled = true;
+        btn.textContent = 'Clôture en cours...';
+
+        try {
+            const response = await fetch(`https://portal.eecie.ca/wp-json/eecie-crm/v1/opportunite/${opportuniteId}/cloturer`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': state.authHeader
+                },
+                body: JSON.stringify({}) // Le corps peut être vide
+            });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.message || 'Le serveur a refusé la clôture.');
+            }
+
+            alert('Dossier clôturé avec succès !');
+            await fetchJobs(); // Recharger la liste des missions
+            showScreen('jobs'); // Retourner à la liste
+
+        } catch (error) {
+            alert(`Erreur : ${error.message}`);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '✅ Clôturer le Dossier';
         }
     }
 
@@ -136,7 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('report-client-name').textContent = job.NomClient;
         document.getElementById('report-client-address').textContent = job.Ville;
         document.getElementById('report-general-scope').innerHTML = job.Travaux;
-        
+
         let initialTotal = 0;
         const initialArticlesList = document.getElementById('initial-articles-list');
         initialArticlesList.innerHTML = `<div class="article-item articles-header"><span class="name">Description</span><span class="qty">Qté</span><span class="price">P.U.</span><span class="total">Total</span><span></span></div>`;
@@ -152,7 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             initialArticlesList.innerHTML += '<div class="article-item">Aucun article spécifique au devis.</div>';
         }
-        
+
         const hasExistingReport = job.RapportLivraison;
         const isSigned = hasExistingReport && job.RapportLivraison.Signature_Image_URL;
 
@@ -180,7 +221,10 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('add-article-form').style.display = 'none';
             submitReportBtn.style.display = 'none';
             modifyReportBtn.style.display = 'block';
+            cloturerDossierBtn.style.display = 'block';
             modifyReportBtn.dataset.reportId = job.RapportLivraison.id;
+            cloturerDossierBtn.dataset.opportuniteId = job.id;
+
             const signaturePad = document.getElementById('signature-pad');
             signaturePad.innerHTML = `<p><strong>Signature du Client :</strong></p><img src="${job.RapportLivraison.Signature_Image_URL}" alt="Signature" style="border: 1px solid #ccc; max-width: 100%; border-radius: 5px;">`;
         } else {
@@ -188,10 +232,11 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('add-article-form').style.display = 'block';
             submitReportBtn.style.display = 'block';
             modifyReportBtn.style.display = 'none';
+            cloturerDossierBtn.style.display = 'none';
             document.getElementById('signature-pad').innerHTML = `<canvas id="signature-canvas"></canvas><button id="clear-signature-btn" class="btn-danger">Effacer</button>`;
             setupSignatureCanvas();
         }
-        
+
         renderAddedArticles();
         showScreen('report');
     }
@@ -235,12 +280,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 totalAjouts += totalLigne;
             });
         }
-        
+
         totalSpan.textContent = totalAjouts.toFixed(2) + ' €';
         const nouveauTotalHT = state.currentReport.initialTotalHT + totalAjouts;
         nouveauTotalSpan.textContent = nouveauTotalHT.toFixed(2) + ' €';
     }
-    
+
     function handleAddArticle(e) {
         e.preventDefault();
         const form = e.target;
@@ -253,7 +298,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderAddedArticles();
         form.reset();
     }
-    
+
     function handleDeleteUnsavedArticle(e) {
         const deleteBtn = e.target.closest('.delete-unsaved-article-btn');
         if (!deleteBtn) return;
@@ -261,7 +306,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.currentReport.articles_supplementaires.splice(index, 1);
         renderAddedArticles();
     }
-    
+
     async function handleDeleteSavedArticle(e) {
         const deleteBtn = e.target.closest('.delete-saved-article-btn');
         if (!deleteBtn) return;
@@ -310,7 +355,7 @@ document.addEventListener('DOMContentLoaded', () => {
         signatureCanvas.addEventListener('touchmove', draw, { passive: false });
         document.getElementById('clear-signature-btn').addEventListener('click', clearSignature);
     }
-    
+
     function clearSignature() {
         if (signatureCanvas) {
             ctx.clearRect(0, 0, signatureCanvas.width, signatureCanvas.height);
@@ -368,7 +413,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderAddedArticles();
         requestAnimationFrame(resizeCanvas);
     }
-    
+
     async function handleModifyReport(e) {
         const reportId = e.target.dataset.reportId;
         if (!reportId) return;
@@ -418,8 +463,9 @@ document.addEventListener('DOMContentLoaded', () => {
         backToJobsBtn.addEventListener('click', () => showScreen('jobs'));
         submitReportBtn.addEventListener('click', handleSubmitReport);
         modifyReportBtn.addEventListener('click', handleModifyReport);
+        cloturerDossierBtn.addEventListener('click', handleSubmitFinal); 
         document.getElementById('add-article-form').addEventListener('submit', handleAddArticle);
-        
+
         const addedArticlesList = document.getElementById('added-articles-list');
         addedArticlesList.addEventListener('click', (e) => {
             handleDeleteUnsavedArticle(e);
