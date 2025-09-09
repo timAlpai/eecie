@@ -5,23 +5,6 @@ defined('ABSPATH') || exit;
 require_once __DIR__ . '/baserow-proxy.php';
 require_once GCE_PLUGIN_DIR . 'includes/shared/security.php';
 
-// Include all the route files
-require_once __DIR__ . '/fournisseurs-routes.php';
-require_once __DIR__ . '/zone-geo-routes.php';
-require_once __DIR__ . '/contacts-routes.php';
-require_once __DIR__ . '/opportunites-routes.php';
-require_once __DIR__ . '/taches-routes.php';
-require_once __DIR__ . '/appels-routes.php';
-require_once __DIR__ . '/interactions-routes.php';
-require_once __DIR__ . '/devis-routes.php';
-require_once __DIR__ . '/articles-devis-routes.php';
-require_once __DIR__ . '/utilisateurs-routes.php';
-require_once __DIR__ . '/fournisseur-app-routes.php';
-require_once __DIR__ . '/employee-app-routes.php';
-require_once __DIR__ . '/proxy-routes.php';
-require_once __DIR__ . '/structure-routes.php';
-require_once __DIR__ . '/rdv-routes.php';
-require_once __DIR__ . '/debug-routes.php';
 
 /**
  * Fonction d'aide pour récupérer une ligne Baserow par son slug et son ID.
@@ -452,5 +435,24 @@ function gce_handle_devis_acceptance(WP_REST_Request $request)
 }
 
 add_action('rest_api_init', function () {
+
+    // Include all the route files
+require_once __DIR__ . '/fournisseurs-routes.php';
+require_once __DIR__ . '/zone-geo-routes.php';
+require_once __DIR__ . '/contacts-routes.php';
+require_once __DIR__ . '/opportunites-routes.php';
+require_once __DIR__ . '/taches-routes.php';
+require_once __DIR__ . '/appels-routes.php';
+require_once __DIR__ . '/interactions-routes.php';
+require_once __DIR__ . '/devis-routes.php';
+require_once __DIR__ . '/articles-devis-routes.php';
+require_once __DIR__ . '/utilisateurs-routes.php';
+require_once __DIR__ . '/fournisseur-app-routes.php';
+require_once __DIR__ . '/employee-app-routes.php';
+require_once __DIR__ . '/proxy-routes.php';
+require_once __DIR__ . '/structure-routes.php';
+require_once __DIR__ . '/rdv-routes.php';
+require_once __DIR__ . '/debug-routes.php';
+
     // All routes are now included in separate files
 });
