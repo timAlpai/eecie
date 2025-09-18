@@ -1,6 +1,29 @@
 <?php
 defined('ABSPATH') || exit;
 
+
+
+/**
+ * Trouve un utilisateur WordPress en se basant sur son ID dans la table T1_user de Baserow.
+ * @param int $t1_user_id L'ID de la ligne dans la table T1_user.
+ * @return WP_User|false L'objet utilisateur WP ou false si non trouvé.
+ */
+function gce_get_wp_user_by_t1_user_id($t1_user_id) {
+    // 1. Récupérer les détails de l'utilisateur T1 depuis Baserow pour obtenir son email
+    $user_table_id = eecie_crm_guess_table_id('T1_user');
+    if (!$user_table_id) return false;
+    
+    $t1_user_data = eecie_crm_baserow_get("rows/table/{$user_table_id}/{$t1_user_id}/?user_field_names=true");
+
+    if (is_wp_error($t1_user_data) || !isset($t1_user_data['Email'])) {
+        return false;
+    }
+
+    // 2. Utiliser l'email pour trouver l'utilisateur WordPress
+    return get_user_by('email', $t1_user_data['Email']);
+}
+
+
 /**
  * Fonction pour effectuer une requête GET sécurisée à Baserow
  *

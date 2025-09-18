@@ -1,0 +1,7 @@
+{
+    "name": "eecie/gestion-crm-eecie",
+    "require": {
+        "firebase/php-jwt": "^6.11",
+        "predis/predis": "^3.2"
+    }
+}

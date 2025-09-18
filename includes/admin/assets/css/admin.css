@@ -60,3 +60,85 @@
     padding: 4px 6px;
   }
 }
+
+/* ===== REFO NTE MESSAGERIE DASHBOARD ADMIN ===== */
+
+.gce-dashboard-grid {
+    display: flex;
+    flex-wrap: wrap; /* Permet de passer en colonne sur mobile */
+    gap: 20px;
+}
+
+.gce-dashboard-column {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+#gce-dashboard-main {
+    flex: 1;
+    min-width: 300px;
+}
+
+#gce-dashboard-messaging {
+    flex: 2;
+    min-width: 450px;
+}
+
+#messages-view {
+    height: 600px; /* Hauteur fixe pour le conteneur de chat */
+    display: flex;
+    flex-direction: column;
+}
+
+#messages-view .inside {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 10px;
+}
+
+#messages-display {
+    flex-grow: 1; /* Prend tout l'espace disponible */
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    background: #fdfdfd;
+    padding: 10px;
+    margin-bottom: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+#message-form {
+    display: flex;
+    gap: 10px;
+}
+
+#message-form textarea {
+    flex-grow: 1;
+    resize: none; /* Empêche le redimensionnement manuel */
+    height: 50px; /* Hauteur de base */
+    margin: 0;
+}
+
+#message-form button {
+    height: 50px;
+}
+
+/* Style de la liste des threads */
+#threads-list .inside {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+#threads-list ul { list-style: none; margin: 0; padding: 0; }
+#threads-list li { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; transition: background-color 0.2s; }
+#threads-list li:hover { background-color: #f5f5f5; }
+#threads-list li.active { background-color: #eef7ff; font-weight: bold; }
+
+/* Styles des messages (déjà fournis mais répétés pour être sûr) */
+.message { padding: 8px 12px; border-radius: 12px; max-width: 75%; line-height: 1.4; }
+.message p { margin: 4px 0 0 0; }
+.message.received { background-color: #e4e6eb; color: #050505; border-bottom-left-radius: 2px; align-self: flex-start; }
+.message.sent { background-color: #0084ff; color: white; border-bottom-right-radius: 2px; align-self: flex-end; }

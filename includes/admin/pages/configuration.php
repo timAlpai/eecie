@@ -22,6 +22,11 @@ $known_usages = [
     'Rapports_Livraison' => 'rapports_livraison',
     'Articles_Livraison' => 'articles_livraison',
     'Signatures_Livraison' => 'signatures_livraison',
+    
+    // --- LIGNES À AJOUTER CI-DESSOUS ---
+    'Threads'       => 'threads',
+    'Messages'      => 'messages',
+    'Lectures'      => 'lectures',
 ];
 
 $api_key = get_option('gce_baserow_api_key', '');

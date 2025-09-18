@@ -14,6 +14,11 @@
 
 
 defined('ABSPATH') || exit;
+
+if ( file_exists( __DIR__ . '/vendor/autoload.php' ) ) {
+    require_once __DIR__ . '/vendor/autoload.php';
+}
+
 // Charger le fichier de secrets s'il existe.
 $secrets_file = __DIR__ . '/gce-secrets.php';
 if (file_exists($secrets_file)) {

@@ -10,6 +10,22 @@ function gce_enqueue_admin_assets($hook) {
     if (strpos($hook, 'gce-backup-restore') !== false) {
         wp_enqueue_script('gce-backup-js', plugin_dir_url(__FILE__) . 'assets/js/backup.js', ['eecie-crm-rest'], GCE_VERSION, true);
      }
+    
+     // *** NOUVELLE CONDITION À AJOUTER POUR LE DASHBOARD ***
+    // 'toplevel_page_gce-dashboard' est l'identifiant de hook pour la page principale du menu.
+    if ($hook === 'toplevel_page_gce-dashboard') {
+         wp_enqueue_script('socket-io-client', 'https://cdn.socket.io/4.7.5/socket.io.min.js', [], '4.7.5', true);
+        wp_enqueue_script(
+            'gce-admin-dashboard-js', // Un nom unique pour notre script
+            plugin_dir_url(__FILE__) . 'assets/js/dashboard.js', // Le chemin vers notre nouveau fichier
+            ['eecie-crm-rest', 'socket-io-client'], // Il dépend de l'objet EECIE_CRM pour l'URL de l'API et le nonce
+            GCE_VERSION, // Toujours versionner les scripts pour éviter les problèmes de cache
+            true // Charger dans le footer
+        );
+        // On peut aussi charger un CSS spécifique au dashboard si besoin
+        // wp_enqueue_style('gce-admin-dashboard-css', plugin_dir_url(__FILE__) . 'assets/css/dashboard-admin.css');
+    }
+
 }
 add_action('admin_enqueue_scripts', 'gce_enqueue_admin_assets');
 

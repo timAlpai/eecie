@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+python-socketio
+redis
+python-jose[cryptography] # Pour les JWT, plus complet que pyjwt
+python-dotenv
+requests
+passlib[bcrypt] # Pour la validation des mots de passe d'application

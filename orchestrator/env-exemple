@@ -1,0 +1,11 @@
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+# Clé pour valider les tokens JWT venant des PWA
+SHARED_SECRET_KEY_JWT="VOTRE_TRES_LONGUE_CLE_SECRETE_PARTAGEE_AVEC_WORDPRESS" 
+# Clé pour que WordPress/n8n puissent appeler l'API interne
+INTERNAL_API_KEY="VOTRE_CLE_API_INTERNE_POUR_LES_SERVICES_BACKEND"
+
+# Identifiants pour que l'Orchestrateur s'authentifie auprès de l'API WordPress
+WP_API_URL=https://example.com/wp-json/eecie-crm/v1
+WP_SERVICE_USER_EMAIL=orchestrator_service@votredomaine.com
+WP_SERVICE_USER_PASSWORD=abc_defg_ijkl_mnop_qrst_uvwx # Le mot de passe d'application SANS espaces

@@ -437,22 +437,23 @@ function gce_handle_devis_acceptance(WP_REST_Request $request)
 add_action('rest_api_init', function () {
 
     // Include all the route files
-require_once __DIR__ . '/fournisseurs-routes.php';
-require_once __DIR__ . '/zone-geo-routes.php';
-require_once __DIR__ . '/contacts-routes.php';
-require_once __DIR__ . '/opportunites-routes.php';
-require_once __DIR__ . '/taches-routes.php';
-require_once __DIR__ . '/appels-routes.php';
-require_once __DIR__ . '/interactions-routes.php';
-require_once __DIR__ . '/devis-routes.php';
-require_once __DIR__ . '/articles-devis-routes.php';
-require_once __DIR__ . '/utilisateurs-routes.php';
-require_once __DIR__ . '/fournisseur-app-routes.php';
-require_once __DIR__ . '/employee-app-routes.php';
-require_once __DIR__ . '/proxy-routes.php';
-require_once __DIR__ . '/structure-routes.php';
-require_once __DIR__ . '/rdv-routes.php';
-require_once __DIR__ . '/debug-routes.php';
+require_once __DIR__ . '/routes/fournisseurs-routes.php';
+require_once __DIR__ . '/routes/zone-geo-routes.php';
+require_once __DIR__ . '/routes/contacts-routes.php';
+require_once __DIR__ . '/routes/opportunites-routes.php';
+require_once __DIR__ . '/routes/taches-routes.php';
+require_once __DIR__ . '/routes/appels-routes.php';
+require_once __DIR__ . '/routes/interactions-routes.php';
+require_once __DIR__ . '/routes/devis-routes.php';
+require_once __DIR__ . '/routes/articles-devis-routes.php';
+require_once __DIR__ . '/routes/utilisateurs-routes.php';
+require_once __DIR__ . '/routes/fournisseur-app-routes.php';
+require_once __DIR__ . '/routes/employee-app-routes.php';
+require_once __DIR__ . '/routes/proxy-routes.php';
+require_once __DIR__ . '/routes/structure-routes.php';
+require_once __DIR__ . '/routes/rdv-routes.php';
+require_once __DIR__ . '/routes/debug-routes.php';
+require_once __DIR__ . '/routes/orchestrator-routes.php';
 
     // All routes are now included in separate files
 });
