@@ -94,17 +94,29 @@ async function displayMessages(threadId, threadName) {
         messagesDisplay.scrollTop = messagesDisplay.scrollHeight;
     }
 
-    function addMessageToDisplay(message) {
-        const senderT1Id = message.Expediteur[0]?.id;
-        const isMe = message.Expediteur[0]?.id === currentUser?.t1_user_id;
+   // Fichier: includes/admin/assets/js/dashboard.js
 
-        const messageEl = document.createElement('div');
-        messageEl.className = `message ${isMe ? 'sent' : 'received'}`;
-        messageEl.innerHTML = `<strong>${message.Expediteur[0]?.value || 'Inconnu'}:</strong><p>${message.contenu.replace(/\n/g, '<br>')}</p>`;
-        messagesDisplay.appendChild(messageEl);
-        messagesDisplay.scrollTop = messagesDisplay.scrollHeight;
+function addMessageToDisplay(message) { // Le paramètre est 'message'
+    if (!message || !message.Expediteur || !message.Expediteur[0]) {
+        console.error("Données de message invalides reçues:", message);
+        return; // Sécurité pour éviter d'autres erreurs
     }
 
+    const senderT1Id = message.Expediteur[0]?.id;
+    const isMe = senderT1Id === currentUser?.t1_user_id;
+
+    const messageEl = document.createElement('div');
+    messageEl.className = `message ${isMe ? 'sent' : 'received'}`;
+    
+    // On utilise 'message' partout ici
+    messageEl.innerHTML = `
+        <strong>${message.Expediteur[0]?.value || 'Inconnu'}:</strong>
+        <p>${(message.contenu || '').replace(/\n/g, '<br>')}</p>
+    `;
+    
+    messagesDisplay.appendChild(messageEl);
+    messagesDisplay.scrollTop = messagesDisplay.scrollHeight;
+}
     // --- Logique WebSocket ---
     async function connectRealtime() {
         try {
