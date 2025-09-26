@@ -127,6 +127,7 @@ async def disconnect(sid):
         is_admin = session.get('is_admin', False)
 
         # On supprime TOUJOURS le mapping de Redis
+        
         await redis_client.hdel("user_connections", str(user_id))
         
         # On notifie les admins uniquement si ce n'était pas un admin qui s'est déconnecté

@@ -22,6 +22,7 @@ $known_usages = [
     'Rapports_Livraison' => 'rapports_livraison',
     'Articles_Livraison' => 'articles_livraison',
     'Signatures_Livraison' => 'signatures_livraison',
+    'Interventions_Planifiees' => 'interventions_planifiees',
     
     // --- LIGNES À AJOUTER CI-DESSOUS ---
     'Threads'       => 'threads',

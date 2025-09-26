@@ -176,209 +176,139 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
         `${tableName.charAt(0).toUpperCase() + tableName.slice(1)} #${data.id}` :
         `Nouveau ${tableName}`;
 
-    const contentHtml = filteredSchema.map((field) => {
-        const fieldKey = `field_${field.id}`;
-        const label = `<label for="${fieldKey}"><strong>${field.name}</strong></label>`;
-        let value = data[field.name];
-        if (value === undefined) {
-            value = data[fieldKey];
+
+  const contentHtml = filteredSchema.map((field) => {
+    // --- DÉBUT DE LA MODIFICATION 1 : Identification du champ ---
+    // On ajoute cette logique au tout début de la boucle.
+    const recurrenceFieldNames = ['Frequence', 'Intervalle', 'Date_Debut_Recurrence', 'Date_Fin_Recurrence'];
+    const isRecurrenceField = tableName === 'opportunites' && recurrenceFieldNames.includes(field.name);
+    // --- FIN DE LA MODIFICATION 1 ---
+
+
+    // TOUT VOTRE CODE EXISTANT RESTE INTACT ICI
+    const fieldKey = `field_${field.id}`;
+    const label = `<label for="${fieldKey}"><strong>${field.name}</strong></label>`;
+    let value = data[field.name];
+    if (value === undefined) {
+        value = data[fieldKey];
+    }
+
+    let fieldHtml; // On déclare une variable pour stocker le HTML du champ
+
+    if (mode === "lecture") {
+        let displayValue = '';
+
+        if (field.type === "link_row" && Array.isArray(value)) {
+            const rawNameToSlugMap = { 't1_user': 'utilisateurs', 'assigne': 'utilisateurs', 'contacts': 'contacts', 'contact': 'contacts', 'task_input': 'opportunites', 'opportunite': 'opportunites', 'opportunité': 'opportunites', 'appel': 'appels', 'appels': 'appels', 'interaction': 'interactions', 'interactions': 'interactions', 'devis': 'devis', 'articles_devis': 'articles_devis', 'article': 'articles_devis', 'fournisseur': 'fournisseurs', 'fournisseurs': 'fournisseurs' };
+            const tableSlug = rawNameToSlugMap[field.name.toLowerCase()] || field.name.toLowerCase();
+            displayValue = value.map(obj => {
+                if (!obj || !obj.id) return '';
+                return `<span style="display: inline-flex; align-items: center; gap: 5px;"><a href="#" class="gce-popup-link" data-table="${tableSlug}" data-id="${obj.id}" data-mode="lecture">${obj.value || 'Détail'}</a><a href="#" class="gce-popup-link" data-table="${tableSlug}" data-id="${obj.id}" data-mode="ecriture" title="Modifier">✏️</a></span>`;
+            }).join(', ');
+        } else if (field.type === "file" && Array.isArray(value)) {
+            displayValue = value.map(file => `<a href="${file.url}" target="_blank" rel="noopener noreferrer">${file.visible_name}</a>`).join('<br>');
+        } else if (field.type === "rating") {
+            const currentValue = data[field.name] || 0;
+            const maxRating = field.max_value || 5;
+            let starsHtml = '';
+            for (let i = 1; i <= maxRating; i++) {
+                const isSelected = i <= currentValue ? 'selected' : '';
+                starsHtml += `<span class="star ${isSelected}" data-value="${i}">★</span>`;
+            }
+            fieldHtml = `<div class="gce-field-row">${label}<div class="gce-rating-input">${starsHtml}<input type="hidden" name="${fieldKey}" value="${currentValue}"></div></div>`;
+        } else if (typeof value === 'object' && value !== null) {
+            displayValue = value.value || '';
+        } else {
+            displayValue = value || '';
+        }
+        
+        if (field.type !== "rating") {
+             fieldHtml = `<div class="gce-field-row"><strong>${field.name}</strong><div>${displayValue}</div></div>`;
         }
 
-        if (mode === "lecture") {
-            let displayValue = '';
+    } else { // Mode 'ecriture'
+        if (field.type === "file") {
+            let existingFilesHtml = '';
+            if (Array.isArray(value) && value.length > 0) {
+                existingFilesHtml = '<div>Fichiers actuels: ' + value.map(f => `<a href="${f.url}" target="_blank">${f.visible_name}</a>`).join(', ') + '</div>';
+            }
+            fieldHtml = `<div class="gce-field-row" style="flex-direction: column; align-items: stretch;">${label}${existingFilesHtml}<input type="file" id="${fieldKey}" name="${fieldKey}" multiple style="margin-top: 5px;"></div>`;
+        } else if (field.type === "link_row") {
+            if (tableName === 'devis' && field.name === 'Fournisseur') {
+                const targetSlug = 'fournisseurs';
+                const options = window.gceDataCache?.[targetSlug] || [];
+                const selectedIds = Array.isArray(value) ? value.map(v => v.id) : [];
+                const optionHtml = options.map(opt => `<option value="${opt.id}" ${selectedIds.includes(opt.id) ? 'selected' : ''}>${opt.Nom || opt.Name || `ID: ${opt.id}`}</option>`).join('');
+                fieldHtml = `<div class="gce-field-row" style="flex-direction: column; align-items: stretch;">${label}<select name="${fieldKey}" id="${fieldKey}" multiple style="min-height: 100px;">${optionHtml}</select></div>`;
+            } else {
+                let displayValue = '—';
+                let hiddenInputValue = '';
 
+               if (Array.isArray(value) && value.length > 0) {
+                    const rawNameToSlugMap = { 't1_user': 'utilisateurs', 'assigne': 'utilisateurs', 'contacts': 'contacts', 'contact': 'contacts', 'task_input': 'opportunites', 'opportunite': 'opportunites', 'opportunité': 'opportunites', 'appel': 'appels', 'appels': 'appels', 'interaction': 'interactions', 'interactions': 'interactions', 'devis': 'devis', 'articles_devis': 'articles_devis', 'article': 'articles_devis' };
+                    const tableSlug = rawNameToSlugMap[field.name.toLowerCase()] || field.name.toLowerCase();
+                    displayValue = value.map(obj => {
+                        if (!obj || !obj.id) return '';
+                        return `<a href="#" class="gce-popup-link" data-table="${tableSlug}" data-id="${obj.id}" data-mode="lecture">${obj.value || 'Détail'}</a>`;
+                    }).join(', ');
+                    hiddenInputValue = JSON.stringify(value.map(v => v.id));
 
-
-            if (field.type === "link_row" && Array.isArray(value)) {
-                // Si c'est un champ de liaison, on crée des liens cliquables
-                const rawNameToSlugMap = { 't1_user': 'utilisateurs', 'assigne': 'utilisateurs', 'contacts': 'contacts', 'contact': 'contacts', 'task_input': 'opportunites', 'opportunite': 'opportunites', 'opportunité': 'opportunites', 'appel': 'appels', 'appels': 'appels', 'interaction': 'interactions', 'interactions': 'interactions', 'devis': 'devis', 'articles_devis': 'articles_devis', 'article': 'articles_devis', 'fournisseur': 'fournisseurs', 'fournisseurs': 'fournisseurs' };
-                const tableSlug = rawNameToSlugMap[field.name.toLowerCase()] || field.name.toLowerCase();
-
-                displayValue = value.map(obj => {
-                    if (!obj || !obj.id) return '';
-                    return `<span style="display: inline-flex; align-items: center; gap: 5px;">
-                                    <a href="#" class="gce-popup-link" data-table="${tableSlug}" data-id="${obj.id}" data-mode="lecture">${obj.value || 'Détail'}</a>
-                                    <a href="#" class="gce-popup-link" data-table="${tableSlug}" data-id="${obj.id}" data-mode="ecriture" title="Modifier">✏️</a>
-                                </span>`;
-                }).join(', ');
-
-            } else if (field.type === "file" && Array.isArray(value)) { // Ajout pour afficher les fichiers existants
-                displayValue = value.map(file =>
-                    `<a href="${file.url}" target="_blank" rel="noopener noreferrer">${file.visible_name}</a>`
-                ).join('<br>');
-            } else
-                if (field.type === "rating") {
-                    const fieldKey = `field_${field.id}`;
-                    const label = `<label for="${fieldKey}"><strong>${field.name}</strong></label>`;
-                    const currentValue = data[field.name] || 0;
-                    const maxRating = field.max_value || 5;
-
-                    let starsHtml = '';
-                    for (let i = 1; i <= maxRating; i++) {
-                        const isSelected = i <= currentValue ? 'selected' : '';
-                        starsHtml += `<span class="star ${isSelected}" data-value="${i}">★</span>`;
-                    }
-
-                    return `
-                    <div class="gce-field-row">
-                        ${label}
-                        <div class="gce-rating-input">
-                            ${starsHtml}
-                            <input type="hidden" name="${fieldKey}" value="${currentValue}">
-                        </div>
-                    </div>
-                `;
                 }
-
-                else if (typeof value === 'object' && value !== null) {
-                    displayValue = value.value || '';
+                fieldHtml = `<div class="gce-field-row">${label}<div>${displayValue} <input type="hidden" name="${fieldKey}" value='${hiddenInputValue}'></div></div>`;
+            }
+        } else if (field.type === "date") {
+            let dateValue = value || '';
+            if (dateValue) {
+                const d = new Date(dateValue);
+                d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+                if (field.date_include_time) {
+                    dateValue = d.toISOString().slice(0, 16);
                 } else {
-                    displayValue = value || '';
-                }
-            return `<div class="gce-field-row"><strong>${field.name}</strong><div>${displayValue}</div></div>`;
-        } else { // Mode 'ecriture'
-
-            if (field.type === "file") {
-                let existingFilesHtml = '';
-                if (Array.isArray(value) && value.length > 0) {
-                    existingFilesHtml = '<div>Fichiers actuels: ' + value.map(f => `<a href="${f.url}" target="_blank">${f.visible_name}</a>`).join(', ') + '</div>';
-                }
-                // Note : On ne peut pas pré-remplir un <input type="file"> pour des raisons de sécurité.
-                // On affiche les fichiers existants et on propose un champ pour en ajouter de nouveaux.
-                return `
-                    <div class="gce-field-row" style="flex-direction: column; align-items: stretch;">
-                        ${label}
-                        ${existingFilesHtml}
-                        <input type="file" id="${fieldKey}" name="${fieldKey}" multiple style="margin-top: 5px;">
-                    </div>`;
-            }
-
-            if (field.type === "link_row") {
-                // CAS SPÉCIAL : Le champ 'Fournisseur' quand on édite un 'devis'.
-                if (tableName === 'devis' && field.name === 'Fournisseur') {
-                    const targetSlug = 'fournisseurs';
-                    const options = window.gceDataCache?.[targetSlug] || [];
-                    const selectedIds = Array.isArray(value) ? value.map(v => v.id) : [];
-                    const optionHtml = options.map(opt => `<option value="${opt.id}" ${selectedIds.includes(opt.id) ? 'selected' : ''}>${opt.Nom || opt.Name || `ID: ${opt.id}`}</option>`).join('');
-                    return `<div class="gce-field-row" style="flex-direction: column; align-items: stretch;">${label}<select name="${fieldKey}" id="${fieldKey}" multiple style="min-height: 100px;">${optionHtml}</select></div>`;
-
-                    // NOUVELLE LOGIQUE : Si ce n'est pas le cas spécial ci-dessus, on affiche juste les liens sans champ de formulaire.
-                } else {
-                    let displayValue = '—';
-                    if (Array.isArray(value) && value.length > 0) {
-                        // Logique pour trouver le bon slug (reste la même)
-                        const rawNameToSlugMap = { 't1_user': 'utilisateurs', 'assigne': 'utilisateurs', 'contacts': 'contacts', 'contact': 'contacts', 'task_input': 'opportunites', 'opportunite': 'opportunites', 'opportunité': 'opportunites', 'appel': 'appels', 'appels': 'appels', 'interaction': 'interactions', 'interactions': 'interactions', 'devis': 'devis', 'articles_devis': 'articles_devis', 'article': 'articles_devis' };
-                        const tableSlug = rawNameToSlugMap[field.name.toLowerCase()] || field.name.toLowerCase();
-                        // Logique d'affichage (reste la même)
-                        displayValue = value.map(obj => {
-                            if (!obj || !obj.id) return '';
-                            return `<a href="#" class="gce-popup-link" data-table="${tableSlug}" data-id="${obj.id}" data-mode="lecture">${obj.value || 'Détail'}</a>`;
-                        }).join(', ');
-                    }
-                    // LA CORRECTION : On retourne seulement le label et la valeur affichée, SANS <input type="hidden">
-                    return `<div class="gce-field-row">${label}<div>${displayValue}</div></div>`;
+                    dateValue = d.toISOString().slice(0, 10);
                 }
             }
-
-            // BLOC CORRIGÉ
-            if (field.type === "date") {
-                let dateValue = value || '';
-                // Si on a une date (ex: "2025-07-23T16:26:00Z"), on la formate
-                if (dateValue) {
-                    const d = new Date(dateValue);
-                    // On ajuste la date au fuseau horaire du navigateur pour l'affichage
-                    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-
-                    if (field.date_include_time) {
-                        // Format pour datetime-local: YYYY-MM-DDTHH:mm
-                        dateValue = d.toISOString().slice(0, 16);
-                    } else {
-                        // Format pour date: YYYY-MM-DD
-                        dateValue = d.toISOString().slice(0, 10);
-                    }
-                }
-                const inputType = field.date_include_time ? "datetime-local" : "date";
-                return `<div class="gce-field-row">${label}<input type="${inputType}" id="${fieldKey}" name="${fieldKey}" value="${dateValue}"></div>`;
+            const inputType = field.date_include_time ? "datetime-local" : "date";
+            fieldHtml = `<div class="gce-field-row">${label}<input type="${inputType}" id="${fieldKey}" name="${fieldKey}" value="${dateValue}"></div>`;
+        } else if (field.read_only) {
+            fieldHtml = `<div class="gce-field-row">${label}<input type="text" value="${value || ''}" readonly disabled></div>`;
+        } else if (field.name === 'Progression') {
+            const currentValue = value || 0;
+            fieldHtml = `<div class="gce-field-row" style="align-items: center;">${label}<div style="display: flex; align-items: center; gap: 10px; flex-grow: 1;"><input type="range" min="0" max="100" value="${currentValue}" id="${fieldKey}" name="${fieldKey}" style="flex-grow: 1;" oninput="this.nextElementSibling.textContent = this.value + '%'"><span style="font-weight: bold; min-width: 40px; text-align: right;">${currentValue}%</span></div></div>`;
+        } else if (field.type === "boolean") {
+            fieldHtml = `<div class="gce-field-row" style="align-items: center;">${label}<input type="checkbox" id="${fieldKey}" name="${fieldKey}" ${value === true ? "checked" : ""} style="width: 20px; height: 20px;"></div>`;
+        } else if (field.type === "single_select" && field.select_options) {
+            const options = field.select_options.map(opt => `<option value="${opt.id}" ${value?.id === opt.id ? "selected" : ""}>${opt.value}</option>`).join("");
+            fieldHtml = `<div class="gce-field-row">${label}<select name="${fieldKey}" id="${fieldKey}"><option value="">-</option>${options}</select></div>`;
+        } else if (field.type === 'long_text' && mode === 'ecriture') {
+            fieldHtml = `<div class="gce-field-row" style="flex-direction: column; align-items: stretch;">${label}<div class="gce-wp-editor-container" data-field-key="${fieldKey}" data-initial-content="${encodeURIComponent(value || '')}">Chargement de l'éditeur...</div></div>`;
+        } else if (field.type === "rating") {
+            const currentValue = data[field.name] || 0;
+            const maxRating = field.max_value || 5;
+            let starsHtml = '';
+            for (let i = 1; i <= maxRating; i++) {
+                const isSelected = i <= currentValue ? 'selected' : '';
+                starsHtml += `<span class="star ${isSelected}" data-value="${i}">★</span>`;
             }
-            if (field.read_only) {
-                return `<div class="gce-field-row">${label}<input type="text" value="${value || ''}" readonly disabled></div>`;
-            }
-
-            // AJOUTER CE BLOC AU DÉBUT DE LA SECTION 'ecriture'
-            if (field.name === 'Progression') {
-                const currentValue = value || 0;
-                return `
-                    <div class="gce-field-row" style="align-items: center;">
-                        ${label}
-                        <div style="display: flex; align-items: center; gap: 10px; flex-grow: 1;">
-                            <input type="range" min="0" max="100" value="${currentValue}" 
-                                   id="${fieldKey}" name="${fieldKey}" style="flex-grow: 1;"
-                                   oninput="this.nextElementSibling.textContent = this.value + '%'"/>
-                            <span style="font-weight: bold; min-width: 40px; text-align: right;">${currentValue}%</span>
-                        </div>
-                    </div>`;
-            }
-
-            if (field.type === "boolean") {
-                return `
-        <div class="gce-field-row" style="align-items: center;">
-            ${label}
-            <input type="checkbox" id="${fieldKey}" name="${fieldKey}" ${value === true ? "checked" : ""} style="width: 20px; height: 20px;">
-        </div>`;
-            }
-
-            if (field.type === "single_select" && field.select_options) {
-                const options = field.select_options.map(opt =>
-                    `<option value="${opt.id}" ${value?.id === opt.id ? "selected" : ""}>${opt.value}</option>`
-                ).join("");
-                return `<div class="gce-field-row">${label}<select name="${fieldKey}" id="${fieldKey}"><option value="">-</option>${options}</select></div>`;
-            }
-            if (field.type === 'long_text' && mode === 'ecriture') {
-                // Pour le texte riche, on crée un conteneur qui sera rempli plus tard par l'API
-                // On ajoute un attribut data pour le retrouver et lui passer le contenu initial
-                return `
-                    <div class="gce-field-row" style="flex-direction: column; align-items: stretch;">
-                        ${label}
-                        <div class="gce-wp-editor-container" 
-                             data-field-key="${fieldKey}"
-                             data-initial-content="${encodeURIComponent(value || '')}">
-                            Chargement de l'éditeur...
-                        </div>
-                    </div>`;
-            }
-            if (field.type === "rating") {
-                const fieldKey = `field_${field.id}`;
-                const label = `<label for="${fieldKey}"><strong>${field.name}</strong></label>`;
-                const currentValue = data[field.name] || 0;
-                const maxRating = field.max_value || 5;
-
-                let starsHtml = '';
-                for (let i = 1; i <= maxRating; i++) {
-                    const isSelected = i <= currentValue ? 'selected' : '';
-                    starsHtml += `<span class="star ${isSelected}" data-value="${i}">★</span>`;
-                }
-
-                return `
-                    <div class="gce-field-row">
-                        ${label}
-                        <div class="gce-rating-input">
-                            ${starsHtml}
-                            <input type="hidden" name="${fieldKey}" value="${currentValue}">
-                        </div>
-                    </div>
-                `;
-            }
+            fieldHtml = `<div class="gce-field-row">${label}<div class="gce-rating-input">${starsHtml}<input type="hidden" name="${fieldKey}" value="${currentValue}"></div></div>`;
+        } else {
             const inputType = field.type === 'number' ? 'number' : 'text';
             const numberAttributes = (inputType === 'number') ? 'step="0.01"' : '';
-            // --- FIN DU CHANGEMENT ---
-
-            return `
-                <div class="gce-field-row">${label}
-                    <input type="${inputType}" id="${fieldKey}" name="${fieldKey}" value="${value || ''}" ${numberAttributes}>
-                </div>`;
+            fieldHtml = `<div class="gce-field-row">${label}<input type="${inputType}" id="${fieldKey}" name="${fieldKey}" value="${value || ''}" ${numberAttributes}></div>`;
         }
-    }).join("");
+    }
 
+    // --- DÉBUT DE LA MODIFICATION 3 : Enveloppement conditionnel ---
+    // A la fin de la boucle, avant de retourner le résultat pour ce champ.
+    if (isRecurrenceField) {
+        // Si c'est un champ de récurrence, on l'enveloppe dans la div cachée.
+        return `<div class="gce-recurrence-field" style="display: none;">${fieldHtml}</div>`;
+    } else {
+        // Sinon, on le retourne normalement.
+        return fieldHtml;
+    }
+    // --- FIN DE LA MODIFICATION 3 ---
+
+}).join("");
     modal.innerHTML = `
         <button class="gce-modal-close">✖</button>
         <h3>${title}</h3>
@@ -425,7 +355,31 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
             console.error("WP Editor load failed:", err);
         }
     });
+if (tableName === 'opportunites' && mode === 'ecriture') {
+            const form = modal.querySelector('form');
+            const typeOppFieldSchema = schema.find(f => f.name === 'Type_Opportunite');
+            
+            if (typeOppFieldSchema) {
+                const typeOppSelect = form.querySelector(`[name="field_${typeOppFieldSchema.id}"]`);
+                const recurrenceFieldsContainer = form.querySelectorAll('.gce-recurrence-field');
+                
+                if (typeOppSelect && recurrenceFieldsContainer.length > 0) {
+                    const toggleRecurrenceFields = () => {
+                        const recurrenteOption = typeOppFieldSchema.select_options.find(o => o.value === 'Récurrente');
+                        if (!recurrenteOption) return;
 
+                        const shouldShow = typeOppSelect.value == recurrenteOption.id;
+                        
+                        recurrenceFieldsContainer.forEach(el => {
+                            el.style.display = shouldShow ? '' : 'none';
+                        });
+                    };
+
+                    typeOppSelect.addEventListener('change', toggleRecurrenceFields);
+                    toggleRecurrenceFields();
+                }
+            }
+        }
 
 
     const close = () => overlay.remove();
@@ -534,7 +488,24 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
                     }
                     else if (["number", "decimal"].includes(field.type)) payload[key] = parseFloat(String(rawValue).replace(',', '.'));
                     else if (["single_select"].includes(field.type)) payload[key] = parseInt(rawValue, 10);
-                    else if (field.type === "link_row") payload[key] = [parseInt(rawValue, 10)];
+                    else if (field.type === "link_row") {
+                        try {
+                            // On essaie de parser la valeur comme un tableau JSON (pour notre champ caché).
+                            // L'apostrophe simple (') autour de la valeur du champ caché peut être problématique.
+                            // On la remplace par une double apostrophe pour un JSON valide.
+                            const ids = JSON.parse(rawValue.replace(/'/g, '"'));
+                            if (Array.isArray(ids)) {
+                                payload[key] = ids;
+                            }
+                        } catch (e) {
+                            // Si le parsing échoue, c'est probablement un ID simple d'un <select>.
+                            // On revient au comportement par défaut.
+                            const singleId = parseInt(rawValue, 10);
+                            if (!isNaN(singleId)) {
+                                payload[key] = [singleId];
+                            }
+                        }
+                    }
                     else payload[key] = rawValue;
                 }
                 // ================== FIN DE LA MODIFICATION ==================
