@@ -264,15 +264,27 @@ document.addEventListener('DOMContentLoaded', () => {
                                 </a>`;
                         }
                         sendDraftButtonHtml = `<button class="button button-primary gce-send-draft-btn" data-devis-id="${devis.id}">📧 Envoyer au client</button>`;
-
+                        const paiementImmediat = devis.Paiement_Immediat === true;
+                        const paiementSelectHtml = `
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <label for="payment-type-select-${devis.id}" style="font-weight:bold;">Type de Paiement :</label>
+                                <select id="payment-type-select-${devis.id}" class="gce-payment-type-select" data-devis-id="${devis.id}">
+                                    <option value="true" ${paiementImmediat ? 'selected' : ''}>Immédiat</option>
+                                    <option value="false" ${!paiementImmediat ? 'selected' : ''}>Différé (Net 21)</option>
+                                </select>
+                            </div>
+                        `;
                         // 4. On injecte la variable (qui sera soit le bouton, soit une chaîne vide)
                         tableDevisDiv.innerHTML = `
-                        <div class="devis-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid #eee;">
-                            <div>
+                        <div>
                                 <strong>Statut :</strong> <span class="gce-badge gce-color-${devis.Status?.color || 'gray'}">${devis.Status?.value || 'N/A'}</span>
                                 <strong style="margin-left: 15px;">Total HT :</strong> ${parseFloat(devis.Montant_total_ht || 0).toFixed(2)} $
+                                ${paiementSelectHtml}
                             </div>
+                        <div class="devis-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid #eee;">
+                            
                             <div class="devis-actions" style="display: flex; gap: 10px;">
+                             
                                 ${pdfLinkHtml} <!-- NOTRE NOUVEAU BOUTON EST INJECTÉ ICI -->
                                 <button class="button button-secondary gce-assign-fournisseur-btn" data-devis-id="${devis.id}">🚚 Assigner Fournisseur</button>
                                 <button class="button gce-add-article-btn">➕ Article</button>
@@ -282,7 +294,36 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                         <div class="articles-sub-table"></div>
                     `;
+                        //const paymentSelect = container.querySelector('.gce-payment-type-select');
+                        const paymentSelect = tableDevisDiv.querySelector('.gce-payment-type-select');
+                        if (paymentSelect) {
+                            paymentSelect.addEventListener('change', async (e) => {
+                                const devisId = e.target.dataset.devisId;
+                                const isImmediat = e.target.value === 'true';
+                                showStatusUpdate('Mise à jour du type de paiement...', true);
 
+                                // On cherche l'ID du champ "Paiement_Immediat" dans le schéma. ID: 7407
+                                const paiementFieldId = 7407; 
+
+                                const payload = {
+                                    [`field_${paiementFieldId}`]: isImmediat
+                                };
+
+                                try {
+                                    const res = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/devis/${devisId}`, {
+                                        method: 'PATCH',
+                                        headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce },
+                                        body: JSON.stringify(payload)
+                                    });
+                                    if (!res.ok) throw new Error('La sauvegarde a échoué.');
+                                    showStatusUpdate('Type de paiement mis à jour !', true);
+                                } catch (err) {
+                                    showStatusUpdate(`Erreur : ${err.message}`, false);
+                                    // En cas d'erreur, on remet la valeur initiale
+                                    e.target.value = !isImmediat; 
+                                }
+                            });
+                        }
 
                         // Logique du bouton "Ajouter Article"
                         container.querySelector('.gce-add-article-btn').addEventListener('click', () => {

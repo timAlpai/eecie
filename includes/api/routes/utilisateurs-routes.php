@@ -115,6 +115,44 @@ register_rest_route('eecie-crm/v1', '/utilisateurs/(?P<id>\d+)/update-password',
     },
 ]);
 
+// --- NOUVEAU : Route pour le mot de passe Nextcloud ---
+register_rest_route('eecie-crm/v1', '/utilisateurs/(?P<id>\d+)/update-nc-password', [
+    'methods'  => 'PATCH',
+    'callback' => function (WP_REST_Request $request) {
+        $user_id = (int)$request['id'];
+        $body = $request->get_json_params();
+        $new_password = $body['nc_password'] ?? null;
+
+        if (empty($new_password)) {
+            return new WP_Error('no_nc_password', 'Le mot de passe d\'application Nextcloud est manquant.', ['status' => 400]);
+        }
+
+        $encrypted_password = gce_encrypt_shared_data($new_password);
+        if ($encrypted_password === false) {
+            return new WP_Error('encryption_failed', 'La clé de chiffrement partagée n\'est pas configurée.', ['status' => 500]);
+        }
+
+        $table_id = get_option('gce_baserow_table_utilisateurs') ?: eecie_crm_guess_table_id('T1_user');
+        if (!$table_id) return new WP_Error('no_table', 'Table utilisateurs introuvable.');
+
+        // On cherche l'ID du champ "ncsec" (ID: 7903 d'après votre schéma)
+        $ncsec_field_id = 7903; 
+
+        $payload = ['field_' . $ncsec_field_id => $encrypted_password];
+
+        $result = eecie_crm_baserow_patch("rows/table/{$table_id}/{$user_id}/", $payload);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        return rest_ensure_response(['success' => true, 'message' => 'Mot de passe Nextcloud enregistré.']);
+    },
+    'permission_callback' => function () {
+        $nonce_valid = isset($_SERVER['HTTP_X_WP_NONCE']) && wp_verify_nonce($_SERVER['HTTP_X_WP_NONCE'], 'wp_rest');
+        return is_user_logged_in() && current_user_can('manage_options') && $nonce_valid;
+    },
+]);
+
 function eecie_crm_get_utilisateurs_secure(WP_REST_Request $request)
 {
     $manual = get_option('gce_baserow_table_utilisateurs');

@@ -24,11 +24,53 @@ document.addEventListener('DOMContentLoaded', () => {
         window.gceUserSchema = schema;
 
         // On exclut le champ 'sec1' de l'affichage automatique
-        const filteredSchema = fetchedSchema.filter(field => field.name !== 'sec1');
+         const filteredSchema = fetchedSchema.filter(field => field.name !== 'sec1' && field.name !== 'ncsec');
         const columns = getTabulatorColumnsFromSchema(filteredSchema, 'utilisateurs');
         
         // --- DÉBUT DE LA MODIFICATION PRINCIPALE ---
+        const nextcloudPasswordColumn = {
+            title: "NC MDP",
+            headerSort: false,
+            width: 150,
+            hozAlign: "center",
+            formatter: function(cell, formatterParams, onRendered) {
+                return `<button class="button button-small">Configurer NC</button>`;
+            },
+            cellClick: function(e, cell) {
+                const rowData = cell.getRow().getData();
+                const newPassword = prompt(`Entrez le mot de passe d'application Nextcloud pour "${rowData.Name}":`);
 
+                if (newPassword === null) return; // Annulé
+
+                if (newPassword.trim() === "") {
+                    alert("Le mot de passe ne peut pas être vide.");
+                    return;
+                }
+
+                // Appel au nouvel endpoint sécurisé
+                fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/utilisateurs/${rowData.id}/update-nc-password`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-WP-Nonce': EECIE_CRM.nonce
+                    },
+                    body: JSON.stringify({ nc_password: newPassword })
+                })
+                .then(res => {
+                    if (!res.ok) {
+                        alert("Erreur lors de la mise à jour du mot de passe Nextcloud !");
+                        throw new Error("Nextcloud password update failed");
+                    }
+                    return res.json();
+                })
+                .then(() => {
+                    alert("Le mot de passe d'application Nextcloud a été enregistré avec succès.");
+                })
+                .catch(err => {
+                    console.error("Erreur PATCH Nextcloud password:", err);
+                });
+            }
+        };
         // Colonne pour changer le mot de passe
         const passwordColumn = {
             title: "Mot de passe",
@@ -102,6 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         
         // On ajoute les colonnes d'action au début
+        columns.unshift(nextcloudPasswordColumn);
         columns.unshift(passwordColumn);
         columns.unshift(deleteColumn);
         

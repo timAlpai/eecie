@@ -55,11 +55,13 @@ register_rest_route('eecie-crm/v1', '/rdv/submit-schedule', [
             return new WP_Error('invalid_submission', 'Lien invalide ou déjà utilisé.', ['status' => 403]);
         }
 
-        // Baserow attend un format ISO 8601 UTC
-        $date_utc = gmdate('Y-m-d\TH:i:s.u\Z', strtotime($date_heure_iso));
-
+        // Convertir le string 'datetime-local' en timestamp, en utilisant le fuseau horaire du serveur
+        $timestamp = strtotime($date_heure_iso);
+        // Formater en ISO 8601 AVEC l'offset du fuseau horaire (ex: -04:00)
+        $date_with_offset = date('Y-m-d\TH:i:sP', $timestamp);
         // Mettre à jour le RDV dans Baserow
-        $payload = ["field_{$date_field_id}" => $date_utc];
+        $payload = ["field_{$date_field_id}" => $date_with_offset];
+        
         $update_result = eecie_crm_baserow_patch("rows/table/{$rdv_table_id}/{$rdv_id}/", $payload);
 
         if (is_wp_error($update_result)) {
