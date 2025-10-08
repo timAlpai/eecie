@@ -1,6 +1,6 @@
 // service-worker.js (Version 2 - Améliorée)
 
-const CACHE_NAME = 'eecie-fournisseur-app-v2'; // On change le nom pour forcer la mise à jour
+const CACHE_NAME = 'eecie-fournisseur-app-v3'; // On change le nom pour forcer la mise à jour
 const urlsToCache = [
     '/',
     '/index.html',

@@ -15,7 +15,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const logoutBtn = document.getElementById('logout-btn');
     const backToJobsBtn = document.getElementById('back-to-jobs-btn');
     const cloturerDossierBtn = document.getElementById('cloturer-dossier-btn');
-
+    const jobsListToday = document.getElementById('jobs-list-today'); // Nouveau
+    const jobsListFuture = document.getElementById('jobs-list-future'); // Nouveau
+    const tabToday = document.getElementById('tab-today'); // Nouveau
+    const tabFuture = document.getElementById('tab-future'); // Nouveau
+    
     let signatureCanvas = null;
     let ctx = null;
     let drawing = false;
@@ -32,6 +36,21 @@ document.addEventListener('DOMContentLoaded', () => {
             initialTotalHT: 0,
         },
     };
+    // --- GESTION DES ONGLETS ---
+    function handleTabClick(e) {
+        // Enlever la classe 'active' de tous les boutons et panneaux
+        [tabToday, tabFuture].forEach(tab => tab.classList.remove('active'));
+        [jobsListToday, jobsListFuture].forEach(panel => panel.classList.remove('active'));
+
+        // Ajouter la classe 'active' au bouton cliqué et au panneau correspondant
+        const clickedTab = e.target;
+        clickedTab.classList.add('active');
+        if (clickedTab.id === 'tab-today') {
+            jobsListToday.classList.add('active');
+        } else {
+            jobsListFuture.classList.add('active');
+        }
+    }
 
     // --- GESTION DES ÉCRANS ---
     function showScreen(screenName) {
@@ -137,48 +156,116 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function fetchJobs() {
-        jobsList.innerHTML = '<div class="loader">Chargement...</div>';
+async function fetchJobs() {
+        // Vider les deux listes
+        jobsListToday.innerHTML = '<div class="loader">Chargement...</div>';
+        jobsListFuture.innerHTML = '<div class="loader">Chargement...</div>';
         try {
             const response = await fetch('https://portal.eecie.ca/wp-json/eecie-crm/v1/fournisseur/mes-jobs', {
                 headers: { 'Authorization': state.authHeader }
             });
             const data = await response.json();
-            if (response.status === 401) {
-                handleLogout();
-                return;
-            }
             if (!response.ok) {
                 throw new Error(data.message || 'Impossible de charger les missions.');
             }
             state.jobs = data;
-            // --- AJOUTER CE LOG ---
-        console.log("1. Données reçues de l'API (state.jobs) :", JSON.stringify(state.jobs, null, 2));
-        // --------------------
+          
             renderJobs();
         } catch (error) {
-            jobsList.innerHTML = `<p class="error-message">${error.message}</p>`;
+            jobsListToday.innerHTML = `<p class="error-message">${error.message}</p>`;
+            jobsListFuture.innerHTML = ''; // Vider l'autre panneau
         }
     }
 
+// *** NOUVELLE FONCTION HELPER POUR ÉVITER LA DUPLICATION DE CODE ***
+ function renderJobsInPanel(panel, jobs) {
+    panel.innerHTML = '';
+    if (jobs.length === 0) {
+        panel.innerHTML = '<p>Aucune intervention ne correspond à ce critère.</p>';
+        return;
+    }
+    jobs.forEach(job => {
+        const item = document.createElement('div');
+        item.className = 'job-item';
+        item.dataset.jobId = job.id;
+
+        // ======================================================================
+        // ==                 DÉBUT DE LA CORRECTION DE LA DATE                ==
+        // ======================================================================
+
+        let dateHtml = '<span>Date non définie</span>';
+        if (job.Date_Prev_Intervention) {
+            try {
+                // 1. Créer un objet Date à partir de la chaîne ISO (UTC)
+                const date = new Date(job.Date_Prev_Intervention);
+
+                // 2. Extraire chaque composante en utilisant les méthodes UTC pour ignorer le fuseau du navigateur
+                const year = date.getUTCFullYear();
+                const month = String(date.getUTCMonth() + 1).padStart(2, '0'); // +1 car les mois sont de 0 à 11
+                const day = String(date.getUTCDate()).padStart(2, '0');
+                const hours = String(date.getUTCHours()).padStart(2, '0');
+                const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+
+                // 3. Formater manuellement la chaîne dans le format souhaité
+                const formattedDate = `${day}/${month}/${year} ${hours}:${minutes}`;
+                
+                dateHtml = `<span><strong>Date :</strong> ${formattedDate}</span>`;
+
+            } catch (e) {
+                dateHtml = '<span>Date invalide</span>';
+            }
+        }
+
+        // On insère le HTML de la date (le reste est inchangé)
+        item.innerHTML = `
+            <strong>Client : ${job.NomClient}</strong><br>
+            ${dateHtml}<br>
+            <span>Ville : ${job.Ville}</span>
+        `;
+        
+        // ======================================================================
+        // ==                   FIN DE LA CORRECTION DE LA DATE                ==
+        // ======================================================================
+
+        item.addEventListener('click', () => startReport(job.id));
+        panel.appendChild(item);
+    });
+}
+
+    // *** FONCTION renderJobs ENTIÈREMENT RÉÉCRITE ***
     function renderJobs() {
-        jobsList.innerHTML = '';
         if (!Array.isArray(state.jobs)) {
-            jobsList.innerHTML = '<p class="error-message">Une erreur de format de données est survenue.</p>';
+            jobsListToday.innerHTML = '<p class="error-message">Une erreur de format de données est survenue.</p>';
+            jobsListFuture.innerHTML = '';
             return;
         }
-        if (state.jobs.length === 0) {
-            jobsList.innerHTML = '<p>Aucune intervention  ne vous est assignée pour le moment.</p>';
-            return;
-        }
+        
+        // Obtenir la date d'aujourd'hui au format YYYY-MM-DD (indépendant du fuseau horaire)
+        const today = new Date();
+        today.setMinutes(today.getMinutes() - today.getTimezoneOffset()); // Ajuster au fuseau horaire local
+        const todayString = today.toISOString().split('T')[0];
+        
+        const todayJobs = [];
+        const futureJobs = [];
+
+        // Trier les jobs dans les bonnes listes
         state.jobs.forEach(job => {
-            const item = document.createElement('div');
-            item.className = 'job-item';
-            item.dataset.jobId = job.id;
-            item.innerHTML = `<strong>Client : ${job.NomClient}</strong><br><span>Ville : ${job.Ville}</span>`;
-            item.addEventListener('click', () => startReport(job.id));
-            jobsList.appendChild(item);
+            if (job.Date_Prev_Intervention) {
+                const jobDateString = job.Date_Prev_Intervention.split('T')[0];
+                if (jobDateString === todayString) {
+                    todayJobs.push(job);
+                } else if (jobDateString > todayString) {
+                    futureJobs.push(job);
+                }
+            } else {
+                // Si pas de date, on le met dans "À venir" par défaut
+                futureJobs.push(job);
+            }
         });
+
+        // Rendre chaque liste dans son panneau respectif
+        renderJobsInPanel(jobsListToday, todayJobs);
+        renderJobsInPanel(jobsListFuture, futureJobs);
     }
 
     // --- LOGIQUE DU RAPPORT ---
@@ -227,7 +314,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 initialTotal += totalLigne;
                 const item = document.createElement('div');
                 item.className = 'article-item readonly';
-                item.innerHTML = `<span class="name">${article.Nom}</span><span class="qty">${parseFloat(article.Quantités || 0).toFixed(2)}</span><span class="price">${parseFloat(article.Prix_unitaire || 0).toFixed(2)}</span><span class="total">${totalLigne.toFixed(2)}</span><span></span>`;
+                item.innerHTML = `
+                <span class="name" data-label="Description">${article.Nom}</span>
+                <span class="qty" data-label="Qté">${parseFloat(article.Quantités || 0).toFixed(2)}</span>
+                <span class="price" data-label="P.U.">${parseFloat(article.Prix_unitaire || 0).toFixed(2)}</span>
+                <span class="total" data-label="Total">${totalLigne.toFixed(2)}</span>
+                <span></span>`; 
                 initialArticlesList.appendChild(item);
             });
         } else {
@@ -312,13 +404,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         deleteButtonHtml = `<span class="actions"><button class="delete-unsaved-article-btn" data-index="${index}" title="Supprimer cet article ajouté">❌</button></span>`;
                     }
                 }
-                item.innerHTML = `
-                    <span class="name">${nom}</span>
-                    <span class="qty">${quantite.toFixed(2)}</span>
-                    <span class="price">${prixUnitaire.toFixed(2)}</span>
-                    <span class="total">${totalLigne.toFixed(2)}</span>
-                    ${deleteButtonHtml}
-                `;
+                 item.innerHTML = `
+        <span class="name" data-label="Description">${nom}</span>
+        <span class="qty" data-label="Qté">${quantite.toFixed(2)}</span>
+        <span class="price" data-label="P.U.">${prixUnitaire.toFixed(2)}</span>
+        <span class="total" data-label="Total">${totalLigne.toFixed(2)}</span>
+        ${deleteButtonHtml}
+    `;
                 addedArticlesList.appendChild(item);
                 totalAjouts += totalLigne;
             });
@@ -509,6 +601,10 @@ document.addEventListener('DOMContentLoaded', () => {
         modifyReportBtn.addEventListener('click', handleModifyReport);
         cloturerDossierBtn.addEventListener('click', handleSubmitFinal); 
         document.getElementById('add-article-form').addEventListener('submit', handleAddArticle);
+         // AJOUTER CES DEUX LIGNES
+        tabToday.addEventListener('click', handleTabClick);
+        tabFuture.addEventListener('click', handleTabClick);
+        
 
         const addedArticlesList = document.getElementById('added-articles-list');
         addedArticlesList.addEventListener('click', (e) => {

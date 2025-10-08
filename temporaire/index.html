@@ -25,83 +25,82 @@
 
     <!-- Écran des Missions (caché) -->
     <div id="jobs-screen" class="screen">
-        <header>
-            <h2>Mes Interventions</h2>
-            <button id="logout-btn">Déconnexion</button>
-        </header>
-        <div id="jobs-list">
-            <div class="loader">Chargement des missions...</div>
-        </div>
+    <header>
+        <h2>Mes Interventions</h2>
+        <button id="logout-btn">Déconnexion</button>
+    </header>
+
+    <!-- NOUVELLE STRUCTURE D'ONGLETS -->
+    <div class="tabs-container">
+        <button id="tab-today" class="tab-button active">Aujourd'hui</button>
+        <button id="tab-future" class="tab-button">À venir</button>
     </div>
 
-        
-<!-- Écran du Rapport d'Intervention (caché) -->
+    <!-- PANNEAU POUR LES INTERVENTIONS DU JOUR -->
+    <div id="jobs-list-today" class="jobs-list-panel active">
+        <!-- Le contenu sera injecté par JavaScript -->
+    </div>
+
+    <!-- PANNEAU POUR LES INTERVENTIONS FUTURES -->
+    <div id="jobs-list-future" class="jobs-list-panel">
+        <!-- Le contenu sera injecté par JavaScript -->
+    </div>
+</div>
+
 <div id="report-screen" class="screen">
     <header>
         <button id="back-to-jobs-btn" class="header-btn">← Retour</button>
         <h2 id="report-title">Rapport d'intervention</h2>
     </header>
 
-    <!-- Section des Détails (maintenant pliable) -->
-    <div class="card collapsible">
-        <h3 class="collapsible-header">Détails de l'intervention</h3>
-        <div class="collapsible-content" style="display:none;"> <!-- Cachée par défaut -->
-            <div class="details-grid">
-                <span>Client :</span><strong id="report-client-name"></strong>
-                <span>Adresse :</span><strong id="report-client-address"></strong>
-            </div>
+    <!-- Section des Détails (inchangée, mais on utilise sa classe "card") -->
+    <div class="card details-card">
+        <h3>Détails de l'intervention</h3>
+        <div class="details-grid">
+            <span>Client :</span><strong id="report-client-name"></strong>
+            <span>Adresse :</span><strong id="report-client-address"></strong>
         </div>
     </div>
 
-    <!-- Section des Travaux (maintenant pliable) -->
-    <div class="card collapsible">
-        <h3 class="collapsible-header">Travaux prévus</h3>
-        <div class="collapsible-content" style="display:none;"> <!-- Cachée par défaut -->
-            <p id="report-general-scope"></p>
-            <div class="articles-table" id="initial-articles-list">
-                <!-- Les articles prévus seront injectés ici -->
-            </div>
+    <!-- Section des Travaux prévus -->
+    <div class="card articles-card">
+        <h3>Travaux prévus</h3>
+        <div class="articles-table" id="initial-articles-list">
+            <!-- Contenu injecté par JS -->
         </div>
     </div>
 
-    <!-- Section des Ajouts (maintenant pliable) -->
-    <div class="card collapsible">
-        <h3 class="collapsible-header">Ajouts de dernière minute</h3>
-        <div class="collapsible-content" style="display:none;"> <!-- Cachée par défaut -->
-            <div class="articles-table" id="added-articles-list">
-                <!-- Les articles ajoutés seront injectés ici -->
-            </div>
+    <!-- Section des Ajouts -->
+    <div class="card add-article-card">
+        <h3>Ajouts de dernière minute</h3>
+        <div class="articles-table" id="added-articles-list">
+            <!-- Contenu injecté par JS -->
+        </div>
         <form id="add-article-form" class="add-form">
-            <input type="text" id="article-name" placeholder="Nom matériel/prestation" required>
-            <div class="form-row">
-                <input type="number" id="article-qty" placeholder="Qté" value="1" min="0.1" step="0.1" required>
-                <input type="number" id="article-price" placeholder="Prix Unitaire" min="0" step="0.01" required>
-                <button type="submit">➕</button>
-            </div>
-        </form>
-            
-<div class="total-section">
+                <input type="text" id="article-name" placeholder="Nom matériel/prestation" required>
+                <div class="form-row">
+                    <input type="number" id="article-qty" placeholder="Qté" value="1" min="0.1" step="0.1" required>
+                    <input type="number" id="article-price" placeholder="Prix Unitaire" min="0" step="0.01" required>
+                    <button type="submit">➕</button>
+                </div>
+            </form>
+        <div class="total-section">
             <strong>Total des ajouts :</strong>
             <span id="added-total">0.00 €</span>
         </div>
-        <!-- NOUVELLE SECTION AJOUTÉE CI-DESSOUS -->
         <div class="total-section grand-total">
             <strong>Nouveau Total HT :</strong>
             <span id="nouveau-total-ht">0.00 €</span>
         </div>
     </div>
 
-  
-    </div>
-
-   <div class="card collapsible">
-        <h3 class="collapsible-header">Notes et Signature</h3>
-        <div class="collapsible-content" style="display:none;"> <!-- Cachée par défaut -->
-            <textarea id="report-notes" placeholder="Notes complémentaires..."></textarea>
-            <p class="signature-label">Signature du Client :</p>
+    <!-- Section Notes et Signature -->
+    <div class="card signature-card">
+        <h3>Notes et Signature</h3>
+        <textarea id="report-notes" placeholder="Notes complémentaires..."></textarea>
+        <p class="signature-label">Signature du Client :</p>
         <div id="signature-pad">
-            <canvas id="signature-canvas" ></canvas>
-            <button id="clear-signature-btn" class="btn-danger">Effacer</button>
+            <!-- Contenu injecté par JS -->
         </div>
     </div>
 
@@ -109,7 +108,6 @@
     <button id="modify-report-btn" class="btn-secondary btn-full" style="display: none; margin-top: 10px;">Modifier le Rapport</button>
     <button id="cloturer-dossier-btn" class="btn-success btn-full" style="display: none; margin-top: 10px;">✅ Clôturer le Dossier</button>
 </div>
-
   
 
     <!-- Le script app.js peut rester relatif, mais c'est plus propre comme ça -->

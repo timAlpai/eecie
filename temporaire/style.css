@@ -216,3 +216,131 @@ button:hover { opacity: 0.9; }
 /* Ajoutez cette nouvelle classe à la fin du fichier */
 .btn-success { background-color: var(--success-color); }
 .btn-success:hover { background-color: #229954; } /* Une teinte un peu plus foncée */
+
+/* --- STYLES POUR LES ONGLETS --- */
+.tabs-container {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--medium-gray);
+}
+
+.tab-button {
+    padding: 10px 15px;
+    cursor: pointer;
+    background-color: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    font-size: 1.1em;
+    font-weight: 500;
+    color: var(--dark-gray);
+}
+
+.tab-button.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+}
+
+.jobs-list-panel {
+    display: none; /* Tous les panneaux sont cachés par défaut */
+}
+
+.jobs-list-panel.active {
+    display: block; /* Seul le panneau actif est visible */
+}
+/* Fichier : temporaire/style.css */
+
+/* ============================================= */
+/* ==         STYLES POUR LA RESPONSIVE         == */
+/* ============================================= */
+
+/* Ces règles ne s'appliquent que sur les écrans de moins de 768px de large (téléphones, tablettes en portrait) */
+@media (max-width: 768px) {
+
+    /* On réduit le padding général pour gagner de la place */
+    .screen {
+        padding: 10px;
+    }
+
+    /* On transforme la grille des détails du client en une simple liste verticale */
+    .details-grid {
+        grid-template-columns: 1fr; /* Une seule colonne */
+        gap: 10px;
+    }
+    .details-grid strong {
+        margin-top: -8px; /* Rapproche la valeur de son label */
+    }
+
+    /* C'est la partie la plus importante : la transformation des tableaux d'articles */
+    .articles-table {
+        display: block; /* On annule la grille CSS */
+        border: none;
+    }
+
+    /* On cache l'en-tête du tableau sur mobile */
+    .articles-table .articles-header {
+        display: none;
+    }
+
+    /* Chaque ligne devient une "carte" */
+    .articles-table > .article-item {
+        display: block;
+        border: 1px solid var(--medium-gray);
+        border-radius: 6px;
+        padding: 10px;
+        margin-bottom: 10px;
+        background-color: white; /* Fond pour les lignes dans la section "ajouts" */
+    }
+    
+    .articles-table > .article-item.readonly > span {
+         background-color: transparent; /* Annule la couleur de fond pour les articles prévus */
+    }
+    
+    .articles-table > .article-item > span {
+        display: block; /* Chaque "cellule" prend toute la largeur */
+        border: none;
+        padding: 4px 0;
+        text-align: right; /* On aligne le contenu à droite */
+    }
+
+    /* On utilise les pseudo-éléments pour recréer les labels de colonne */
+    .articles-table > .article-item > span::before {
+        content: attr(data-label); /* On lira un attribut 'data-label' qu'on ajoutera en JS */
+        font-weight: bold;
+        float: left; /* Le label à gauche, la valeur à droite */
+        color: var(--dark-gray);
+    }
+    
+    /* Le nom de l'article prend toute la largeur */
+    .articles-table > .article-item > span.name {
+         display: block;
+         font-weight: bold;
+         font-size: 1.1em;
+         text-align: left;
+         margin-bottom: 8px;
+         padding-bottom: 8px;
+         border-bottom: 1px solid #eee;
+    }
+    .articles-table > .article-item > span.name::before {
+        display: none; /* Pas de label "Description:" pour le nom */
+    }
+    
+    /* Le bouton de suppression est centré */
+    .articles-table > .article-item > span.actions {
+        text-align: center;
+        margin-top: 10px;
+    }
+     .articles-table > .article-item > span.actions::before {
+        display: none;
+    }
+
+    /* Le formulaire d'ajout passe en mode vertical */
+    .add-form .form-row {
+        flex-direction: column;
+    }
+     /* On s'assure que le formulaire lui-même est bien visible */
+    #add-article-form {
+        display: block; /* Force l'affichage du formulaire */
+        margin-top: 20px; /* Ajoute un peu d'espace au-dessus */
+    }
+}
