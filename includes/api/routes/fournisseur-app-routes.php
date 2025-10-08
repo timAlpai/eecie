@@ -73,135 +73,125 @@ register_rest_route('eecie-crm/v1', '/opportunite/(?P<id>\\d+)/cloturer', [
  * @param WP_REST_Request $request
  * @return WP_REST_Response|WP_Error
  */
-function gce_api_get_fournisseur_jobs($request)
+function gce_api_get_fournisseur_jobs(WP_REST_Request $request)
 {
-    // === ÉTAPE 1: IDENTIFIER LE FOURNISSEUR (Logique 100% validée) ===
+    // === ÉTAPE 1 & 2 : IDENTIFICATION ET RÉCUPÉRATION DES INTERVENTIONS (inchangées et validées) ===
     $user_email = wp_get_current_user()->user_email;
-
-    $contacts_table_id = get_option('gce_baserow_table_contacts');
-    if (!$contacts_table_id) return new WP_Error('config_error', "ID table Contacts non configuré.", ['status' => 500]);
-    $id_option_fournisseur = 3065;
-    $params_contact = ['user_field_names' => 'true', 'filter__Email__equal' => $user_email, 'filter__Type__single_select_equal' => $id_option_fournisseur, 'size' => 1];
-    $contact_response = eecie_crm_baserow_get("rows/table/{$contacts_table_id}/", $params_contact);
-
-    if (is_wp_error($contact_response) || empty($contact_response['results'])) {
-        error_log("[PWA DEBUG 1.2] ERREUR : Aucun contact de type Fournisseur trouvé pour " . $user_email . ". Fin.");
-        return new WP_Error('no_provider_contact', "Aucun contact de type Fournisseur trouvé pour l'email: " . $user_email, ['status' => 404]);
-    }
-    $contact_fournisseur = $contact_response['results'][0];
-    if (empty($contact_fournisseur['Fournisseur'][0]['id'])) {
-        error_log("[PWA DEBUG 1.3] ERREUR : Le contact trouvé n'est pas lié à une fiche Fournisseur. Fin.");
-        return new WP_Error('no_provider_linked', "Le contact trouvé n'est lié à aucune fiche Fournisseur.", ['status' => 404]);
+    $contact_fournisseur = gce_get_baserow_user_by_email($user_email, 'Fournisseur');
+    if (!$contact_fournisseur || empty($contact_fournisseur['Fournisseur'][0]['id'])) {
+        return new WP_Error('provider_not_found', "Aucun fournisseur associé.", ['status' => 404]);
     }
     $fournisseur_id = $contact_fournisseur['Fournisseur'][0]['id'];
 
-    // === ÉTAPE 2: TROUVER LES DEVIS LIÉS (Syntaxe validée par cURL) ===
-    $devis_table_id = get_option('gce_baserow_table_devis');
-    if (!$devis_table_id) return new WP_Error('config_error', "ID table Devis non configuré.", ['status' => 500]);
-    $id_field_fournisseur_in_devis = 6958;
-    $params_devis = [
+    $interventions_table_id = eecie_crm_guess_table_id('Interventions_Planifiees');
+    if (!$interventions_table_id) { return new WP_Error('config_error', "Table 'Interventions_Planifiees' non trouvée.", ['status' => 500]); }
+
+    $params = [
         'user_field_names' => 'true',
-        'filter__field_' . $id_field_fournisseur_in_devis . '__link_row_has' => $fournisseur_id
+        'filter__Fournisseur__link_row_has' => $fournisseur_id,
+        'filter__Statut_Intervention__single_select_equal' => 3440,
+        'size' => 200
     ];
-    $devis_lies = eecie_crm_baserow_get("rows/table/{$devis_table_id}/", $params_devis);
-    if (is_wp_error($devis_lies) || empty($devis_lies['results'])) return new WP_REST_Response([], 200);
-
-    // === ÉTAPE 3: EXTRAIRE LES IDs DES OPPORTUNITÉS (Logique validée) ===
-    $opportunite_ids_du_fournisseur = array_unique(array_filter(array_map(fn($devis) => $devis['Task_input'][0]['id'] ?? null, $devis_lies['results'])));
-    if (empty($opportunite_ids_du_fournisseur)) return new WP_REST_Response([], 200);
-
-    // === ÉTAPE 4: RÉCUPÉRER TOUTES LES OPPORTUNITÉS EN "LIVRAISON" ===
-    $opp_table_id = get_option('gce_baserow_table_opportunites');
-    if (!$opp_table_id) return new WP_Error('config_error', "ID table Opportunites non configuré.", ['status' => 500]);
-    $id_option_livraison = 3155;
-    $params_opp = ['user_field_names' => 'true', 'filter__Status__single_select_equal' => $id_option_livraison, 'size' => 200];
-    $toutes_les_opps_en_livraison = eecie_crm_baserow_get("rows/table/{$opp_table_id}/", $params_opp);
-    if (is_wp_error($toutes_les_opps_en_livraison) || empty($toutes_les_opps_en_livraison['results'])) return new WP_REST_Response([], 200);
-
-    // === ÉTAPE 5: FILTRER EN PHP (La méthode 100% fiable) ===
-    $jobs_filtres = [];
-    foreach ($toutes_les_opps_en_livraison['results'] as $job) {
-        if (in_array($job['id'], $opportunite_ids_du_fournisseur)) {
-            $jobs_filtres[] = $job;
-        }
+    $interventions = eecie_crm_baserow_get("rows/table/{$interventions_table_id}/", $params);
+    
+    if (is_wp_error($interventions) || empty($interventions['results'])) {
+        return new WP_REST_Response([], 200);
     }
 
-    // On récupère les IDs des tables une seule fois
-    $articles_devis_table_id = get_option('gce_baserow_table_articles_devis');
-    $rapports_table_id = eecie_crm_guess_table_id('Rapports_Livraison');
-    $signatures_table_id = eecie_crm_guess_table_id('Signature_Livraison');
-    $articles_livraison_table_id = eecie_crm_guess_table_id('Articles_Livraison');
+    // === ÉTAPE 3: HYDRATATION COMPLÈTE DES DONNÉES POUR LA PWA ===
+    $jobs_pour_pwa = [];
+    foreach ($interventions['results'] as $intervention) {
+        if (empty($intervention['Opportunite_Liee'][0]['id'])) continue;
 
-    // On prépare le tableau final qui sera renvoyé
-    $cleaned_jobs = [];
+        $opportunite_id = $intervention['Opportunite_Liee'][0]['id'];
+        $job_data = eecie_crm_get_row_by_slug_and_id('opportunites', $opportunite_id);
 
-    foreach ($jobs_filtres as $job) {
-        $final_job_data = [
-            'id'               => $job['id'],
-            'NomClient'        => $job['NomClient'],
-            'Ville'            => $job['Ville'],
-            'Travaux'          => $job['Travaux'] ?? 'Aucune description',
-            'ArticlesDevis'    => [], // Sera rempli ci-dessous
-            'RapportLivraison' => null // Sera rempli ci-dessous
-        ];
-
-        // 6.1 - Enrichir avec les Articles du Devis (les articles prévus)
-        if (!empty($job['Devis'][0]['id'])) {
-            $devis_id = $job['Devis'][0]['id'];
-            $devis_complet = eecie_crm_get_row_by_slug_and_id('devis', $devis_id);
-            if (!is_wp_error($devis_complet) && !empty($devis_complet['Articles_devis'])) {
-                foreach ($devis_complet['Articles_devis'] as $article_ref) {
-                    $article_data = eecie_crm_get_row_by_slug_and_id('articles_devis', $article_ref['id']);
-                    if (!is_wp_error($article_data)) {
-                        $final_job_data['ArticlesDevis'][] = $article_data;
-                    }
+        if (!is_wp_error($job_data)) {
+            $job_data['intervention_id'] = $intervention['id'];
+             $job_data['Date_Prev_Intervention'] = $intervention['Date_Prev_Intervention'];
+             // ======================================================================
+            // ==                 AJOUT : HYDRATER LE CONTACT COMPLET              ==
+            // ======================================================================
+            $job_data['ContactDetails'] = null; // Initialiser la propriété
+            if (!empty($job_data['Contacts'][0]['id'])) {
+                $contact_id = $job_data['Contacts'][0]['id'];
+                $contact_data = eecie_crm_get_row_by_slug_and_id('contacts', $contact_id);
+                if (!is_wp_error($contact_data)) {
+                    // On attache l'objet contact complet à notre "job"
+                    $job_data['ContactDetails'] = $contact_data;
                 }
             }
-        }
+            // ======================================================================
+            // ==                           FIN DE L'AJOUT                         ==
+            // ======================================================================
+            $job_data['ArticlesDevis'] = [];
+            $job_data['RapportLivraison'] = null; // Important: Initialiser à null
 
-        // 6.2 - Enrichir avec le Rapport de Livraison (s'il existe)
-        if ($rapports_table_id) {
-            $params_rapport = ['user_field_names' => 'true', 'filter__Opportunite_liee__link_row_has' => $job['id'], 'size' => 1];
-            $rapport_response = eecie_crm_baserow_get("rows/table/{$rapports_table_id}/", $params_rapport);
-
-            if (!is_wp_error($rapport_response) && !empty($rapport_response['results'])) {
-                $rapport_enrichi = $rapport_response['results'][0];
-
-                // 6.2.1 - Hydrater la Signature liée au rapport
-                if (!empty($rapport_enrichi['Signature_client'][0]['id'])) {
-                    $signature_id = $rapport_enrichi['Signature_client'][0]['id'];
-                    $signature_data = eecie_crm_get_row_by_slug_and_id('Signatures_Livraison', $signature_id); // Assumant que le slug est 'devis_signatures'
-                    if (!is_wp_error($signature_data) && !empty($signature_data['Fichier_signature'][0]['url'])) {
-                        $rapport_enrichi['Signature_Image_URL'] = $signature_data['Fichier_signature'][0]['url'];
+            // Hydratation des Articles du Devis (logique existante)
+            if (!empty($job_data['Devis'][0]['id'])) {
+                $devis_complet = eecie_crm_get_row_by_slug_and_id('devis', $job_data['Devis'][0]['id']);
+                if (!is_wp_error($devis_complet) && !empty($devis_complet['Articles_devis'])) {
+                    $articles_hydrates = [];
+                    foreach ($devis_complet['Articles_devis'] as $article_ref) {
+                        $article_data = eecie_crm_get_row_by_slug_and_id('articles_devis', $article_ref['id']);
+                        if (!is_wp_error($article_data)) $articles_hydrates[] = $article_data;
                     }
+                    $job_data['ArticlesDevis'] = $articles_hydrates;
                 }
+            }
 
-                // 6.2.2 - **LA CORRECTION CRUCIALE** - Hydrater les Articles de Livraison liés au rapport
-                if (!empty($rapport_enrichi['Articles_Livraison'])) {
-                    error_log("6.2.1 verif 1 ok");
-                    $articles_complets = [];
-                    foreach ($rapport_enrichi['Articles_Livraison'] as $article_ref) {
-                        // On utilise la fonction eecie_crm_get_row_by_slug_and_id qui est faite pour ça
-                        $article_data = eecie_crm_get_row_by_slug_and_id('articles_livraison', $article_ref['id']);
-                        if (!is_wp_error($article_data)) {
-                            $articles_complets[] = $article_data;
+            // ======================================================================
+            // ==                 DÉBUT DE LA CORRECTION D'HYDRATATION               ==
+            // ======================================================================
+            
+            // On vérifie si un rapport est lié à L'INTERVENTION
+            if (!empty($intervention['Rapport_Livraison_Lie'][0]['id'])) {
+                $rapport_id = $intervention['Rapport_Livraison_Lie'][0]['id'];
+
+                // On récupère l'objet Rapport complet
+                $rapport_data = eecie_crm_get_row_by_slug_and_id('rapports_livraison', $rapport_id);
+                
+                if (!is_wp_error($rapport_data)) {
+                    // 1. HYDRATER LA SIGNATURE
+                    if (!empty($rapport_data['Signature_client'][0]['id'])) {
+                        $signature_id = $rapport_data['Signature_client'][0]['id'];
+                        $signature_data = eecie_crm_get_row_by_slug_and_id('signatures_livraison', $signature_id);
+                        if (!is_wp_error($signature_data) && !empty($signature_data['Fichier_signature'][0]['url'])) {
+                            // On crée la propriété que la PWA attend
+                            $rapport_data['Signature_Image_URL'] = $signature_data['Fichier_signature'][0]['url'];
                         }
                     }
-                    // On remplace le tableau de références par le tableau d'objets complets
-                    $rapport_enrichi['Articles_Livraison'] = $articles_complets;
+
+                    // 2. HYDRATER LES ARTICLES DE LIVRAISON
+                    if (!empty($rapport_data['Articles_Livraison'])) {
+                        $articles_livraison_complets = [];
+                        foreach ($rapport_data['Articles_Livraison'] as $article_ref) {
+                            $article_data = eecie_crm_get_row_by_slug_and_id('articles_livraison', $article_ref['id']);
+                            if (!is_wp_error($article_data)) {
+                                $articles_livraison_complets[] = $article_data;
+                            }
+                        }
+                        // On remplace le tableau de références par le tableau d'objets complets
+                        $rapport_data['Articles_Livraison'] = $articles_livraison_complets;
+                    }
+                    
+                    // On assigne l'objet rapport entièrement hydraté
+                    $job_data['RapportLivraison'] = $rapport_data;
                 }
-
-                $final_job_data['RapportLivraison'] = $rapport_enrichi;
             }
+            
+            // ======================================================================
+            // ==                   FIN DE LA CORRECTION D'HYDRATATION                 ==
+            // ======================================================================
+
+            $jobs_pour_pwa[] = $job_data;
         }
-
-        $cleaned_jobs[] = $final_job_data;
     }
-    $test = print_r($cleaned_jobs, 1);
-    error_log($test);
 
-    return new WP_REST_Response($cleaned_jobs, 200);
+
+    return new WP_REST_Response($jobs_pour_pwa, 200);
 }
+
 
 /**
  * Crée ou met à jour un rapport de livraison et sa signature.
@@ -214,20 +204,46 @@ function gce_api_submit_livraison_report(WP_REST_Request $request)
 {
     // --- ÉTAPE 1: DÉMARRAGE ET VALIDATION DES PARAMÈTRES ---
     $params = $request->get_json_params();
-
-    if (empty($params['opportunite_id']) || empty($params['signature_base64'])) {
-        return new WP_REST_Response(['message' => 'Données manquantes (opportunité ou signature).'], 400);
+        // **NOUVEAU** : On attend maintenant l'ID de l'intervention
+    if (empty($params['intervention_id']) || empty($params['signature_base64'])) {
+        return new WP_Error('missing_data', 'Données manquantes (ID intervention ou signature).', ['status' => 400]);
     }
+    
+    $intervention_id = (int)$params['intervention_id'];
+    $opportunite_id = (int)$params['opportunite_id']; // On le garde pour la liaison au rapport
+    $report_id_from_pwa = isset($params['report_id']) ? (int)$params['report_id'] : null;
 
     // --- ÉTAPE 2: IDENTIFICATION DE L'UTILISATEUR ET DES TABLES ---
     $user_id = get_current_user_id();
     $user = get_userdata($user_id);
-    $fournisseur_baserow = gce_get_baserow_t1_user_by_email($user->user_email);
-    if (!$fournisseur_baserow) {
-        return new WP_REST_Response(['message' => 'Utilisateur fournisseur introuvable dans Baserow.'], 403);
+    // === ÉTAPE 2: IDENTIFIER LE FOURNISSEUR VIA L'OPPORTUNITÉ ET LE DEVIS ===
+    $opportunite_data = eecie_crm_get_row_by_slug_and_id('opportunites', $opportunite_id);
+    if (is_wp_error($opportunite_data)) {
+        error_log("[PWA SUBMIT 2.2] ERREUR : Impossible de récupérer les données de l'opportunité.");
+        return $opportunite_data;
     }
 
+    if (empty($opportunite_data['Devis'][0]['id'])) {
+        error_log("[PWA SUBMIT 2.3] ERREUR : L'opportunité #{$opportunite_id} n'est liée à aucun devis.");
+        return new WP_Error('no_devis_linked', 'L\'opportunité n\'est pas liée à un devis.', ['status' => 400]);
+    }
+    $devis_id = $opportunite_data['Devis'][0]['id'];
+
+    $devis_data = eecie_crm_get_row_by_slug_and_id('devis', $devis_id);
+    if (is_wp_error($devis_data)) {
+        error_log("[PWA SUBMIT 2.5] ERREUR : Impossible de récupérer les données du devis #{$devis_id}.");
+        return $devis_data;
+    }
+    
+    if (empty($devis_data['Fournisseur'][0]['id'])) {
+        error_log("[PWA SUBMIT 2.6] ERREUR : Le devis #{$devis_id} n'a aucun fournisseur assigné.");
+        return new WP_Error('no_provider_on_devis', 'Aucun fournisseur n\'est assigné à ce devis.', ['status' => 400]);
+    }
+    
+    $fournisseur_id = $devis_data['Fournisseur'][0]['id'];
+
     $rapport_table_id = get_option('gce_baserow_table_rapports_livraison') ?: eecie_crm_guess_table_id('Rapports_Livraison');
+    $interventions_table_id = eecie_crm_guess_table_id('Interventions_Planifiees');
     $articles_table_id = get_option('gce_baserow_table_articles_livraison') ?: eecie_crm_guess_table_id('Articles_Livraison');
     $signature_table_id = get_option('gce_baserow_table_signatures_livraison') ?: eecie_crm_guess_table_id('Signatures_Livraison');
 
@@ -236,21 +252,31 @@ function gce_api_submit_livraison_report(WP_REST_Request $request)
     }
 
     // --- ÉTAPE 3: GESTION DU RAPPORT (CRÉATION OU MISE À JOUR) ---
-    $report_id = null;
+    $report_id = $report_id_from_pwa;
+    
+    // **CORRECTION MAJEURE : On assemble le payload AVANT de faire la requête**
+    $shared_payload = [
+        'Opportunite_liee'        => [$opportunite_id],
+        'Fournisseur_intervenant'   => [$fournisseur_id],
+        'Notes_intervention'        => sanitize_textarea_field($params['notes']),
+        'Date_intervention'         => gmdate('Y-m-d\TH:i:s\Z'),
+        'Interventions_Planifiees'  => [$intervention_id]
+    ];
 
-    if (isset($params['report_id']) && !empty($params['report_id'])) {
-        $report_id = (int)$params['report_id'];
-        $update_payload = ['Notes_intervention' => sanitize_textarea_field($params['notes']), 'Date_intervention' => gmdate('Y-m-d\TH:i:s\Z')];
-        eecie_crm_baserow_patch("rows/table/{$rapport_table_id}/{$report_id}/", $update_payload);
+    if ($report_id) {
+        // MISE À JOUR D'UN RAPPORT EXISTANT
+        eecie_crm_baserow_patch("rows/table/{$rapport_table_id}/{$report_id}/?user_field_names=true", $shared_payload);
     } else {
-        $create_payload = ['Opportunite_liee' => [(int)$params['opportunite_id']], 'Fournisseur_intervenant' => [(int)$fournisseur_baserow['id']], 'Notes_intervention' => sanitize_textarea_field($params['notes']), 'Date_intervention' => gmdate('Y-m-d\TH:i:s\Z')];
-        $new_report_data = eecie_crm_baserow_request('POST', "rows/table/{$rapport_table_id}/", $create_payload);
+        // CRÉATION D'UN NOUVEAU RAPPORT
+        $new_report_data = eecie_crm_baserow_request('POST', "rows/table/{$rapport_table_id}/?user_field_names=true", $shared_payload);
 
         if (is_wp_error($new_report_data) || !isset($new_report_data['id'])) {
-            return new WP_REST_Response(['message' => 'La création du rapport a échoué.'], 500);
+            error_log("[PWA SUBMIT 4.2] ERREUR lors de la création du rapport : " . (is_wp_error($new_report_data) ? $new_report_data->get_error_message() : 'ID manquant dans la réponse.'));
+            return new WP_Error('report_creation_failed', 'La création du rapport a échoué.', ['status' => 500]);
         }
         $report_id = $new_report_data['id'];
     }
+
 
     // --- ÉTAPE 4: CRÉATION DES ARTICLES SUPPLÉMENTAIRES (VERSION CORRIGÉE) ---
     if (!empty($params['articles_supplementaires']) && is_array($params['articles_supplementaires'])) {
@@ -340,7 +366,8 @@ function gce_api_submit_livraison_report(WP_REST_Request $request)
     if ($signature_client_field_id) {
         eecie_crm_baserow_patch("rows/table/{$rapport_table_id}/{$report_id}/", ['field_' . $signature_client_field_id => [$new_signature['id']]]);
     }
-    return new WP_REST_Response(['message' => 'Rapport soumis avec succès !', 'report_id' => $report_id], 200);
+
+ return new WP_REST_Response(['message' => 'Rapport soumis avec succès !', 'report_id' => $report_id], 200);
 }
 
 /**
@@ -368,7 +395,6 @@ function gce_invalidate_livraison_report(WP_REST_Request $request)
         return new WP_REST_Response(['message' => 'Erreur: Impossible de trouver le rapport de livraison.'], 404);
     }
     $test = print_r($report_data, 1);
-    error_log($test);
     // --- ÉTAPE 2 : Extraire l'ID de la signature du champ de liaison ---
     // On vérifie que le champ 'Signatures_Livraison' existe, n'est pas vide et est un tableau.
     if (empty($report_data['Signature_client']) || !is_array($report_data['Signature_client']) || !isset($report_data['Signature_client'][0]['id'])) {
@@ -432,41 +458,58 @@ function gce_delete_article_livraison(WP_REST_Request $request)
  */
 function gce_api_cloturer_opportunite(WP_REST_Request $request)
 {
+ 
+    // === ÉTAPE 1: RÉCUPÉRER LES IDs NÉCESSAIRES ===
     $opportunite_id = (int) $request['id'];
+    $params = $request->get_json_params();
+    $intervention_id = isset($params['intervention_id']) ? (int)$params['intervention_id'] : null;
 
-    // Récupérer l'ID de la table des opportunités
-    $opp_table_id = get_option('gce_baserow_table_opportunites') ?: eecie_crm_guess_table_id('Task_input');
-    if (!$opp_table_id) {
-        return new WP_Error('config_error', "La table des opportunités n'est pas configurée.", ['status' => 500]);
+    if (!$intervention_id) {
+        error_log("[PWA CLOTURE 1.1] ERREUR: L'ID de l'intervention est manquant dans la requête.");
+        return new WP_Error('missing_intervention_id', "L'ID de l'intervention est requis.", ['status' => 400]);
+    }
+ 
+    // === ÉTAPE 2: CHANGER LE STATUT DE L'INTERVENTION À "Realisée" ===
+    $interventions_table_id = eecie_crm_guess_table_id('Interventions_Planifiees');
+    $id_option_realisee = 3441; // ID de l'option de statut "Realisée"
+
+    $intervention_update_payload = ['Statut_Intervention' => $id_option_realisee];
+    
+    $intervention_update_result = eecie_crm_baserow_patch("rows/table/{$interventions_table_id}/{$intervention_id}/?user_field_names=true", $intervention_update_payload);
+
+    if (is_wp_error($intervention_update_result)) {
+        error_log("[PWA CLOTURE 2.1] ERREUR: La mise à jour du statut de l'intervention #{$intervention_id} a échoué. " . $intervention_update_result->get_error_message());
+        return $intervention_update_result;
+    }
+    // === ÉTAPE 3: VÉRIFIER LE TYPE DE L'OPPORTUNITÉ ===
+    $opportunite_data = eecie_crm_get_row_by_slug_and_id('opportunites', $opportunite_id);
+    if (is_wp_error($opportunite_data)) {
+        error_log("[PWA CLOTURE 3.1] ERREUR: Impossible de récupérer les données de l'opportunité #{$opportunite_id}.");
+        return $opportunite_data;
     }
 
-    // Récupérer le schéma de la table pour trouver l'ID du champ et de l'option
-    $opp_schema = eecie_crm_baserow_get_fields($opp_table_id);
-    if (is_wp_error($opp_schema)) {
-        return new WP_Error('schema_error', "Impossible de lire la structure de la table des opportunités.", ['status' => 500]);
+    $id_option_ponctuelle = 3433; // ID de l'option de type "Ponctuelle"
+    $type_opportunite_id = $opportunite_data['Type_Opportunite']['id'] ?? null;
+
+    // === ÉTAPE 4: SI PONCTUELLE, CHANGER LE STATUT DE L'OPPORTUNITÉ À "Finaliser" ===
+    if ($type_opportunite_id === $id_option_ponctuelle) {
+ 
+        $opp_table_id = eecie_crm_guess_table_id('Task_input');
+        $id_option_finaliser = 3157; // ID de l'option de statut "Finaliser"
+
+        $opportunite_update_payload = ['Status' => $id_option_finaliser];
+        
+        $opp_update_result = eecie_crm_baserow_patch("rows/table/{$opp_table_id}/{$opportunite_id}/?user_field_names=true", $opportunite_update_payload);
+        
+        if (is_wp_error($opp_update_result)) {
+            error_log("[PWA CLOTURE 4.2] ERREUR: La mise à jour du statut de l'opportunité #{$opportunite_id} a échoué.");
+            // On ne retourne pas une erreur fatale, car l'intervention a bien été mise à jour. On logue simplement.
+        } else {
+            error_log("[PWA CLOTURE 4.3] Succès: Statut de l'opportunité #{$opportunite_id} passé à 'Finaliser'.");
+        }
+    } else {
+        error_log("[PWA CLOTURE 4.1] L'opportunité est de type 'Récurrente' ou non défini. Le statut de l'opportunité n'est pas modifié.");
     }
-
-    $status_field = array_values(array_filter($opp_schema, fn($f) => $f['name'] === 'Status'))[0] ?? null;
-    if (!$status_field) {
-        return new WP_Error('schema_error', "Le champ 'Status' est introuvable.", ['status' => 500]);
-    }
-
-    $finaliser_option = array_values(array_filter($status_field['select_options'], fn($o) => $o['value'] === 'Finaliser'))[0] ?? null;
-    if (!$finaliser_option) {
-        return new WP_Error('schema_error', "L'option de statut 'Finaliser' est introuvable.", ['status' => 500]);
-    }
-
-    // Préparer le payload pour la mise à jour
-    $payload = [
-        'field_' . $status_field['id'] => $finaliser_option['id']
-    ];
-
-    // Envoyer la requête PATCH à Baserow
-    $update_result = eecie_crm_baserow_patch("rows/table/{$opp_table_id}/{$opportunite_id}/", $payload);
-
-    if (is_wp_error($update_result)) {
-        return new WP_Error('baserow_error', "La mise à jour du statut dans Baserow a échoué.", ['status' => 502]);
-    }
-
-    return new WP_REST_Response(['success' => true, 'message' => 'Dossier clôturé avec succès.'], 200);
+    
+    return new WP_REST_Response(['success' => true, 'message' => 'L\'intervention a été marquée comme réalisée.'], 200);
 }
