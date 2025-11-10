@@ -311,11 +311,16 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
 }).join("");
     modal.innerHTML = `
         <button class="gce-modal-close">✖</button>
-        <h3>${title}</h3>
-        <form class="gce-modal-content">
-            ${contentHtml}
-            ${mode === "ecriture" ? `<button type="submit" class="button button-primary">💾 Enregistrer</button>` : ""}
-        </form>
+            <h3>${title}</h3>
+            <div class="gce-modal-scroll-content">
+                <form class="gce-modal-content" id="gce-main-edit-form">
+                    ${contentHtml}
+                    <button type="submit" class="button button-primary" style="margin-top: 15px;">💾 Enregistrer les modifications</button>
+                </form>
+                
+                <!-- Conteneur dédié et indépendant pour le formulaire de planification -->
+                <div id="first-intervention-wrapper"></div>
+            </div>
     `;
 
     overlay.appendChild(modal);
@@ -355,14 +360,40 @@ function gceShowModal(data = {}, tableName, mode = "lecture", visibleFields = nu
             console.error("WP Editor load failed:", err);
         }
     });
-if (tableName === 'opportunites' && mode === 'ecriture') {
-            const form = modal.querySelector('form');
+        // --- DÉBUT DE LA LOGIQUE D'AFFICHAGE CONDITIONNEL (MODIFIÉE) ---
+        if (tableName === 'opportunites' && mode === 'ecriture') {
+            const form = modal.querySelector('#gce-main-edit-form');
+            const wrapper = modal.querySelector('#first-intervention-wrapper'); // On cible notre nouveau conteneur
             const typeOppFieldSchema = schema.find(f => f.name === 'Type_Opportunite');
             
             if (typeOppFieldSchema) {
                 const typeOppSelect = form.querySelector(`[name="field_${typeOppFieldSchema.id}"]`);
                 const recurrenceFieldsContainer = form.querySelectorAll('.gce-recurrence-field');
-                
+
+                // --- INJECTION DU MINI-FORMULAIRE ---
+                const firstInterventionContainer = document.createElement('div');
+                firstInterventionContainer.id = 'first-intervention-container';
+                firstInterventionContainer.style.display = 'none'; // Caché par défaut
+
+                const fournisseurOptionsHtml = '<option value="">Choisir un fournisseur...</option>' + 
+                    (window.gceDataCache.fournisseurs || []).map(f => `<option value="${f.id}">${f.Nom}</option>`).join('');
+
+                firstInterventionContainer.innerHTML = `
+                    <h4>Planifier la Première Intervention</h4>
+                    <p>Cette action créera un rendez-vous et enverra les notifications par email au client et au fournisseur.</p>
+                    <div class="gce-field-row">
+                        <label for="first_intervention_date"><strong>Date & Heure</strong></label>
+                        <input type="datetime-local" id="first_intervention_date" name="first_intervention_date" required>
+                    </div>
+                    <div class="gce-field-row">
+                        <label for="first_intervention_fournisseur"><strong>Fournisseur</strong></label>
+                        <select id="first_intervention_fournisseur" name="first_intervention_fournisseur" required>${fournisseurOptionsHtml}</select>
+                    </div>
+                    <button type="button" id="gce-schedule-first-btn" class="button">Planifier et Notifier</button>
+                `;
+                // On ajoute le formulaire dans son conteneur dédié, en dehors du formulaire principal.
+                wrapper.appendChild(firstInterventionContainer);
+
                 if (typeOppSelect && recurrenceFieldsContainer.length > 0) {
                     const toggleRecurrenceFields = () => {
                         const recurrenteOption = typeOppFieldSchema.select_options.find(o => o.value === 'Récurrente');
@@ -373,11 +404,56 @@ if (tableName === 'opportunites' && mode === 'ecriture') {
                         recurrenceFieldsContainer.forEach(el => {
                             el.style.display = shouldShow ? '' : 'none';
                         });
+                        // On bascule aussi l'affichage de notre nouveau formulaire
+                        firstInterventionContainer.style.display = shouldShow ? 'block' : 'none';
                     };
 
                     typeOppSelect.addEventListener('change', toggleRecurrenceFields);
                     toggleRecurrenceFields();
                 }
+                document.getElementById('gce-schedule-first-btn').addEventListener('click', async (e) => {
+                const btn = e.target;
+                const date = document.getElementById('first_intervention_date').value;
+                const fournisseurId = document.getElementById('first_intervention_fournisseur').value;
+                const opportuniteId = data.id;
+
+                if (!date || !fournisseurId) {
+                    alert("Veuillez sélectionner une date et un fournisseur.");
+                    return;
+                }
+
+                btn.disabled = true;
+                btn.textContent = 'Planification...';
+                showStatusUpdate('Déclenchement du workflow de planification...', true);
+
+                try {
+                    const response = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/interventions/schedule-first`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce },
+                        body: JSON.stringify({
+                            opportunite_id: opportuniteId,
+                            fournisseur_id: parseInt(fournisseurId, 10),
+                            date_heure: date
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errData = await response.json();
+                        throw new Error(errData.message || 'Le serveur a retourné une erreur.');
+                    }
+                    
+                    showStatusUpdate('Workflow déclenché avec succès ! Les notifications ont été envoyées.', true, 5000);
+                    // On peut éventuellement vider les champs après succès
+                    document.getElementById('first_intervention_date').value = '';
+                    document.getElementById('first_intervention_fournisseur').value = '';
+
+                } catch (error) {
+                    showStatusUpdate(`Erreur : ${error.message}`, false, 5000);
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = 'Planifier et Notifier';
+                }
+            });
             }
         }
 
@@ -389,7 +465,9 @@ if (tableName === 'opportunites' && mode === 'ecriture') {
     modal.querySelector(".gce-modal-close").addEventListener("click", close);
 
     if (mode === "ecriture") {
-        modal.querySelector("form").addEventListener("submit", async (e) => {
+        const mainForm = modal.querySelector("#gce-main-edit-form");
+            if(mainForm) {
+               modal.querySelector("form").addEventListener("submit", async (e) => {
             e.preventDefault();
 
             const submitButton = e.target.querySelector('button[type="submit"]');
@@ -574,7 +652,8 @@ if (tableName === 'opportunites' && mode === 'ecriture') {
                 submitButton.disabled = false;
                 submitButton.textContent = '💾 Enregistrer';
             }
-        });
+            });
+            }
     }
 
 }

@@ -98,3 +98,24 @@
 .gce-rating-input .star.selected {
     color: #f5b041;
 }
+/* Fichier: includes/shared/css/popup.css */
+
+/* Conteneur pour le contenu scrollable du modal */
+.gce-modal-scroll-content {
+    max-height: 70vh; /* Limite la hauteur du contenu */
+    overflow-y: auto; /* Ajoute une barre de défilement si nécessaire */
+    padding-right: 15px; /* Espace pour la barre de défilement */
+    margin-right: -15px;
+}
+
+/* Conteneur pour le formulaire de planification indépendant */
+#first-intervention-wrapper {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 2px dashed #0f766e; /* Séparateur visuel clair */
+}
+
+#first-intervention-wrapper h4 {
+    margin-top: 0;
+    color: #0f766e;
+}

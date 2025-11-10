@@ -1,6 +1,6 @@
 
 
-<div class="wrap">
+<<div class="wrap">
     <h1>Gestion des utilisateurs Baserow</h1>
     <button id="gce-add-user-btn" class="button button-primary">➕ Nouvel utilisateur</button>
 
@@ -8,6 +8,16 @@
     <h3>Ajouter un utilisateur</h3>
     <label>Nom<br><input type="text" id="gce-new-user-nom" style="width: 100%;"></label><br><br>
     <label>Email<br><input type="email" id="gce-new-user-email" style="width: 100%;"></label><br><br>
+    
+    <!-- Ajout du champ de sélection de rôle -->
+    <label>Rôle<br>
+        <select id="gce-new-user-role" style="width: 100%;">
+            <option value="3041">Chargé de projet</option>
+            <option value="3043">Fournisseur</option>
+            <option value="3042">Vente</option>
+        </select>
+    </label><br><br>
+
     <label>Actif<br>
         <select id="gce-new-user-actif">
             <option value="true">Oui</option>

@@ -213,18 +213,27 @@ document.getElementById('gce-submit-user').addEventListener('click', () => {
     const nom = document.getElementById('gce-new-user-nom').value.trim();
     const email = document.getElementById('gce-new-user-email').value.trim();
     const actif = document.getElementById('gce-new-user-actif').value === 'true';
-
+    // --- DÉBUT DE LA MODIFICATION ---
+        // 1. Récupérer les informations du rôle sélectionné
+        const roleSelect = document.getElementById('gce-new-user-role');
+        const roleId = parseInt(roleSelect.value, 10);
+        const roleValue = roleSelect.options[roleSelect.selectedIndex].text;
+        // --- FIN DE LA MODIFICATION ---
     if (!nom || !email) {
         alert("Le nom et l'email sont requis.");
         return;
     }
 
-    const newUser = {
-        Name: nom,
-        Email: email,
-        Active: actif,
-        Task_in_progress: 0
-    };
+    // --- DÉBUT DE LA MODIFICATION ---
+        // 2. Ajouter l'objet "Role" au payload de l'utilisateur
+        const newUser = {
+            Name: nom,
+            Email: email,
+            Active: actif,
+            Task_in_progress: 0,
+            Role: { id: roleId, value: roleValue } // Format attendu par la fonction de sauvegarde
+        };
+        // --- FIN DE LA MODIFICATION ---
 
     const cleaned = sanitizeRowBeforeSave(newUser, gceUserSchema);
 

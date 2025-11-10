@@ -454,6 +454,7 @@ require_once __DIR__ . '/routes/structure-routes.php';
 require_once __DIR__ . '/routes/rdv-routes.php';
 require_once __DIR__ . '/routes/debug-routes.php';
 require_once __DIR__ . '/routes/orchestrator-routes.php';
+require_once __DIR__ . '/routes/interventions-routes.php';
 
     // All routes are now included in separate files
 });
