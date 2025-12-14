@@ -241,6 +241,8 @@ register_rest_route('eecie-crm/v1', '/opportunites/(?P<id>\d+)/related-data', [
     'permission_callback' => 'eecie_crm_check_capabilities',
 ]);
 
+
+
 register_rest_route('eecie-crm/v1', '/opportunites/(?P<id>\d+)/reset', [
     'methods'  => 'POST',
     'callback' => function (WP_REST_Request $request) {
@@ -417,3 +419,130 @@ register_rest_route('eecie-crm/v1', '/opportunites/(?P<id>\d+)/reset', [
     },
     'permission_callback' => 'eecie_crm_check_capabilities',
 ]);
+register_rest_route('eecie-crm/v1', '/opportunites/(?P<id>\\d+)/reassign-provider', [
+    'methods'  => 'POST',
+    'callback' => 'gce_reassign_provider_callback',
+    'permission_callback' => 'eecie_crm_check_capabilities',
+    'args' => [
+        'id' => [
+            'validate_callback' => function ($param) { return is_numeric($param); }
+        ],
+        'new_provider_id' => [
+            'required' => true,
+            'validate_callback' => function ($param) { return is_numeric($param); }
+        ],
+    ],
+]);
+
+register_rest_route('eecie-crm/v1', '/opportunites/(?P<id>\\d+)/transfer', [
+    'methods'  => 'POST',
+    'callback' => 'gce_transfer_opportunity_callback',
+    'permission_callback' => 'eecie_crm_check_capabilities',
+    'args' => [
+        'id' => [ 'validate_callback' => function ($param) { return is_numeric($param); } ],
+        'new_user_id' => [
+            'required' => true,
+            'validate_callback' => function ($param) { return is_numeric($param); }
+        ],
+    ],
+]);
+
+function gce_transfer_opportunity_callback(WP_REST_Request $request) {
+    $opportunite_id = (int)$request['id'];
+    $new_user_id = (int)$request['new_user_id'];
+
+    // 1. Mettre à jour l'opportunité principale
+    $opp_table_id = eecie_crm_guess_table_id('Task_input');
+    $opp_update_payload = ['field_6840' => [$new_user_id]]; // field_6840 = T1_user
+    $update_opp = eecie_crm_baserow_patch("rows/table/{$opp_table_id}/{$opportunite_id}/", $opp_update_payload);
+
+    if (is_wp_error($update_opp)) {
+        return new WP_Error('opp_transfer_failed', 'La mise à jour de l\'opportunité a échoué.', ['status' => 500]);
+    }
+
+    // 2. Mettre à jour les Tâches non terminées
+    $taches_table_id = eecie_crm_guess_table_id('Taches');
+    $params_taches = [
+        'user_field_names' => 'true',
+        'filter__field_6885__link_row_has' => $opportunite_id, // Liées à l'opportunité
+        'filter__field_6874__boolean' => 'false' // Dont le champ "terminer" est faux
+    ];
+    $taches = eecie_crm_baserow_get_all_paginated_results("rows/table/{$taches_table_id}/", $params_taches);
+    if (!empty($taches)) {
+        foreach ($taches as $tache) {
+            eecie_crm_baserow_patch("rows/table/{$taches_table_id}/{$tache['id']}/", ['field_6886' => [$new_user_id]]); // field_6886 = assigne
+        }
+    }
+
+    // 3. Mettre à jour les Appels
+    $appels_table_id = eecie_crm_guess_table_id('Appels');
+    $params_appels = [ 'filter__field_6845__link_row_has' => $opportunite_id ];
+    $appels = eecie_crm_baserow_get_all_paginated_results("rows/table/{$appels_table_id}/", $params_appels);
+    if (!empty($appels)) {
+        foreach ($appels as $appel) {
+            eecie_crm_baserow_patch("rows/table/{$appels_table_id}/{$appel['id']}/", ['field_6846' => [$new_user_id]]); // field_6846 = Employé
+        }
+    }
+    
+    // 4. Mettre à jour les Interactions non verrouillées
+    $interactions_table_id = eecie_crm_guess_table_id('Interactions');
+    $params_interactions = [
+        'user_field_names' => 'true',
+        'filter__field_6882__link_row_has' => $opportunite_id, // Liées à l'opportunité
+        'filter__field_7224__boolean' => 'false' // Dont le champ "Lock" est faux
+    ];
+    $interactions = eecie_crm_baserow_get_all_paginated_results("rows/table/{$interactions_table_id}/", $params_interactions);
+    if (!empty($interactions)) {
+        foreach ($interactions as $interaction) {
+            eecie_crm_baserow_patch("rows/table/{$interactions_table_id}/{$interaction['id']}/", ['field_6883' => [$new_user_id]]); // field_6883 = effectue_par
+        }
+    }
+
+    return new WP_REST_Response(['success' => true, 'message' => 'Opportunité et tous ses éléments actifs ont été transférés.'], 200);
+}
+
+function gce_reassign_provider_callback(WP_REST_Request $request) {
+    $opportunite_id = (int)$request['id'];
+    $new_provider_id = (int)$request['new_provider_id'];
+
+    // 1. Récupérer l'opportunité pour trouver le devis lié
+    $opportunite = eecie_crm_get_row_by_slug_and_id('opportunites', $opportunite_id);
+    if (is_wp_error($opportunite) || empty($opportunite['Devis'][0]['id'])) {
+        return new WP_Error('no_devis', 'Aucun devis n\'est lié à cette opportunité.', ['status' => 404]);
+    }
+    $devis_id = $opportunite['Devis'][0]['id'];
+
+    // 2. Mettre à jour le fournisseur sur le devis
+    $devis_table_id = eecie_crm_guess_table_id('Devis');
+    $devis_update_payload = ['field_6958' => [$new_provider_id]]; // field_6958 est l'ID du champ "Fournisseur" sur la table Devis
+    $update_devis = eecie_crm_baserow_patch("rows/table/{$devis_table_id}/{$devis_id}/", $devis_update_payload);
+    if (is_wp_error($update_devis)) {
+        return new WP_Error('devis_update_failed', 'La mise à jour du fournisseur sur le devis a échoué.', ['status' => 500]);
+    }
+
+    // 3. Effacer le champ "Dernier_status_ok" sur l'opportunité
+    $opp_table_id = eecie_crm_guess_table_id('Task_input');
+    $opp_update_payload = ['field_7222' => null]; // field_7222 est l'ID du champ "Dernier_status_ok"
+    eecie_crm_baserow_patch("rows/table/{$opp_table_id}/{$opportunite_id}/", $opp_update_payload);
+
+    // 4. Trouver et réinitialiser la tâche "Réalisation projet"
+    $taches_table_id = eecie_crm_guess_table_id('Taches');
+    $params = [ 'filter__field_6885__link_row_has' => $opportunite_id, 'filter__field_6869__equal' => 'Réalisation projet' ];
+    $taches = eecie_crm_baserow_get("rows/table/{$taches_table_id}/", $params);
+
+    if (!is_wp_error($taches) && !empty($taches['results'])) {
+        $tache_id = $taches['results'][0]['id'];
+        $status_creation_id = 3039;
+        $status_encours_id = 3031;
+        $status_field_id = 6872; // ID du champ "statut" sur la table Taches
+
+        // On la passe en "Creation"
+        eecie_crm_baserow_patch("rows/table/{$taches_table_id}/{$tache_id}/", ["field_{$status_field_id}" => $status_creation_id]);
+        // On attend un court instant pour laisser Baserow traiter
+        usleep(500000); // 0.5 secondes
+        // On la repasse en "En cours" pour déclencher le workflow
+        eecie_crm_baserow_patch("rows/table/{$taches_table_id}/{$tache_id}/", ["field_{$status_field_id}" => $status_encours_id]);
+    }
+
+    return new WP_REST_Response(['success' => true, 'message' => 'Fournisseur réassigné. Le processus de planification a été relancé.'], 200);
+}

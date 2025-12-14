@@ -69,6 +69,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="header-actions" style="display: flex; gap: 10px;">
                         <button class="button button-secondary gce-popup-link" data-table="opportunites" data-id="${opportunite.id}" data-mode="ecriture">✏️ Modifier</button>
                         <button class="button button-primary gce-add-task-btn">➕ Tâche</button>
+                        <button class="button gce-reassign-provider-btn">🔄 Réassigner Fournisseur</button>
+                        <button class="button gce-transfer-opp-btn">👤 Transférer</button>
                         <button class="button gce-add-interaction-btn" disabled title="Un appel doit exister pour ajouter une interaction.">➕ Interaction</button>
                     </div>
                 </div>
@@ -169,7 +171,147 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                         }
                     });
+                    const transferBtn = container.querySelector('.gce-transfer-opp-btn');
+                    transferBtn.addEventListener('click', () => {
+                        const currentOwnerId = opportunite.T1_user?.[0]?.id;
 
+                        // On filtre la liste pour ne pas pouvoir se transférer à soi-même
+                        const userOptions = (window.gceDataCache.utilisateurs || [])
+                            .filter(user => user.id !== currentOwnerId)
+                            .map(user => `<option value="${user.id}">${user.Name}</option>`)
+                            .join('');
+
+                        // Créer un modal simple pour la sélection
+                        const modalContent = document.createElement('div');
+                        modalContent.style.padding = '20px';
+                        modalContent.innerHTML = `
+        <h4>Transférer le dossier à</h4>
+        <select id="gce-new-owner-select" style="width: 100%; margin-bottom: 15px;">
+            <option value="">-- Choisir un chargé de projet --</option>
+            ${userOptions}
+        </select>
+        <button id="gce-confirm-transfer" class="button button-primary">Confirmer le Transfert</button>
+    `;
+
+                        const overlay = document.createElement('div');
+                        overlay.className = 'gce-modal-overlay';
+                        const modal = document.createElement('div');
+                        modal.className = 'gce-modal';
+                        modal.appendChild(modalContent);
+                        overlay.appendChild(modal);
+                        document.body.appendChild(overlay);
+
+                        const closeModal = () => overlay.remove();
+                        overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+
+                        document.getElementById('gce-confirm-transfer').addEventListener('click', async () => {
+                            const newUserId = document.getElementById('gce-new-owner-select').value;
+                            if (!newUserId) {
+                                alert('Veuillez sélectionner un nouveau responsable.');
+                                return;
+                            }
+
+                            if (!confirm('Êtes-vous sûr de vouloir transférer ce dossier et toutes ses tâches actives ? Cette action est irréversible.')) {
+                                return;
+                            }
+
+                            showStatusUpdate('Transfert en cours...', true);
+                            closeModal();
+
+                            try {
+                                const res = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/opportunites/${opportunite.id}/transfer`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce },
+                                    body: JSON.stringify({ new_user_id: parseInt(newUserId, 10) })
+                                });
+
+                                if (!res.ok) {
+                                    const errData = await res.json();
+                                    throw new Error(errData.message || 'Le serveur a retourné une erreur.');
+                                }
+
+                                showStatusUpdate('Dossier transféré avec succès ! La page va se rafraîchir.', true, 4000);
+
+                                // On ferme le modal de détail qui est en arrière-plan
+                                const detailModal = document.querySelector('.gce-detail-modal-overlay');
+                                if (detailModal) detailModal.remove();
+
+                                // On rafraîchit la vue principale après un court délai
+                                setTimeout(() => location.reload(), 1500);
+
+                            } catch (err) {
+                                showStatusUpdate(`Erreur : ${err.message}`, false, 5000);
+                            }
+                        });
+                    });
+                    const reassignBtn = container.querySelector('.gce-reassign-provider-btn');
+                    reassignBtn.addEventListener('click', () => {
+                        // Créer le HTML du modal de sélection
+                        const modalContent = document.createElement('div');
+                        modalContent.style.padding = '20px';
+
+                        const fournisseurOptions = (window.gceDataCache.fournisseurs || [])
+                            .map(f => `<option value="${f.id}">${f.Nom}</option>`)
+                            .join('');
+
+                        modalContent.innerHTML = `
+        <h4>Sélectionnez le nouveau fournisseur</h4>
+        <select id="gce-new-provider-select" style="width: 100%; margin-bottom: 15px;">
+            <option value="">-- Choisir un fournisseur --</option>
+            ${fournisseurOptions}
+        </select>
+        <button id="gce-confirm-reassign" class="button button-primary">Confirmer la réassignation</button>
+    `;
+
+                        // Afficher le modal (on peut utiliser une simple alerte ou un vrai modal; ici un modal simple)
+                        const overlay = document.createElement('div');
+                        overlay.className = 'gce-modal-overlay';
+                        const modal = document.createElement('div');
+                        modal.className = 'gce-modal';
+                        modal.appendChild(modalContent);
+                        overlay.appendChild(modal);
+                        document.body.appendChild(overlay);
+
+                        const closeModal = () => overlay.remove();
+                        overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+
+                        document.getElementById('gce-confirm-reassign').addEventListener('click', async () => {
+                            const select = document.getElementById('gce-new-provider-select');
+                            const newProviderId = select.value;
+                            if (!newProviderId) {
+                                alert('Veuillez sélectionner un fournisseur.');
+                                return;
+                            }
+
+                            if (!confirm('Confirmez-vous la réassignation ? Un nouveau courriel de planification sera envoyé.')) {
+                                return;
+                            }
+
+                            showStatusUpdate('Réassignation en cours...', true);
+                            closeModal();
+
+                            try {
+                                const res = await fetch(`${EECIE_CRM.rest_url}eecie-crm/v1/opportunites/${opportunite.id}/reassign-provider`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': EECIE_CRM.nonce },
+                                    body: JSON.stringify({ new_provider_id: parseInt(newProviderId, 10) })
+                                });
+
+                                if (!res.ok) {
+                                    const errData = await res.json();
+                                    throw new Error(errData.message || 'Le serveur a retourné une erreur.');
+                                }
+
+                                showStatusUpdate('Fournisseur réassigné ! Le workflow est relancé.', true, 5000);
+
+                                // Rafraîchir la vue pour afficher le nouveau fournisseur
+                                setTimeout(() => location.reload(), 2000);
+
+                            } catch (err) {
+                                showStatusUpdate(`Erreur : ${err.message}`, false, 5000);
+                            }
+                        });
+                    });
                     const visibleTaskColumns = ['Actions', 'titre', 'description', 'statut', 'priorite', 'date_echeance'];
                     tachesColumns.forEach(col => { if (!visibleTaskColumns.includes(col.field) && col.title !== 'Actions') { col.visible = false; } });
 
@@ -303,7 +445,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 showStatusUpdate('Mise à jour du type de paiement...', true);
 
                                 // On cherche l'ID du champ "Paiement_Immediat" dans le schéma. ID: 7407
-                                const paiementFieldId = 7407; 
+                                const paiementFieldId = 7407;
 
                                 const payload = {
                                     [`field_${paiementFieldId}`]: isImmediat
@@ -320,7 +462,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 } catch (err) {
                                     showStatusUpdate(`Erreur : ${err.message}`, false);
                                     // En cas d'erreur, on remet la valeur initiale
-                                    e.target.value = !isImmediat; 
+                                    e.target.value = !isImmediat;
                                 }
                             });
                         }
@@ -518,8 +660,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // AJOUTER CES DEUX LIGNES
         fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/devis/schema', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
         fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/articles_devis/schema', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
-        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/fournisseurs', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json())
-    ]).then(([oppData, oppSchema, tachesSchema, appelsSchema, interactionsSchema, devisSchema, articlesDevisSchema, fournisseursData]) => {// Ajouter les nouvelles variables ici
+        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/fournisseurs', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json()),
+        fetch(EECIE_CRM.rest_url + 'eecie-crm/v1/utilisateurs', { headers: { 'X-WP-Nonce': EECIE_CRM.nonce } }).then(r => r.json())
+    ]).then(([oppData, oppSchema, tachesSchema, appelsSchema, interactionsSchema, devisSchema, articlesDevisSchema, fournisseursData, utilisateursData]) => {// Ajouter les nouvelles variables ici
         window.gceSchemas = {
             ...window.gceSchemas,
             "opportunites": oppSchema,
@@ -533,7 +676,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // NOUVEAU : On met les données des fournisseurs dans le cache global
         window.gceDataCache = {
             ...window.gceDataCache,
-            fournisseurs: fournisseursData.results || []
+            fournisseurs: fournisseursData.results || [],
+            utilisateurs: utilisateursData.results || []
         };
         const myOpps = oppData.results || [];
         gce.viewManager.initialize(mainContainer, myOpps, opportunitesViewConfig);
