@@ -198,3 +198,24 @@ if (is_wp_error($tables)) {
     <div id="gce-baserow-structure-output" style="white-space: pre-wrap; background: #f8f8f8; padding: 10px; border: 1px solid #ccc; max-height: 400px; overflow: auto;"></div>
 
 </div>
+
+    
+<hr>
+    <h2>Outils de Maintenance</h2>
+    <table class="form-table">
+        <tr>
+            <th scope="row">Synchronisation des Interventions</th>
+            <td>
+                <button type="button" id="gce-sync-interv-btn" class="button button-secondary">
+                    🔄 Synchroniser depuis les RDV Fournisseurs
+                </button>
+                <p class="description">
+                    Ceci va parcourir la table des Rendez-vous, ignorer les dates passées, et créer les interventions planifiées 
+                    (1 pour les ponctuelles, 3 occurrences pour les récurrentes).
+                </p>
+                <div id="sync-result-msg" style="margin-top: 10px; font-weight: bold;"></div>
+            </td>
+        </tr>
+    </table>
+
+  
